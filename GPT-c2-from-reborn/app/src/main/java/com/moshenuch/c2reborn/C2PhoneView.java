@@ -2,6 +2,8 @@ package com.moshenuch.c2reborn;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -35,6 +37,7 @@ public class C2PhoneView extends View {
     private static final float SH = 325.33f;
 
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Bitmap wallpaper;
     private final SharedPreferences prefs;
     private final Deque<PageState> history = new ArrayDeque<>();
 
@@ -90,6 +93,11 @@ public class C2PhoneView extends View {
     private String countdownDigits = "";
     private long countdownEnd = 0L;
 
+    private String loanPrincipal = "10000";
+    private String loanRate = "5.0";
+    private String loanMonths = "36";
+    private int loanField = 0;
+
     private boolean musicPlaying = false;
     private int musicTrack = 0;
     private long musicStarted = 0L;
@@ -125,6 +133,7 @@ public class C2PhoneView extends View {
 
     public C2PhoneView(Context context) {
         super(context);
+        wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
         setBackgroundColor(Color.rgb(9, 9, 11));
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -261,6 +270,7 @@ public class C2PhoneView extends View {
         else if ("dial".equals(page)) drawDial(c);
         else if ("call".equals(page)) drawCall(c);
         else if ("calculator".equals(page)) drawCalculator(c);
+        else if ("loan".equals(page)) drawLoan(c);
         else if ("stopwatch".equals(page)) drawStopwatch(c);
         else if ("countdown".equals(page)) drawCountdown(c);
         else if ("music".equals(page)) drawMusic(c);
@@ -321,16 +331,16 @@ public class C2PhoneView extends View {
     }
 
     private void drawHome(Canvas c) {
-        p.setShader(new LinearGradient(0, 0, 240, 300,
-                Color.rgb(40, 91, 149), Color.rgb(103, 49, 137), Shader.TileMode.CLAMP));
+        if (wallpaper != null) {
+            c.drawBitmap(wallpaper, null, new RectF(0, 0, 240, 296), p);
+        } else {
+            p.setShader(new LinearGradient(0, 0, 240, 300,
+                    Color.rgb(40, 91, 149), Color.rgb(103, 49, 137), Shader.TileMode.CLAMP));
+            c.drawRect(0, 0, 240, 296, p);
+            p.setShader(null);
+        }
+        p.setColor(Color.argb(28, 0, 0, 0));
         c.drawRect(0, 0, 240, 296, p);
-        p.setShader(null);
-
-        p.setColor(Color.argb(65, 255,255,255));
-        c.drawCircle(196, 86, 58, p);
-        c.drawCircle(34, 218, 76, p);
-        p.setColor(Color.argb(38, 255,255,255));
-        c.drawCircle(125, 166, 95, p);
 
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.LEFT);
@@ -620,6 +630,28 @@ public class C2PhoneView extends View {
         for (int i = 0; i < ops.length; i++) c.drawText(ops[i], 120, 125 + i * 24, p);
     }
 
+    private void drawLoan(Canvas c) {
+        drawStatus(c, "Loan calculator");
+        String[] labels = {"Loan amount", "Interest %", "Months"};
+        String[] values = {loanPrincipal, loanRate, loanMonths};
+        for (int i = 0; i < 3; i++) {
+            float y = 35 + i * 62;
+            p.setColor(i == loanField ? accent() : ("Dark".equals(theme) ? Color.rgb(49,55,58) : Color.WHITE));
+            c.drawRoundRect(new RectF(8, y, 232, y + 48), 4, 4, p);
+            p.setColor(i == loanField ? Color.WHITE : themeText());
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setTextSize(9);
+            c.drawText(labels[i], 15, y + 14, p);
+            p.setTextSize(18);
+            c.drawText(values[i], 15, y + 38, p);
+        }
+        p.setColor(themeText());
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setTextSize(11);
+        c.drawText("OK = calculate monthly payment", 120, 244, p);
+        c.drawText("Use ▲/▼ to change field", 120, 263, p);
+    }
+
     private void drawStopwatch(Canvas c) {
         drawStatus(c, "Stopwatch");
         long ms = stopwatchAccum + (stopwatchRunning ? SystemClock.elapsedRealtime() - stopwatchStarted : 0);
@@ -734,6 +766,7 @@ public class C2PhoneView extends View {
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
         if ("call".equals(page)) return new String[]{"Options", "End", "Loudsp."};
         if ("calculator".equals(page)) return new String[]{"Options", "=", "Back"};
+        if ("loan".equals(page)) return new String[]{"Calculate", "", "Back"};
         if ("stopwatch".equals(page)) return new String[]{"Split", stopwatchRunning ? "Stop" : "Start", "Back"};
         if ("countdown".equals(page)) return new String[]{"Options", "Start", "Back"};
         if ("music".equals(page)) return new String[]{"Options", musicPlaying ? "Pause" : "Play", "Back"};
@@ -875,6 +908,19 @@ public class C2PhoneView extends View {
             case "conversations": return "Conversations";
             case "sent": return "Sent items";
             case "drafts": return "Drafts";
+            case "outbox": return "Outbox";
+            case "savedmessages": return "Saved items";
+            case "reports": return "Delivery reports";
+            case "email": return "E-mail";
+            case "ims": return "IMs";
+            case "voicemessages": return "Voice messages";
+            case "infomessages": return "Info messages";
+            case "servicecommands": return "Serv. commands";
+            case "deletemessages": return "Delete messages";
+            case "messagesettings": return "Message settings";
+            case "recipientPicker": return "Select contact";
+            case "symbolPicker": return "Symbols";
+            case "emojiPicker": return "Emoticons";
             case "contacts": return "Contacts";
             case "contactsNames": return "Names";
             case "log": return "Log";
@@ -886,6 +932,8 @@ public class C2PhoneView extends View {
             case "gallery": return "Gallery";
             case "media": return "Media";
             case "organiser": return "Organiser";
+            case "maps": return "Maps";
+            case "scientific": return "Scientific";
             case "alarm": return "Alarm clock";
             case "calendar": return "Calendar";
             case "todo": return "To-do list";
@@ -906,20 +954,57 @@ public class C2PhoneView extends View {
     private String[] itemsFor(String pg) {
         switch (pg) {
             case "messaging":
-                return new String[]{"Create message","Inbox","Conversations","Sent items","Drafts","E-mail","Chat","Message settings"};
+                return new String[]{"Create message","Conversations","Drafts","Outbox","Sent items","Saved items","Delivery reports","E-mail","IMs","Voice messages","Info messages","Serv. commands","Delete messages","Message settings"};
             case "inbox": {
                 String[] a = new String[24];
                 for (int i = 0; i < a.length; i++) a[i] = inboxName(i);
                 return a;
             }
-            case "conversations":
-                return new String[]{"Alex Morgan","Nokia service","Demo contact","Demo contact 4","Demo contact 5","Demo contact 6"};
+            case "conversations": {
+                String[] a = new String[179];
+                for (int i = 0; i < a.length; i++) {
+                    if (i == 0) a[i] = "Alex Morgan";
+                    else if (i == 1) a[i] = "Nokia service";
+                    else if (i == 2) a[i] = "Demo contact";
+                    else a[i] = "Conversation " + (i + 1);
+                }
+                return a;
+            }
             case "sent":
                 return new String[]{"Alex Morgan","Demo contact","Nokia service"};
             case "drafts":
                 return drafts.isEmpty() ? new String[]{"(empty)"} : drafts.toArray(new String[0]);
+            case "outbox":
+                return new String[]{"(empty)"};
+            case "savedmessages":
+                return new String[]{"Saved message 1","Saved message 2","Saved message 3"};
+            case "reports":
+                return new String[]{"Alex Morgan  Delivered","Demo contact  Delivered","Nokia service  Sent"};
+            case "email":
+                return new String[]{"Mailboxes","Create e-mail","E-mail settings"};
+            case "ims":
+                return new String[]{"Sign in","Saved conversations","IM settings"};
+            case "voicemessages":
+                return new String[]{"Listen to voice msgs.","Voice mailbox no."};
+            case "infomessages":
+                return new String[]{"Info service","Topics","Language"};
+            case "servicecommands":
+                return new String[]{"Service command editor"};
+            case "deletemessages":
+                return new String[]{"All messages","By folder","Inbox","Sent items","Drafts"};
+            case "messagesettings":
+                return new String[]{"General settings","Text messages","Multimedia messages","E-mail messages","Service messages"};
+            case "recipientPicker": {
+                String[] a = new String[contacts.size()];
+                for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
+                return a;
+            }
+            case "symbolPicker":
+                return new String[]{".",",","?","!","@","#","%","&","(",")","-","+","/",";",":","'"};
+            case "emojiPicker":
+                return new String[]{"☺","☹","♥","★","♪","✓","☀","☕"};
             case "contacts":
-                return new String[]{"Names","Add new contact","Groups","Speed dials","Service numbers","My numbers","Contact settings"};
+                return new String[]{"Names","Add new","Synchronise all","Settings","Groups","Speed dials","Service numbers","Del. all contacts"};
             case "contactsNames": {
                 String[] a = new String[contacts.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
@@ -938,7 +1023,7 @@ public class C2PhoneView extends View {
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Connectivity","Call","Phone","Accessories","Configuration","Security","Restore factory set."};
             case "profiles":
-                return new String[]{"General","Silent","Meeting","Outdoor","My style 1","My style 2"};
+                return new String[]{"General","Silent","Meeting","Outdoor","My style 1","My style 2","Flight"};
             case "themes":
                 return new String[]{"Nokia","Blue","Silver","Dark"};
             case "connectivity":
@@ -948,11 +1033,15 @@ public class C2PhoneView extends View {
             case "shortcuts":
                 return new String[]{"Left selection key","Right selection key","Navigation key","Home screen key"};
             case "gallery":
-                return new String[]{"Photos","Video clips","Music files","Graphics","Tones","Recordings","Received files","Memory card"};
+                return new String[]{"Memory card","Images","Video clips","Music files"};
             case "media":
-                return new String[]{"Camera","Video","Media player","Radio","Voice recorder","Equaliser","Stereo widening"};
+                return new String[]{"Camera","Video camera","Media player","Radio","Voice recorder","Equaliser"};
             case "organiser":
-                return new String[]{"Alarm clock","Calendar","To-do list","Notes","Calculator","Countdown timer","Stopwatch","Loan calculator"};
+                return new String[]{"Alarm clock","Calendar","Maps","To-do list","Notes","Calculator","Countdown timer","Stopwatch"};
+            case "maps":
+                return new String[]{"Current position","Find address","Favourites","Route planner"};
+            case "scientific":
+                return new String[]{"sin","cos","tan","√","x²","log10","1/x","π"};
             case "alarm":
                 return new String[]{"Alarm","Alarm time","Repeat","Alarm tone","Snooze time-out"};
             case "calendar":
@@ -982,20 +1071,15 @@ public class C2PhoneView extends View {
         }
 
         if ("messaging".equals(page)) {
-            String[] routes = {"compose","inbox","conversations","sent","drafts","itemDetail","itemDetail","itemDetail"};
             if (sel == 0) {
                 recipient = "";
                 messageBody = "";
                 composeFocus = 0;
                 inputMode = "T9";
                 go("compose");
-            } else if (sel <= 4) go(routes[sel]);
-            else {
-                detailTitle = itemsFor(page)[sel];
-                detailText = sel == 5 ? "E-mail is not configured." :
-                        sel == 6 ? "Chat service is not configured." :
-                                "Text, multimedia and service-message settings.";
-                go("itemDetail");
+            } else {
+                String[] routes = {"","conversations","drafts","outbox","sent","savedmessages","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings"};
+                go(routes[Math.max(1, Math.min(sel, routes.length - 1))]);
             }
             return;
         }
@@ -1008,7 +1092,45 @@ public class C2PhoneView extends View {
 
         if ("conversations".equals(page)) {
             detailTitle = itemsFor(page)[sel];
-            detailText = "16-09-2026\n00:59  Can you test the native version?\n01:00  Yes - checking it now.";
+            detailText = "16-09-2026\n00:59  Can you test the native version?\n01:00  Yes - checking it now.\n\nConversation " + (sel + 1) + " of 179";
+            go("itemDetail");
+            return;
+        }
+
+        if ("recipientPicker".equals(page) && !contacts.isEmpty()) {
+            recipient = contacts.get(sel).number;
+            back();
+            composeFocus = 1;
+            showNotice("Recipient added");
+            return;
+        }
+
+        if ("symbolPicker".equals(page)) {
+            messageBody += itemsFor(page)[sel];
+            back();
+            composeFocus = 1;
+            return;
+        }
+
+        if ("emojiPicker".equals(page)) {
+            messageBody += itemsFor(page)[sel];
+            back();
+            composeFocus = 1;
+            return;
+        }
+
+        if (Arrays.asList("outbox","savedmessages","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
+            detailTitle = itemsFor(page)[sel];
+            if ("outbox".equals(page)) detailText = "No messages waiting to be sent.";
+            else if ("reports".equals(page)) detailText = "Delivery information for this message.";
+            else if ("email".equals(page)) detailText = "E-mail account is not configured.";
+            else if ("ims".equals(page)) detailText = "Instant messaging service is offline.";
+            else if ("voicemessages".equals(page)) detailText = "Voice mailbox service.";
+            else if ("infomessages".equals(page)) detailText = "Network information message settings.";
+            else if ("servicecommands".equals(page)) detailText = "Enter a service command for the network.";
+            else if ("deletemessages".equals(page)) detailText = "Delete selected message group.";
+            else if ("messagesettings".equals(page)) detailText = "Messaging configuration.";
+            else detailText = "Saved message.";
             go("itemDetail");
             return;
         }
@@ -1028,7 +1150,12 @@ public class C2PhoneView extends View {
             else if (sel == 1) beginContactEdit(-1);
             else {
                 detailTitle = itemsFor(page)[sel];
-                detailText = "Native contact feature placeholder.";
+                if (sel == 2) detailText = "Synchronisation complete.";
+                else if (sel == 4) detailText = "No groups defined.";
+                else if (sel == 5) detailText = "No speed dials assigned.";
+                else if (sel == 6) detailText = "Service numbers from SIM.";
+                else if (sel == 7) detailText = "Delete all contacts.";
+                else detailText = "Contact settings.";
                 go("itemDetail");
             }
             return;
@@ -1113,7 +1240,7 @@ public class C2PhoneView extends View {
 
         if ("gallery".equals(page)) {
             detailTitle = itemsFor(page)[sel];
-            detailText = sel == 7 ? "Memory card\nFree memory: 1.8 GB" : "Folder is empty.";
+            detailText = sel == 0 ? "Memory card\nFree memory: 1.8 GB\nUsed: 214 MB" : "Folder is empty.";
             go("itemDetail");
             return;
         }
@@ -1133,16 +1260,24 @@ public class C2PhoneView extends View {
         if ("organiser".equals(page)) {
             if (sel == 0) go("alarm");
             else if (sel == 1) go("calendar");
-            else if (sel == 2) go("todo");
-            else if (sel == 3) go("notes");
-            else if (sel == 4) go("calculator");
-            else if (sel == 5) go("countdown");
-            else if (sel == 6) go("stopwatch");
-            else {
-                detailTitle = "Loan calculator";
-                detailText = "Loan calculator is included as a native organiser screen. Further finance fields can be added without any web layer.";
-                go("itemDetail");
-            }
+            else if (sel == 2) go("maps");
+            else if (sel == 3) go("todo");
+            else if (sel == 4) go("notes");
+            else if (sel == 5) go("calculator");
+            else if (sel == 6) go("countdown");
+            else if (sel == 7) go("stopwatch");
+            return;
+        }
+
+        if ("maps".equals(page)) {
+            detailTitle = itemsFor(page)[sel];
+            detailText = "Maps simulation\nNo network connection required for this native recreation.";
+            go("itemDetail");
+            return;
+        }
+
+        if ("scientific".equals(page)) {
+            applyScientific(sel);
             return;
         }
 
@@ -1554,6 +1689,11 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("loan".equals(page)) {
+            handleLoanKey(key);
+            return;
+        }
+
         if ("call".equals(page)) {
             if ("OK".equals(key)) loudspeaker = !loudspeaker;
             else if ("RSK".equals(key)) loudspeaker = !loudspeaker;
@@ -1686,7 +1826,7 @@ public class C2PhoneView extends View {
             resetTap();
         } else if ("*".equals(key) && composeFocus == 1) {
             commitT9();
-            messageBody += ".";
+            go("symbolPicker");
             resetTap();
         } else if (isDigit(key)) {
             if (composeFocus == 0) {
@@ -1897,6 +2037,69 @@ public class C2PhoneView extends View {
         calcOp = 0;
     }
 
+    private void applyScientific(int which) {
+        double x;
+        try { x = Double.parseDouble(calc); } catch (Exception e) { x = 0; }
+        double r = x;
+        if (which == 0) r = Math.sin(Math.toRadians(x));
+        else if (which == 1) r = Math.cos(Math.toRadians(x));
+        else if (which == 2) r = Math.tan(Math.toRadians(x));
+        else if (which == 3) r = x < 0 ? Double.NaN : Math.sqrt(x);
+        else if (which == 4) r = x * x;
+        else if (which == 5) r = x <= 0 ? Double.NaN : Math.log10(x);
+        else if (which == 6) r = x == 0 ? Double.NaN : 1d / x;
+        else if (which == 7) r = Math.PI;
+        if (Double.isNaN(r) || Double.isInfinite(r)) calc = "Error";
+        else if (Math.abs(r - Math.rint(r)) < 0.0000001) calc = String.valueOf((long)Math.rint(r));
+        else calc = String.format(Locale.UK, "%.8g", r);
+        showNotice(calc);
+    }
+
+    private void handleLoanKey(String key) {
+        if ("UP".equals(key)) loanField = (loanField + 2) % 3;
+        else if ("DOWN".equals(key)) loanField = (loanField + 1) % 3;
+        else if (isDigit(key)) {
+            String v = loanValue();
+            if (v.length() < 10) setLoanValue(("0".equals(v) ? "" : v) + key);
+        } else if ("*".equals(key) && loanField == 1 && !loanRate.contains(".")) {
+            setLoanValue(loanRate + ".");
+        } else if ("RSK".equals(key)) {
+            String v = loanValue();
+            if (!v.isEmpty()) setLoanValue(v.substring(0, v.length() - 1));
+            else back();
+        } else if ("OK".equals(key) || "LSK".equals(key)) {
+            calculateLoan();
+        }
+        invalidate();
+    }
+
+    private String loanValue() {
+        if (loanField == 0) return loanPrincipal;
+        if (loanField == 1) return loanRate;
+        return loanMonths;
+    }
+
+    private void setLoanValue(String v) {
+        if (loanField == 0) loanPrincipal = v;
+        else if (loanField == 1) loanRate = v;
+        else loanMonths = v;
+    }
+
+    private void calculateLoan() {
+        try {
+            double principal = Double.parseDouble(loanPrincipal);
+            double annual = Double.parseDouble(loanRate);
+            int months = Integer.parseInt(loanMonths);
+            if (principal <= 0 || months <= 0) throw new Exception();
+            double monthlyRate = annual / 1200d;
+            double payment = monthlyRate == 0 ? principal / months :
+                    principal * monthlyRate / (1d - Math.pow(1d + monthlyRate, -months));
+            showNotice("Monthly " + String.format(Locale.UK, "%.2f", payment));
+        } catch (Exception e) {
+            showNotice("Check loan values");
+        }
+    }
+
     private void toggleStopwatch() {
         if (stopwatchRunning) {
             stopwatchAccum += SystemClock.elapsedRealtime() - stopwatchStarted;
@@ -1926,12 +2129,12 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
-        if ("compose".equals(page)) optionItems = new String[]{"Send","Save as draft","Input options","Clear text"};
+        if ("compose".equals(page)) optionItems = new String[]{"Send","Add recipient","Insert symbol","Insert emoticon","Save as draft","Input options","Clear text"};
         else if ("contactDetail".equals(page)) optionItems = new String[]{"Call","Edit contact","Delete contact"};
         else if ("notes".equals(page)) optionItems = new String[]{"New note","Edit","Delete"};
         else if ("todo".equals(page)) optionItems = new String[]{"Add","Edit","Delete"};
         else if ("messageRead".equals(page)) optionItems = new String[]{"Reply","Delete","Message details"};
-        else if ("calculator".equals(page)) optionItems = new String[]{"Clear","Scientific info"};
+        else if ("calculator".equals(page)) optionItems = new String[]{"Scientific","Loan calculator","Clear"};
         else if ("stopwatch".equals(page)) optionItems = new String[]{"Start/Stop","Split time","Reset"};
         else if ("music".equals(page)) optionItems = new String[]{"Play/Pause","Next track","Previous track"};
         else if ("dial".equals(page)) optionItems = new String[]{"Call","Save number","Clear"};
@@ -1948,6 +2151,9 @@ public class C2PhoneView extends View {
 
         if ("compose".equals(page)) {
             if ("Send".equals(choice)) sendMessage();
+            else if ("Add recipient".equals(choice)) go("recipientPicker");
+            else if ("Insert symbol".equals(choice)) go("symbolPicker");
+            else if ("Insert emoticon".equals(choice)) go("emojiPicker");
             else if ("Save as draft".equals(choice)) {
                 if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
                     drafts.add(0, messageBody);
@@ -1993,11 +2199,13 @@ public class C2PhoneView extends View {
                 go("compose");
             } else showNotice(choice);
         } else if ("calculator".equals(page)) {
-            if ("Clear".equals(choice)) {
+            if ("Scientific".equals(choice)) go("scientific");
+            else if ("Loan calculator".equals(choice)) go("loan");
+            else if ("Clear".equals(choice)) {
                 calc = "0";
                 calcStored = null;
                 calcOp = 0;
-            } else showNotice("D-pad: × − + ÷, OK =");
+            }
         } else if ("stopwatch".equals(page)) {
             if ("Start/Stop".equals(choice)) toggleStopwatch();
             else if ("Split time".equals(choice)) {
