@@ -1,4 +1,4 @@
-name: Build C2 Reborn APK
+name: Build GPT c2 from reborn APK
 
 on:
   push:
@@ -34,21 +34,21 @@ jobs:
         run: gradle --no-daemon clean assembleDebug
 
       - name: Prepare APK
-        run: cp c2-native-android/app/build/outputs/apk/debug/app-debug.apk C2-Reborn.apk
+        run: cp c2-native-android/app/build/outputs/apk/debug/app-debug.apk GPT-c2-from-reborn.apk
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: C2-Reborn-APK
+          name: GPT-c2-from-reborn-APK
           path: C2-Reborn.apk
 
       - name: Publish/update public APK release
         uses: ncipollo/release-action@v1
         with:
           tag: c2-native-latest
-          name: C2 Reborn Native - Latest
+          name: GPT c2 from reborn - Latest
           body: |
-            Native Android build of the Nokia C2-01 recreation.
+            Native Android build of GPT c2 from reborn, based on the Nokia C2-01 recreation.
             No WebView: the phone shell, menus and interactions are implemented in Android code.
           artifacts: C2-Reborn.apk
           allowUpdates: true
