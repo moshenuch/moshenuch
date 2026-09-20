@@ -1,0 +1,57 @@
+name: Build C2 Reborn APK
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "c2-native-android/**"
+      - ".github/workflows/build-c2-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build native debug APK
+        working-directory: c2-native-android
+        run: gradle --no-daemon clean assembleDebug
+
+      - name: Prepare APK
+        run: cp c2-native-android/app/build/outputs/apk/debug/app-debug.apk C2-Reborn.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: C2-Reborn-APK
+          path: C2-Reborn.apk
+
+      - name: Publish/update public APK release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: c2-native-latest
+          name: C2 Reborn Native - Latest
+          body: |
+            Native Android build of the Nokia C2-01 recreation.
+            No WebView: the phone shell, menus and interactions are implemented in Android code.
+          artifacts: C2-Reborn.apk
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
