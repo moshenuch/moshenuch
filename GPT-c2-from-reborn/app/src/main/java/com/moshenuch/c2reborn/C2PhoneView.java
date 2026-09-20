@@ -1036,7 +1036,6 @@ public class C2PhoneView extends View {
             case "applications": return "Applications";
             case "games": return "Games";
             case "collection": return "Collection";
-            case "web": return "Web";
             case "calllog": return "All calls";
             case "missed": return "Missed calls";
             case "received": return "Received calls";
