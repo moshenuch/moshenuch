@@ -236,32 +236,50 @@ public class C2PhoneView extends View {
     }
 
     private void drawPhone(Canvas c) {
-        p.setShader(new LinearGradient(0, 0, 0, DH, Color.rgb(45,46,50), Color.rgb(11,11,13), Shader.TileMode.CLAMP));
-        c.drawRoundRect(new RectF(30, 8, 330, 772), 42, 42, p);
+        p.setShader(new LinearGradient(0, 0, 0, DH,
+                Color.rgb(26,30,30), Color.rgb(3,5,5), Shader.TileMode.CLAMP));
+        c.drawRoundRect(new RectF(45, 8, 315, 772), 42, 42, p);
         p.setShader(null);
 
         p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(2f);
-        p.setColor(Color.rgb(94, 95, 100));
-        c.drawRoundRect(new RectF(31, 9, 329, 771), 41, 41, p);
+        p.setStrokeWidth(2.4f);
+        p.setColor(Color.rgb(185,190,190));
+        c.drawRoundRect(new RectF(45, 8, 315, 772), 42, 42, p);
+        p.setStrokeWidth(1f);
+        p.setColor(Color.rgb(80,84,84));
+        c.drawRoundRect(new RectF(49, 12, 311, 768), 38, 38, p);
         p.setStyle(Paint.Style.FILL);
 
-        p.setColor(Color.rgb(18,18,20));
-        c.drawRoundRect(new RectF(48, 60, 312, 411), 12, 12, p);
-        p.setColor(Color.rgb(190,190,194));
-        p.setTextAlign(Paint.Align.CENTER);
+        p.setColor(Color.rgb(190,195,195));
+        c.drawRoundRect(new RectF(41, 95, 45, 700), 2, 2, p);
+        c.drawRoundRect(new RectF(315, 95, 319, 700), 2, 2, p);
+
+        p.setColor(Color.rgb(80,82,84));
+        c.drawRoundRect(new RectF(155, 27, 205, 30), 2, 2, p);
+
+        p.setColor(Color.rgb(220,220,220));
         p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(18);
-        c.drawText("NOKIA", 180, 39, p);
+        c.drawText("NOKIA", 180, 61, p);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
-        p.setColor(Color.rgb(82,82,86));
-        c.drawRoundRect(new RectF(150, 47, 210, 52), 3, 3, p);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(10);
+        c.drawText("C2", 78, 59, p);
+
+        p.setColor(Color.rgb(3,4,4));
+        c.drawRoundRect(new RectF(67, 86, 293, 397), 5, 5, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.5f);
+        p.setColor(Color.rgb(82,88,88));
+        c.drawRoundRect(new RectF(69, 88, 291, 395), 4, 4, p);
+        p.setStyle(Paint.Style.FILL);
 
         c.save();
         c.clipRect(SX, SY, SX + SW, SY + SH);
         c.translate(SX, SY);
-        float s = SW / 240f;
-        c.scale(s, s);
+        float scale = SW / 240f;
+        c.scale(scale, scale);
         drawDisplay(c);
         c.restore();
 
@@ -865,56 +883,72 @@ public class C2PhoneView extends View {
     }
 
     private void drawControls(Canvas c) {
-        drawSoftKey(c, new RectF(55, 422, 123, 458), true);
-        drawSoftKey(c, new RectF(237, 422, 305, 458), false);
+        p.setColor(Color.rgb(235,235,235));
+        c.drawRoundRect(new RectF(75, 414, 108, 417), 2, 2, p);
+        c.drawRoundRect(new RectF(252, 414, 285, 417), 2, 2, p);
 
-        p.setColor(Color.rgb(43,44,47));
-        c.drawOval(new RectF(139, 444, 221, 526), p);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(3);
-        p.setColor(Color.rgb(118,119,123));
-        c.drawOval(new RectF(142, 447, 218, 523), p);
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.rgb(28,29,31));
-        c.drawCircle(180, 485, 18, p);
-        p.setColor(Color.rgb(205,205,208));
+        p.setShader(new LinearGradient(0, 432, 0, 515,
+                Color.rgb(220,220,220), Color.rgb(95,97,99), Shader.TileMode.CLAMP));
+        c.drawRoundRect(new RectF(137, 432, 223, 515), 15, 15, p);
+        p.setShader(null);
+        p.setColor(Color.rgb(12,14,14));
+        c.drawRoundRect(new RectF(146, 441, 214, 506), 11, 11, p);
+        p.setColor(Color.rgb(230,230,230));
         p.setTextAlign(Paint.Align.CENTER);
-        p.setTextSize(12);
-        c.drawText("OK", 180, 489, p);
+        p.setTextSize(8);
+        c.drawText("▲", 180, 451, p);
+        c.drawText("▼", 180, 499, p);
+        c.drawText("◀", 155, 476, p);
+        c.drawText("▶", 205, 476, p);
+        p.setTextSize(10);
+        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        c.drawText("OK", 180, 477, p);
+        p.setTypeface(android.graphics.Typeface.DEFAULT);
 
-        p.setColor(Color.rgb(41,42,45));
-        c.drawRoundRect(new RectF(50, 466, 122, 508), 14,14,p);
-        c.drawRoundRect(new RectF(238, 466, 310, 508), 14,14,p);
-        p.setColor(Color.rgb(66,170,85));
-        p.setTextSize(21);
-        c.drawText("☏", 86, 493, p);
-        p.setColor(Color.rgb(205,62,62));
-        c.drawText("☏", 274, 493, p);
+        p.setShader(new LinearGradient(0, 453, 0, 491,
+                Color.rgb(35,38,38), Color.rgb(5,7,7), Shader.TileMode.CLAMP));
+        c.drawRoundRect(new RectF(60, 453, 132, 491), 9, 9, p);
+        c.drawRoundRect(new RectF(228, 453, 300, 491), 9, 9, p);
+        p.setShader(null);
+        p.setTextSize(20);
+        p.setColor(Color.rgb(45,190,95));
+        c.drawText("☎", 96, 479, p);
+        p.setColor(Color.rgb(225,65,75));
+        c.drawText("☎", 264, 479, p);
 
         String[][] labels = {
-                {"1","◉◉"},{"2","abc"},{"3","def"},
+                {"1","●●"},{"2","abc"},{"3","def"},
                 {"4","ghi"},{"5","jkl"},{"6","mno"},
                 {"7","pqrs"},{"8","tuv"},{"9","wxyz"},
-                {"*","+"},{"0","↻"},{"#","⌂"}
+                {"*","+"},{"0","↻"},{"#","⌂ *"}
         };
-        float[] xs = {58, 149, 240};
-        float[] ys = {538, 590, 642, 694};
+        float[] xs = {48, 138, 228};
+        float[] ys = {535, 588, 641, 694};
         for (int r = 0; r < 4; r++) {
             for (int col = 0; col < 3; col++) {
                 int i = r * 3 + col;
-                RectF kr = new RectF(xs[col], ys[r], xs[col] + 62, ys[r] + 40);
+                RectF kr = new RectF(xs[col], ys[r], xs[col] + 84, ys[r] + 45);
                 p.setShader(new LinearGradient(0, kr.top, 0, kr.bottom,
-                        Color.rgb(68,69,73), Color.rgb(28,29,32), Shader.TileMode.CLAMP));
-                c.drawRoundRect(kr, 9,9,p);
+                        Color.rgb(31,35,35), Color.rgb(4,6,6), Shader.TileMode.CLAMP));
+                c.drawRoundRect(kr, 4, 4, p);
                 p.setShader(null);
-                p.setColor(Color.rgb(226,226,229));
-                p.setTextAlign(Paint.Align.CENTER);
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(1);
+                p.setColor(Color.rgb(70,76,76));
+                c.drawRoundRect(kr, 4, 4, p);
+                p.setStyle(Paint.Style.FILL);
+
+                p.setColor(Color.rgb(47,184,233));
                 p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
                 p.setTextSize(16);
-                c.drawText(labels[i][0], kr.centerX(), kr.top + 18, p);
+                p.setTextAlign(Paint.Align.CENTER);
+                c.drawText(labels[i][0], kr.centerX(), kr.top + 26, p);
                 p.setTypeface(android.graphics.Typeface.DEFAULT);
                 p.setTextSize(8);
-                c.drawText(labels[i][1], kr.centerX(), kr.top + 31, p);
+                if (i != 0 && i != 9 && i != 10 && i != 11)
+                    c.drawText(labels[i][1], kr.centerX() + 20, kr.top + 26, p);
+                else
+                    c.drawText(labels[i][1], kr.centerX() + 14, kr.top + 37, p);
             }
         }
     }
@@ -2346,25 +2380,24 @@ public class C2PhoneView extends View {
     }
 
     private String hitKey(float x, float y) {
-        if (new RectF(50, 416, 130, 462).contains(x,y)) return "LSK";
-        if (new RectF(230, 416, 310, 462).contains(x,y)) return "RSK";
-        if (new RectF(45, 462, 128, 513).contains(x,y)) return "CALL";
-        if (new RectF(232, 462, 315, 513).contains(x,y)) return "END";
+        if (new RectF(55, 402, 125, 430).contains(x,y)) return "LSK";
+        if (new RectF(235, 402, 305, 430).contains(x,y)) return "RSK";
+        if (new RectF(55, 448, 137, 497).contains(x,y)) return "CALL";
+        if (new RectF(223, 448, 305, 497).contains(x,y)) return "END";
 
-        float dx = x - 180, dy = y - 485;
-        float d = (float)Math.sqrt(dx*dx + dy*dy);
-        if (d <= 42) {
-            if (d <= 19) return "OK";
+        if (new RectF(137, 432, 223, 515).contains(x,y)) {
+            if (new RectF(160, 455, 200, 493).contains(x,y)) return "OK";
+            float dx = x - 180, dy = y - 474;
             if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? "LEFT" : "RIGHT";
             return dy < 0 ? "UP" : "DOWN";
         }
 
-        float[] xs = {58,149,240};
-        float[] ys = {538,590,642,694};
+        float[] xs = {48,138,228};
+        float[] ys = {535,588,641,694};
         String[] ks = {"1","2","3","4","5","6","7","8","9","*","0","#"};
         for (int r = 0; r < 4; r++) {
             for (int col = 0; col < 3; col++) {
-                if (new RectF(xs[col], ys[r], xs[col] + 62, ys[r] + 40).contains(x,y))
+                if (new RectF(xs[col], ys[r], xs[col] + 84, ys[r] + 45).contains(x,y))
                     return ks[r*3+col];
             }
         }
