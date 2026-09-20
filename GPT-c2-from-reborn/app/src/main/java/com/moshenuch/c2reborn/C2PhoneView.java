@@ -114,6 +114,8 @@ public class C2PhoneView extends View {
 
     private boolean optionsOpen = false;
     private int optionSel = 0;
+    private boolean locked = false;
+    private int unlockStep = 0;
     private String[] optionItems = new String[0];
 
     private final String[] mainMenu = {
@@ -829,6 +831,7 @@ public class C2PhoneView extends View {
     }
 
     private String[] softLabels() {
+        if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
         if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
@@ -849,27 +852,33 @@ public class C2PhoneView extends View {
     }
 
     private void drawOptions(Canvas c) {
-        float w = 170;
-        float h = Math.min(230, 24 + optionItems.length * 31);
-        float x = 5;
-        float y = 292 - h;
-        p.setColor(Color.rgb(248, 249, 247));
-        c.drawRect(x, y, x + w, y + h, p);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(1);
-        p.setColor(Color.rgb(45,50,52));
-        c.drawRect(x, y, x + w, y + h, p);
-        p.setStyle(Paint.Style.FILL);
-        for (int i = 0; i < optionItems.length; i++) {
-            float ry = y + 4 + i * 31;
-            if (i == optionSel) {
-                p.setColor(accent());
-                c.drawRect(x + 2, ry, x + w - 2, ry + 29, p);
+        p.setColor(Color.rgb(17,25,35));
+        c.drawRect(0, 0, 240, 286, p);
+
+        p.setColor(Color.BLACK);
+        c.drawRect(0, 0, 240, 28, p);
+        p.setColor(Color.WHITE);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTextSize(18);
+        c.drawText("Options", 6, 21, p);
+        p.setTextAlign(Paint.Align.RIGHT);
+        p.setTextSize(13);
+        c.drawText((optionSel + 1) + "-" + optionItems.length, 233, 20, p);
+
+        int visible = 6;
+        int start = Math.max(0, Math.min(optionSel - (visible - 1), Math.max(0, optionItems.length - visible)));
+        for (int row = 0; row < visible && start + row < optionItems.length; row++) {
+            int idx = start + row;
+            float y = 29 + row * 40;
+            if (idx == optionSel) {
+                p.setColor(Color.WHITE);
+                c.drawRect(0, y, 240, y + 38, p);
             }
-            p.setColor(i == optionSel ? Color.WHITE : Color.rgb(20,23,24));
+            p.setColor(idx == optionSel ? Color.BLACK : Color.WHITE);
             p.setTextAlign(Paint.Align.LEFT);
-            p.setTextSize(12);
-            c.drawText(optionItems[i], x + 9, ry + 20, p);
+            p.setTextSize(17);
+            c.drawText(optionItems[idx], 8, y + 25, p);
         }
     }
 
@@ -1033,6 +1042,8 @@ public class C2PhoneView extends View {
             case "received": return "Received calls";
             case "dialled": return "Dialled numbers";
             case "shortcuts": return "My shortcuts";
+            case "goto": return "Go to";
+            case "web": return "STORE";
             default: return "GPT c2 from reborn";
         }
     }
@@ -1118,6 +1129,8 @@ public class C2PhoneView extends View {
                 return new String[]{"Bluetooth","Connect audio acc.","Paired devices","Active devices","My phone's visibility","My phone's name"};
             case "shortcuts":
                 return new String[]{"Left selection key","Right selection key","Navigation key","Home screen key"};
+            case "goto":
+                return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
             case "gallery":
                 return new String[]{"Memory card","Images","Video clips","Music files"};
             case "media":
@@ -1457,6 +1470,39 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("goto".equals(page)) {
+            switch (sel) {
+                case 0:
+                    locked = true;
+                    unlockStep = 0;
+                    history.clear();
+                    page = "home";
+                    sel = 0;
+                    showNotice("Keypad locked");
+                    break;
+                case 1: go("profiles"); break;
+                case 2: go("alarm"); break;
+                case 3:
+                    detailTitle = "Camera";
+                    detailText = "Camera";
+                    go("itemDetail");
+                    break;
+                case 4:
+                    detailTitle = "Video recorder";
+                    detailText = "Video recorder";
+                    go("itemDetail");
+                    break;
+                case 5: go("calculator"); break;
+                case 6:
+                    browserUrl = "https://www.nokia.com/";
+                    go("browser");
+                    break;
+                case 7: go("music"); break;
+                case 8: go("conversations"); break;
+            }
+            return;
+        }
+
         String[] items = itemsFor(page);
         if (items.length > 0) {
             detailTitle = items[sel];
@@ -1678,6 +1724,22 @@ public class C2PhoneView extends View {
     private void press(String key) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
 
+        if (locked) {
+            if (unlockStep == 0 && "LSK".equals(key)) {
+                unlockStep = 1;
+                showNotice("Now press *");
+            } else if (unlockStep == 1 && "*".equals(key)) {
+                locked = false;
+                unlockStep = 0;
+                showNotice("Keypad unlocked");
+            } else {
+                unlockStep = 0;
+                showNotice("Keypad locked");
+            }
+            invalidate();
+            return;
+        }
+
         if (optionsOpen) {
             if ("UP".equals(key)) optionSel = (optionSel - 1 + optionItems.length) % optionItems.length;
             else if ("DOWN".equals(key)) optionSel = (optionSel + 1) % optionItems.length;
@@ -1719,12 +1781,8 @@ public class C2PhoneView extends View {
 
         if ("home".equals(page)) {
             if ("OK".equals(key)) go("menu");
-            else if ("LSK".equals(key)) {
-                page = "shortcuts";
-                history.push(new PageState("home",0));
-                sel = 0;
-                invalidate();
-            } else if ("RSK".equals(key)) go("contactsNames");
+            else if ("LSK".equals(key)) go("goto");
+            else if ("RSK".equals(key)) go("contactsNames");
             else if (isNumberKey(key) && !"#".equals(key)) {
                 dial = "*".equals(key) ? "*" : key;
                 go("dial");
@@ -2220,17 +2278,156 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
-        if ("compose".equals(page)) optionItems = new String[]{"Send","Add recipient","Insert symbol","Insert emoticon","Save as draft","Input options","Clear text"};
-        else if ("contactDetail".equals(page)) optionItems = new String[]{"Call","Edit contact","Delete contact"};
-        else if ("notes".equals(page)) optionItems = new String[]{"New note","Edit","Delete"};
-        else if ("todo".equals(page)) optionItems = new String[]{"Add","Edit","Delete"};
-        else if ("messageRead".equals(page)) optionItems = new String[]{"Reply","Delete","Message details"};
-        else if ("calculator".equals(page)) optionItems = new String[]{"Scientific","Loan calculator","Clear"};
-        else if ("stopwatch".equals(page)) optionItems = new String[]{"Start/Stop","Split time","Reset"};
-        else if ("music".equals(page)) optionItems = new String[]{"Play/Pause","Next track","Previous track"};
-        else if ("dial".equals(page)) optionItems = new String[]{"Call","Save number","Clear"};
-        else if ("call".equals(page)) optionItems = new String[]{"End call","Loudspeaker"};
+        if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
+        else if ("messaging".equals(page)) {
+            if (sel == 1) optionItems = new String[]{"New message","Inbox view","Message log","SIM messages","Memory status"};
+            else if (sel == 2) optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
+            else if (sel >= 3 && sel <= 5) optionItems = new String[]{"New message","Folder details","Message log","Add mailbox","IM messages","Memory status"};
+            else if (sel == 7) optionItems = new String[]{"New message","New e-mail","Add mailbox","Message log","IM messages","Memory status"};
+            else optionItems = new String[]{"New message","Message log","Add mailbox","IM messages","Memory status"};
+        }
+        else if ("drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page))
+            optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
+        else if ("inbox".equals(page) || "messageRead".equals(page))
+            optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+        else if ("conversations".equals(page))
+            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all"};
+        else if ("compose".equals(page))
+            optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
+        else if ("contacts".equals(page))
+            optionItems = new String[]{"Open","Search","Add new","Memory status"};
+        else if ("contactsNames".equals(page))
+            optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >","Delete contact","Mark >"};
+        else if ("contactDetail".equals(page))
+            optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >","View conversations","Add image >","Use number","Set as default","Change type >","Copy number","Send business card >","Add to group","Speed dial"};
+        else if ("log".equals(page))
+            optionItems = new String[]{"View","Call","Send message","Save","Delete","Clear lists","Call timers"};
+        else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
+            optionItems = new String[]{"Call","Send message","Save to contacts","Delete","Clear list"};
+        else if ("settings".equals(page))
+            optionItems = new String[]{"Open","Search","Help"};
+        else if ("profiles".equals(page))
+            optionItems = new String[]{"Activate","Personalise","Timed"};
+        else if ("gallery".equals(page))
+            optionItems = new String[]{"Downloads","Mem. card options","Details","Type of view","Sort","Add folder","Memory status"};
+        else if ("media".equals(page))
+            optionItems = new String[]{"Open","View photos","View videos","Settings","Memory in use"};
+        else if ("organiser".equals(page))
+            optionItems = new String[]{"Open","Make a note","Week view","Go to date","Go to today","Settings","Memory status"};
+        else if ("calendar".equals(page))
+            optionItems = new String[]{"View","Make a note","Delete","Week view","Go to date","Go to today","Memory status","Go to To-do list"};
+        else if ("todo".equals(page))
+            optionItems = new String[]{"Open","Add","Delete","Memory status","Go to calendar"};
+        else if ("notes".equals(page))
+            optionItems = new String[]{"Make a note","Delete","Edit","Use detail >","Send note","Delete all notes","Memory status"};
+        else if ("applications".equals(page))
+            optionItems = new String[]{"Open","Move","Move to folder","Organise","Add folder","Memory status"};
+        else if ("web".equals(page))
+            optionItems = new String[]{"Open","Home","Bookmarks","Go to address","Downloads","Settings"};
+        else if ("goto".equals(page))
+            optionItems = new String[]{"Select","Organise","Help"};
+        else if ("dial".equals(page))
+            optionItems = new String[]{"Call","Save","Send message","Add to contact"};
+        else if ("call".equals(page))
+            optionItems = new String[]{"Loudspeaker","Mute","Hold","Contacts","Main menu","End call"};
+        else if ("music".equals(page))
+            optionItems = new String[]{"Music library","Now playing","Shuffle","Repeat","Equaliser","Settings"};
+        else if ("themes".equals(page))
+            optionItems = new String[]{"Open","Theme downloads","Type of view","Sort","Search","Memory status"};
+        else if ("connectivity".equals(page))
+            optionItems = new String[]{"Open","Help"};
+        else if ("bluetooth".equals(page))
+            optionItems = new String[]{"Open","New search","Details","Delete pairing","Help"};
+        else if ("calculator".equals(page))
+            optionItems = new String[]{"Scientific calculator","Loan calculator","Instructions","Exit"};
+        else if ("scientific".equals(page))
+            optionItems = new String[]{"Standard calculator","Loan calculator","Instructions","Exit"};
+        else if ("loan".equals(page))
+            optionItems = new String[]{"Calculate","Standard calculator","Scientific calculator","Instructions","Exit","Editing options"};
+        else if ("maps".equals(page))
+            optionItems = new String[]{"Open map","Search","Favourites","Settings"};
+        else if ("voicemessages".equals(page))
+            optionItems = new String[]{"Call voice mailbox","Voice mailbox no.","Info"};
+        else if ("ims".equals(page))
+            optionItems = new String[]{"Sign in","Saved conversations","Settings"};
+        else if ("browser".equals(page))
+            optionItems = new String[]{"Open","Home","Bookmarks","Go to address","Last web addr.","Downloads","Settings"};
+        else if ("stopwatch".equals(page))
+            optionItems = new String[]{"Split timing","Lap timing"};
         else optionItems = new String[]{"Open","Details","Help"};
+
+        optionSel = 0;
+        optionsOpen = true;
+        invalidate();
+    }
+
+"Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+        else if ("conversations".equals(page))
+            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all"};
+        else if ("compose".equals(page))
+            optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
+        else if ("contacts".equals(page))
+            optionItems = new String[]{"Open","Search","Add new","Memory status"};
+        else if ("contactsNames".equals(page))
+            optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >","Delete contact","Mark >"};
+        else if ("contactDetail".equals(page))
+            optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >","View conversations","Add image >","Use number","Set as default","Change type >","Copy number","Send business card >","Add to group","Speed dial"};
+        else if ("log".equals(page))
+            optionItems = new String[]{"View","Call","Send message","Save","Delete","Clear lists","Call timers"};
+        else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
+            optionItems = new String[]{"Call","Send message","Save to contacts","Delete","Clear list"};
+        else if ("settings".equals(page))
+            optionItems = new String[]{"Open","Search","Help"};
+        else if ("profiles".equals(page))
+            optionItems = new String[]{"Activate","Personalise","Timed"};
+        else if ("gallery".equals(page))
+            optionItems = new String[]{"Downloads","Mem. card options","Details","Type of view","Sort","Add folder","Memory status"};
+        else if ("media".equals(page))
+            optionItems = new String[]{"Open","View photos","View videos","Settings","Memory in use"};
+        else if ("organiser".equals(page))
+            optionItems = new String[]{"Open","Make a note","Week view","Go to date","Go to today","Settings","Memory status"};
+        else if ("calendar".equals(page))
+            optionItems = new String[]{"View","Make a note","Delete","Week view","Go to date","Go to today","Memory status","Go to To-do list"};
+        else if ("todo".equals(page))
+            optionItems = new String[]{"Open","Add","Delete","Memory status","Go to calendar"};
+        else if ("notes".equals(page))
+            optionItems = new String[]{"Make a note","Delete","Edit","Use detail >","Send note","Delete all notes","Memory status"};
+        else if ("applications".equals(page))
+            optionItems = new String[]{"Open","Move","Move to folder","Organise","Add folder","Memory status"};
+        else if ("web".equals(page))
+            optionItems = new String[]{"Open","Home","Bookmarks","Go to address","Downloads","Settings"};
+        else if ("goto".equals(page))
+            optionItems = new String[]{"Select","Organise","Help"};
+        else if ("dial".equals(page))
+            optionItems = new String[]{"Call","Save","Send message","Add to contact"};
+        else if ("call".equals(page))
+            optionItems = new String[]{"Loudspeaker","Mute","Hold","Contacts","Main menu","End call"};
+        else if ("music".equals(page))
+            optionItems = new String[]{"Music library","Now playing","Shuffle","Repeat","Equaliser","Settings"};
+        else if ("themes".equals(page))
+            optionItems = new String[]{"Open","Theme downloads","Type of view","Sort","Search","Memory status"};
+        else if ("connectivity".equals(page))
+            optionItems = new String[]{"Open","Help"};
+        else if ("bluetooth".equals(page))
+            optionItems = new String[]{"Open","New search","Details","Delete pairing","Help"};
+        else if ("calculator".equals(page))
+            optionItems = new String[]{"Scientific calculator","Loan calculator","Instructions","Exit"};
+        else if ("scientific".equals(page))
+            optionItems = new String[]{"Standard calculator","Loan calculator","Instructions","Exit"};
+        else if ("loan".equals(page))
+            optionItems = new String[]{"Calculate","Standard calculator","Scientific calculator","Instructions","Exit","Editing options"};
+        else if ("maps".equals(page))
+            optionItems = new String[]{"Open map","Search","Favourites","Settings"};
+        else if ("voicemessages".equals(page))
+            optionItems = new String[]{"Call voice mailbox","Voice mailbox no.","Info"};
+        else if ("ims".equals(page))
+            optionItems = new String[]{"Sign in","Saved conversations","Settings"};
+        else if ("browser".equals(page))
+            optionItems = new String[]{"Open","Home","Bookmarks","Go to address","Last web addr.","Downloads","Settings"};
+        else if ("stopwatch".equals(page))
+            optionItems = new String[]{"Split timing","Lap timing"};
+        else optionItems = new String[]{"Open","Details","Help"};
+
         optionSel = 0;
         optionsOpen = true;
         invalidate();
@@ -2240,89 +2437,170 @@ public class C2PhoneView extends View {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
 
-        if ("compose".equals(page)) {
-            if ("Send".equals(choice)) sendMessage();
-            else if ("Add recipient".equals(choice)) go("recipientPicker");
-            else if ("Insert symbol".equals(choice)) go("symbolPicker");
-            else if ("Insert emoticon".equals(choice)) go("emojiPicker");
-            else if ("Save as draft".equals(choice)) {
-                if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
-                    drafts.add(0, messageBody);
-                    saveStringList("drafts", drafts);
-                    showNotice("Saved to Drafts");
-                }
-            } else if ("Input options".equals(choice)) {
-                if ("T9".equals(inputMode)) inputMode = "abc"; else inputMode = "T9";
-                showNotice("Input " + inputMode);
-            } else if ("Clear text".equals(choice)) messageBody = "";
-        } else if ("contactDetail".equals(page)) {
-            if ("Call".equals(choice)) startCall(contacts.get(contactIndex).number);
-            else if ("Edit contact".equals(choice)) beginContactEdit(contactIndex);
-            else if ("Delete contact".equals(choice)) {
-                contacts.remove(contactIndex);
-                saveContacts();
-                back();
-                showNotice("Contact deleted");
-            }
-        } else if ("notes".equals(page)) {
-            if ("New note".equals(choice)) beginTextEdit("note",-1,"");
-            else if ("Edit".equals(choice) && !notes.isEmpty()) beginTextEdit("note",sel,notes.get(sel));
-            else if ("Delete".equals(choice) && !notes.isEmpty()) {
-                notes.remove(sel);
-                saveStringList("notes",notes);
-                sel = Math.max(0, Math.min(sel, notes.size() - 1));
-                showNotice("Deleted");
-            }
-        } else if ("todo".equals(page)) {
-            if ("Add".equals(choice)) beginTextEdit("todo",-1,"");
-            else if ("Edit".equals(choice) && !todos.isEmpty()) beginTextEdit("todo",sel,todos.get(sel));
-            else if ("Delete".equals(choice) && !todos.isEmpty()) {
-                todos.remove(sel);
-                saveStringList("todos",todos);
-                sel = Math.max(0, Math.min(sel, todos.size() - 1));
-                showNotice("Deleted");
-            }
-        } else if ("messageRead".equals(page)) {
-            if ("Reply".equals(choice)) {
+        if ("menu".equals(page)) {
+            if ("Main menu view".equals(choice)) showNotice("Grid with labels");
+            else if ("Organise".equals(choice)) showNotice("Organise menu");
+            else showNotice("Help");
+        } else if ("goto".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
+            else if ("Organise".equals(choice)) showNotice("Organise shortcuts");
+            else showNotice("Help");
+        } else if ("messaging".equals(page) || "drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page)) {
+            if ("New message".equals(choice)) {
+                recipient = ""; messageBody = ""; composeFocus = 0; inputMode = "T9"; go("compose");
+            } else if ("Inbox view".equals(choice)) go("inbox");
+            else if ("Message log".equals(choice)) { detailTitle="Message log"; detailText="Sent messages\nReceived messages\nDraft messages"; go("itemDetail"); }
+            else if ("SIM messages".equals(choice)) { detailTitle="SIM messages"; detailText="No SIM messages"; go("itemDetail"); }
+            else if ("Memory status".equals(choice)) { detailTitle="Memory status"; detailText="Phone\nMemory card"; go("itemDetail"); }
+            else if ("Folder details".equals(choice)) showNotice("Folder details");
+            else if ("Add mailbox".equals(choice) || "New e-mail".equals(choice)) showNotice("E-mail not configured");
+            else if ("IM messages".equals(choice)) go("ims");
+        } else if ("conversations".equals(page)) {
+            if ("Call".equals(choice)) {
+                if (sel == 0 && !contacts.isEmpty()) startCall(contacts.get(0).number);
+                else showNotice("No number");
+            } else if ("Conversation details".equals(choice)) {
+                detailTitle="Message details";
+                detailText="Type: Conversation\nContact: " + itemsFor("conversations")[sel];
+                go("itemDetail");
+            } else if ("Delete conversation".equals(choice)) showNotice("Conversation deleted");
+            else if ("Inbox view >".equals(choice)) go("inbox");
+            else if ("New message >".equals(choice)) { recipient=""; messageBody=""; composeFocus=0; go("compose"); }
+            else if ("Mark >".equals(choice) || "Mark all".equals(choice)) showNotice(choice.replace(" >",""));
+        } else if ("inbox".equals(page) || "messageRead".equals(page)) {
+            if ("Reply".equals(choice) || "Reply as".equals(choice)) {
                 recipient = inboxName(inboxIndex);
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
+            } else if ("Call".equals(choice)) startCall(inboxName(inboxIndex));
+            else if ("Delete".equals(choice)) showNotice("Message deleted");
+            else if ("Forward".equals(choice) || "Edit".equals(choice) || "New message".equals(choice)) {
+                recipient = ""; messageBody = "Forwarded message"; composeFocus = 0; go("compose");
+            } else if ("Conversation view".equals(choice)) go("conversations");
+            else if ("Message details".equals(choice)) {
+                detailTitle="Message details"; detailText="Type: Text message\nStatus: Read"; go("itemDetail");
             } else showNotice(choice);
-        } else if ("calculator".equals(page)) {
-            if ("Scientific".equals(choice)) go("scientific");
-            else if ("Loan calculator".equals(choice)) go("loan");
-            else if ("Clear".equals(choice)) {
-                calc = "0";
-                calcStored = null;
-                calcOp = 0;
-            }
-        } else if ("stopwatch".equals(page)) {
-            if ("Start/Stop".equals(choice)) toggleStopwatch();
-            else if ("Split time".equals(choice)) {
-                long ms = stopwatchAccum + (stopwatchRunning ? SystemClock.elapsedRealtime() - stopwatchStarted : 0);
-                stopwatchSplits.add(formatMillis(ms));
-            } else {
-                stopwatchRunning = false;
-                stopwatchAccum = 0;
-                stopwatchSplits.clear();
-            }
-        } else if ("music".equals(page)) {
-            if ("Play/Pause".equals(choice)) toggleMusic();
-            else if ("Next track".equals(choice)) changeTrack(1);
-            else changeTrack(-1);
+        } else if ("compose".equals(page)) {
+            if ("Send".equals(choice)) sendMessage();
+            else if ("Add recipient >".equals(choice)) go("recipientPicker");
+            else if ("Insert symbol".equals(choice) || "Insert".equals(choice)) go("symbolPicker");
+            else if ("Clear field".equals(choice)) messageBody = "";
+            else if ("Save message >".equals(choice)) {
+                if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
+                    drafts.add(0, messageBody);
+                    saveStringList("drafts", drafts);
+                }
+                showNotice("Message saved");
+            } else if ("Prediction options >".equals(choice)) {
+                inputMode = "T9".equals(inputMode) ? "abc" : "T9";
+                showNotice("Prediction " + ("T9".equals(inputMode) ? "on" : "off"));
+            } else if ("Exit editor".equals(choice)) back();
+            else showNotice(choice.replace(" >",""));
+        } else if ("contacts".equals(page)) {
+            if ("Open".equals(choice)) openSelected();
+            else if ("Add new".equals(choice)) beginContactEdit(-1);
+            else if ("Search".equals(choice)) showNotice("Search");
+            else { detailTitle="Memory status"; detailText="Phone memory\nSIM card"; go("itemDetail"); }
+        } else if ("contactsNames".equals(page)) {
+            if (contacts.isEmpty()) return;
+            contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
+            Contact ct = contacts.get(contactIndex);
+            if ("Call >".equals(choice)) startCall(ct.number);
+            else if ("Send message >".equals(choice)) { recipient=ct.number; messageBody=""; composeFocus=1; go("compose"); }
+            else if ("Add new >".equals(choice)) beginContactEdit(-1);
+            else if ("Edit >".equals(choice)) beginContactEdit(contactIndex);
+            else if ("Delete contact".equals(choice)) { contacts.remove(contactIndex); saveContacts(); sel=Math.max(0,sel-1); showNotice("Contact deleted"); }
+            else if ("Search".equals(choice)) showNotice("Search");
+            else if ("Mark >".equals(choice)) showNotice("Mark");
+        } else if ("contactDetail".equals(page)) {
+            Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
+            if ("Call".equals(choice)) startCall(ct.number);
+            else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
+            else if ("Delete".equals(choice)) { contacts.remove(contactIndex); saveContacts(); back(); showNotice("Contact deleted"); }
+            else if ("Send message >".equals(choice)) { recipient=ct.number; messageBody=""; composeFocus=1; go("compose"); }
+            else if ("View conversations".equals(choice)) go("conversations");
+            else if ("Use number".equals(choice) || "Copy number".equals(choice)) showNotice(ct.number);
+            else showNotice(choice.replace(" >",""));
+        } else if ("log".equals(page)) {
+            if ("View".equals(choice)) openSelected();
+            else if ("Call".equals(choice)) openSelected();
+            else if ("Clear lists".equals(choice)) showNotice("Call lists cleared");
+            else if ("Call timers".equals(choice)) { detailTitle="Call timers"; detailText="Call duration\nPacket data counter\nPacket data timer"; go("itemDetail"); }
+            else showNotice(choice);
+        } else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page)) {
+            if ("Call".equals(choice)) {
+                String item=itemsFor(page)[sel]; int cut=item.indexOf("  "); startCall(cut>0?item.substring(0,cut):item);
+            } else if ("Clear list".equals(choice)) showNotice("List cleared");
+            else showNotice(choice);
+        } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
+            if ("Open".equals(choice)) openSelected();
+            else showNotice(choice);
+        } else if ("profiles".equals(page)) {
+            if ("Activate".equals(choice)) { profile=itemsFor(page)[sel]; saveSettings(); showNotice(profile+" activated"); }
+            else showNotice(choice);
+        } else if ("notes".equals(page)) {
+            if ("Make a note".equals(choice)) beginTextEdit("note",-1,"");
+            else if ("Edit".equals(choice) && !notes.isEmpty()) beginTextEdit("note",sel,notes.get(sel));
+            else if ("Delete".equals(choice) && !notes.isEmpty()) { notes.remove(sel); saveStringList("notes",notes); sel=Math.max(0,Math.min(sel,notes.size()-1)); showNotice("Deleted"); }
+            else if ("Delete all notes".equals(choice)) { notes.clear(); saveStringList("notes",notes); sel=0; showNotice("Notes deleted"); }
+            else showNotice(choice.replace(" >",""));
+        } else if ("todo".equals(page)) {
+            if ("Add".equals(choice)) beginTextEdit("todo",-1,"");
+            else if ("Delete".equals(choice) && !todos.isEmpty()) { todos.remove(sel); saveStringList("todos",todos); sel=Math.max(0,Math.min(sel,todos.size()-1)); }
+            else if ("Go to calendar".equals(choice)) go("calendar");
+            else if ("Open".equals(choice)) openSelected();
+            else showNotice(choice);
+        } else if ("calendar".equals(page)) {
+            if ("Make a note".equals(choice)) beginTextEdit("calendar",-1,"");
+            else if ("Go to To-do list".equals(choice)) go("todo");
+            else if ("View".equals(choice)) openSelected();
+            else showNotice(choice);
         } else if ("dial".equals(page)) {
             if ("Call".equals(choice)) startCall(dial);
-            else if ("Save number".equals(choice) && !dial.isEmpty()) {
-                editKind = "contact";
-                editIndex = -1;
-                editBuffer = "\n" + dial;
-                editField = 0;
-                go("edit");
-            } else if ("Clear".equals(choice)) dial = "";
+            else if ("Save".equals(choice) && !dial.isEmpty()) { editKind="contact"; editIndex=-1; editBuffer="\n"+dial; editField=0; go("edit"); }
+            else if ("Send message".equals(choice)) { recipient=dial; messageBody=""; composeFocus=1; go("compose"); }
+            else if ("Add to contact".equals(choice)) showNotice("Add to contact");
         } else if ("call".equals(page)) {
-            if ("End call".equals(choice)) endCall();
-            else loudspeaker = !loudspeaker;
+            if ("Loudspeaker".equals(choice)) { loudspeaker=!loudspeaker; showNotice(loudspeaker?"Loudspeaker on":"Loudspeaker off"); }
+            else if ("Contacts".equals(choice)) go("contactsNames");
+            else if ("Main menu".equals(choice)) go("menu");
+            else if ("End call".equals(choice)) endCall();
+            else showNotice(choice);
+        } else if ("calculator".equals(page)) {
+            if ("Scientific calculator".equals(choice)) go("scientific");
+            else if ("Loan calculator".equals(choice)) go("loan");
+            else if ("Exit".equals(choice)) { history.clear(); page="home"; sel=0; }
+            else showNotice("Use keypad and navigation keys");
+        } else if ("scientific".equals(page)) {
+            if ("Standard calculator".equals(choice)) backTo("calculator");
+            else if ("Loan calculator".equals(choice)) go("loan");
+            else if ("Exit".equals(choice)) { history.clear(); page="home"; sel=0; }
+            else showNotice("Scientific calculator");
+        } else if ("loan".equals(page)) {
+            if ("Calculate".equals(choice)) calculateLoan();
+            else if ("Standard calculator".equals(choice)) go("calculator");
+            else if ("Scientific calculator".equals(choice)) go("scientific");
+            else if ("Exit".equals(choice)) { history.clear(); page="home"; sel=0; }
+            else showNotice(choice);
+        } else if ("music".equals(page)) {
+            if ("Now playing".equals(choice)) showNotice(tracks[musicTrack]);
+            else if ("Equaliser".equals(choice)) showNotice("Normal");
+            else if ("Shuffle".equals(choice) || "Repeat".equals(choice)) showNotice(choice);
+            else if ("Music library".equals(choice)) showNotice("Music library");
+            else showNotice(choice);
+        } else if ("bluetooth".equals(page)) {
+            if ("Open".equals(choice)) openSelected();
+            else if ("New search".equals(choice)) showNotice(bluetooth ? "No devices found" : "Switch Bluetooth on first");
+            else showNotice(choice);
+        } else if ("browser".equals(page)) {
+            if ("Home".equals(choice)) { browserUrl="https://www.nokia.com/"; invalidate(); }
+            else if ("Bookmarks".equals(choice)) { browserUrl="about:bookmarks"; invalidate(); }
+            else if ("Go to address".equals(choice)) beginTextEdit("url",-1,"http://");
+            else if ("Last web addr.".equals(choice)) showNotice(browserUrl);
+            else showNotice(choice);
+        } else if ("stopwatch".equals(page)) {
+            if ("Split timing".equals(choice) || "Lap timing".equals(choice)) showNotice(choice);
         } else {
             if ("Open".equals(choice)) openSelected();
             else showNotice(choice);
