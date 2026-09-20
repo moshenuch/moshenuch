@@ -160,7 +160,7 @@ public class C2PhoneView extends View {
             saveContacts();
         }
         if (notes.isEmpty()) {
-            notes.add("Welcome to C2 Reborn native.");
+            notes.add("Welcome to GPT c2 from reborn.");
             saveStringList("notes", notes);
         }
     }
@@ -356,7 +356,7 @@ public class C2PhoneView extends View {
 
         p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(11);
-        c.drawText("C2 Reborn", 10, 281, p);
+        c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
         c.drawText("Native", 230, 281, p);
     }
@@ -899,7 +899,7 @@ public class C2PhoneView extends View {
             case "received": return "Received calls";
             case "dialled": return "Dialled numbers";
             case "shortcuts": return "My shortcuts";
-            default: return "C2 Reborn";
+            default: return "GPT c2 from reborn";
         }
     }
 
