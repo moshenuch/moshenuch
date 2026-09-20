@@ -4,8 +4,8 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - "c2-native-android/**"
-      - ".github/workflows/build-c2-native.yml"
+      - "GPT-c2-from-reborn/**"
+      - ".github/workflows/build-GPT-c2-from-reborn.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,11 +30,11 @@ jobs:
           gradle-version: "8.7"
 
       - name: Build native debug APK
-        working-directory: c2-native-android
+        working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
 
       - name: Prepare APK
-        run: cp c2-native-android/app/build/outputs/apk/debug/app-debug.apk GPT-c2-from-reborn.apk
+        run: cp GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk GPT-c2-from-reborn.apk
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -52,6 +52,7 @@ jobs:
             No WebView: the phone shell, menus and interactions are implemented in Android code.
           artifacts: GPT-c2-from-reborn.apk
           allowUpdates: true
+          removeArtifacts: true
           replacesArtifacts: true
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
