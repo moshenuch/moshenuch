@@ -25,19 +25,22 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
 public class C2PhoneView extends View {
     private static final float DW = 360f;
     private static final float DH = 780f;
-    private static final float SX = 58f;
-    private static final float SY = 77f;
-    private static final float SW = 244f;
-    private static final float SH = 325.33f;
+    private static final float SX = 73f;
+    private static final float SY = 96f;
+    private static final float SW = 214f;
+    private static final float SH = 286f;
 
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Bitmap wallpaper;
+    private final Bitmap[] menuIcons = new Bitmap[9];
+    private final HashMap<String, Bitmap> listIcons = new HashMap<>();
     private final SharedPreferences prefs;
     private final Deque<PageState> history = new ArrayDeque<>();
 
@@ -48,7 +51,7 @@ public class C2PhoneView extends View {
     private long noticeUntil = 0L;
 
     private String profile = "General";
-    private String theme = "Nokia";
+    private String theme = "Dark";
     private boolean bluetooth = false;
     private String alarmTime = "07:00";
     private boolean alarmOn = false;
@@ -114,10 +117,11 @@ public class C2PhoneView extends View {
     private String[] optionItems = new String[0];
 
     private final String[] mainMenu = {
-            "Messaging", "Contacts", "Log",
-            "Settings", "Gallery", "Media",
-            "Organiser", "Applications", "Web"
+            "Contacts", "Organiser", "Media",
+            "Gallery", "Messaging", "Apps.",
+            "Log", "Settings", "STORE"
     };
+    private final int[] mainMenuIconIndex = {1,6,5,4,0,7,2,3,8};
 
     private final String[] tracks = {
             "Nokia Tune", "Demo track", "Acoustic sample", "Voice recording"
@@ -134,7 +138,10 @@ public class C2PhoneView extends View {
     public C2PhoneView(Context context) {
         super(context);
         wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
-        setBackgroundColor(Color.rgb(9, 9, 11));
+        for (int i = 0; i < menuIcons.length; i++) menuIcons[i] = RebornAssets.main(i);
+        String[] ids = {"0595","0540","0513","0628","0715","0703","0558","0599","0593","0922","0917","0562","0570","1066","0415","0724"};
+        for (String id : ids) listIcons.put(id, RebornAssets.list(id));
+        setBackgroundColor(Color.BLACK);
         setFocusable(true);
         setFocusableInTouchMode(true);
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
@@ -143,7 +150,8 @@ public class C2PhoneView extends View {
 
     private void loadState() {
         profile = prefs.getString("profile", "General");
-        theme = prefs.getString("theme", "Nokia");
+        theme = prefs.getString("theme", "Dark");
+        if ("Nokia".equals(theme)) theme = "Dark";
         bluetooth = prefs.getBoolean("bluetooth", false);
         alarmTime = prefs.getString("alarmTime", "07:00");
         alarmOn = prefs.getBoolean("alarmOn", false);
@@ -289,14 +297,13 @@ public class C2PhoneView extends View {
     }
 
     private int themeBackground() {
-        if ("Dark".equals(theme)) return Color.rgb(39, 45, 49);
-        if ("Silver".equals(theme)) return Color.rgb(226, 230, 231);
-        if ("Blue".equals(theme)) return Color.rgb(222, 234, 246);
-        return Color.rgb(238, 241, 237);
+        if ("Silver".equals(theme)) return Color.rgb(38, 38, 42);
+        if ("Blue".equals(theme)) return Color.rgb(8, 18, 34);
+        return Color.BLACK;
     }
 
     private int themeText() {
-        return "Dark".equals(theme) ? Color.WHITE : Color.rgb(20, 25, 27);
+        return Color.WHITE;
     }
 
     private int accent() {
@@ -307,27 +314,26 @@ public class C2PhoneView extends View {
     }
 
     private void drawStatus(Canvas c, String title) {
-        p.setColor("Dark".equals(theme) ? Color.rgb(25,32,35) : Color.rgb(213, 224, 221));
-        c.drawRect(0, 0, 240, 18, p);
-
-        p.setColor(themeText());
-        p.setStrokeWidth(1.5f);
+        p.setColor(Color.BLACK);
+        c.drawRect(0, 0, 240, 41, p);
+        p.setColor(Color.WHITE);
+        p.setStrokeWidth(1.4f);
         for (int i = 0; i < 4; i++) {
-            float h = 3 + i * 2.5f;
-            c.drawRect(5 + i * 4, 14 - h, 7 + i * 4, 14, p);
+            float h = 3 + i * 2.3f;
+            c.drawRect(8 + i * 4, 15 - h, 10 + i * 4, 15, p);
         }
-
         p.setStyle(Paint.Style.STROKE);
-        c.drawRect(216, 5, 231, 13, p);
-        c.drawRect(232, 8, 234, 10, p);
+        p.setStrokeWidth(1.2f);
+        c.drawRect(28, 7, 38, 14, p);
         p.setStyle(Paint.Style.FILL);
-        c.drawRect(218, 7, 228, 11, p);
-
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setTextSize(11);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        c.drawText(title, 120, 13, p);
+        c.drawRect(30, 9, 35, 12, p);
+        p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTextSize(14);
+        c.drawText(new SimpleDateFormat("HH:mm", Locale.UK).format(new Date()), 232, 17, p);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(16);
+        c.drawText(title, 6, 37, p);
     }
 
     private void drawHome(Canvas c) {
@@ -372,75 +378,108 @@ public class C2PhoneView extends View {
     }
 
     private void drawMenu(Canvas c) {
+        if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
         drawStatus(c, "Menu");
-        String[] icons = {"✉","☏","↗","⚙","▧","♪","◷","◆","◎"};
         for (int i = 0; i < mainMenu.length; i++) {
             int col = i % 3, row = i / 3;
-            float x = 7 + col * 78;
-            float y = 28 + row * 83;
-            RectF r = new RectF(x, y, x + 70, y + 72);
+            float x = 4 + col * 78;
+            float y = 43 + row * 78;
+            RectF r = new RectF(x, y, x + 75, y + 72);
             if (i == sel) {
-                p.setColor(accent());
-                c.drawRoundRect(r, 6, 6, p);
+                p.setShader(new LinearGradient(0, y, 0, y + 72, Color.rgb(92,92,96), Color.rgb(18,18,20), Shader.TileMode.CLAMP));
+                c.drawRoundRect(r, 5, 5, p);
+                p.setShader(null);
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(1);
+                p.setColor(Color.LTGRAY);
+                c.drawRoundRect(r, 5, 5, p);
+                p.setStyle(Paint.Style.FILL);
             }
-            p.setColor(i == sel ? Color.WHITE : themeText());
+            Bitmap icon = menuIcons[mainMenuIconIndex[i]];
+            if (icon != null) c.drawBitmap(icon, null, new RectF(x + 20, y + 6, x + 55, y + 41), p);
+            p.setColor(Color.WHITE);
             p.setTextAlign(Paint.Align.CENTER);
-            p.setTextSize(28);
-            c.drawText(icons[i], x + 35, y + 34, p);
-            p.setTextSize(10);
-            p.setTypeface(i == sel ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
-            c.drawText(mainMenu[i], x + 35, y + 58, p);
+            p.setTextSize(11);
             p.setTypeface(android.graphics.Typeface.DEFAULT);
+            c.drawText(mainMenu[i], x + 37.5f, y + 60, p);
         }
     }
 
     private void drawListPage(Canvas c) {
-        String title = titleFor(page);
+        if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
+        String title = "conversations".equals(page) ? "Conversations " + (sel + 1) + "/179" : titleFor(page);
         drawStatus(c, title);
         String[] items = itemsFor(page);
 
         if (items.length == 0) {
-            p.setColor(themeText());
+            p.setColor(Color.WHITE);
             p.setTextAlign(Paint.Align.CENTER);
             p.setTextSize(14);
-            c.drawText("(empty)", 120, 120, p);
+            c.drawText("(empty)", 120, 140, p);
             return;
         }
 
-        int start = Math.max(0, Math.min(sel - 2, Math.max(0, items.length - 6)));
-        for (int row = 0; row < 6 && start + row < items.length; row++) {
+        int visible = ("messaging".equals(page) || "settings".equals(page) || "gallery".equals(page)) ? 4 : 5;
+        int start = Math.max(0, Math.min(sel - (visible - 1), Math.max(0, items.length - visible)));
+        float rowH = (286f - 42f) / visible;
+        boolean showIcons = !"conversations".equals(page) && !"contactsNames".equals(page)
+                && (page.equals("messaging") || page.equals("settings") || page.equals("contacts") || page.equals("gallery") || page.equals("media"));
+        for (int row = 0; row < visible && start + row < items.length; row++) {
             int idx = start + row;
-            float y = 22 + row * 43;
-            if (idx == sel) {
-                p.setColor(accent());
-                c.drawRect(3, y, 235, y + 39, p);
-            } else {
-                p.setColor("Dark".equals(theme) ? Color.rgb(45,52,55) : Color.rgb(246,248,247));
-                c.drawRect(3, y, 235, y + 39, p);
+            float y = 42 + row * rowH;
+            boolean selected = idx == sel;
+            if (selected) {
+                p.setColor(Color.WHITE);
+                c.drawRect(3, y, 233, y + rowH - 2, p);
             }
-            p.setColor(idx == sel ? Color.WHITE : themeText());
+            int textColor = selected ? Color.BLACK : Color.WHITE;
+            float textX = showIcons ? 49 : 10;
+            Bitmap icon = showIcons ? iconForRow(page, idx) : null;
+            if (icon != null) c.drawBitmap(icon, null, new RectF(10, y + 8, 40, y + 38), p);
+            p.setColor(textColor);
             p.setTextAlign(Paint.Align.LEFT);
-            p.setTextSize(13);
-            p.setTypeface(idx == sel ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
-            c.drawText(items[idx], 12, y + 24, p);
+            p.setTextSize(15);
+            p.setTypeface(selected ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
+            c.drawText(items[idx], textX, y + 24, p);
             p.setTypeface(android.graphics.Typeface.DEFAULT);
-
             String sub = subtitleFor(page, idx);
             if (!sub.isEmpty()) {
-                p.setTextAlign(Paint.Align.RIGHT);
-                p.setTextSize(10);
-                c.drawText(sub, 226, y + 24, p);
+                p.setColor(selected ? Color.DKGRAY : Color.LTGRAY);
+                p.setTextSize(11);
+                c.drawText(sub, textX, y + 40, p);
             }
         }
 
-        if (items.length > 6) {
-            p.setColor(Color.rgb(180,185,185));
-            c.drawRect(236, 22, 239, 280, p);
-            float h = Math.max(20, 258f * 6f / items.length);
-            float y = 22 + (258f - h) * sel / Math.max(1, items.length - 1);
-            p.setColor(accent());
-            c.drawRect(236, y, 239, y + h, p);
+        if (items.length > visible) {
+            p.setColor(Color.WHITE);
+            c.drawRect(235, 47, 237, 270, p);
+            float h = Math.max(18, 223f * visible / items.length);
+            float y = 47 + (223f - h) * sel / Math.max(1, items.length - 1);
+            p.setColor(Color.GRAY);
+            c.drawRect(235, y, 237, y + h, p);
         }
+    }
+
+    private Bitmap iconForRow(String pg, int idx) {
+        String id = null;
+        if ("messaging".equals(pg)) {
+            String[] ids = {"0570","1066","0415","0724","0570","0599","0570","0570","0570","0570","0570","0570","0570","0595"};
+            if (idx < ids.length) id = ids[idx];
+        } else if ("settings".equals(pg)) {
+            String[] ids = {"0595","0540","0513","0628","0715","0703","0558","0599"};
+            if (idx < ids.length) id = ids[idx];
+        } else if ("contacts".equals(pg)) {
+            String[] ids = {"0593","0922","0917","0599","0562","0558","0589","0572"};
+            if (idx < ids.length) id = ids[idx];
+        }
+        Bitmap b = id == null ? null : listIcons.get(id);
+        if (b != null) return b;
+        if ("messaging".equals(pg)) return menuIcons[0];
+        if ("contacts".equals(pg)) return menuIcons[1];
+        if ("settings".equals(pg)) return menuIcons[3];
+        if ("gallery".equals(pg)) return menuIcons[4];
+        if ("media".equals(pg)) return menuIcons[5];
+        return null;
     }
 
     private String subtitleFor(String pg, int idx) {
@@ -454,6 +493,17 @@ public class C2PhoneView extends View {
         }
         if ("notes".equals(pg) && idx < notes.size()) return "";
         if ("contactsNames".equals(pg) && idx < contacts.size()) return contacts.get(idx).number;
+        if ("conversations".equals(pg)) {
+            if (idx == 0) return "Sent 13:12";
+            if (idx == 1) return "Received 11:57";
+            if (idx == 2) return "Sent 12:49";
+            if (idx == 3) return "Received 13:03";
+        }
+        if ("messaging".equals(pg)) {
+            if (idx == 1) return "179 conversations";
+            if (idx == 2) return "44 messages";
+        }
+        if ("settings".equals(pg) && idx == 1) return "Dark.nth";
         if ("drafts".equals(pg) && idx < drafts.size()) return "Draft";
         return "";
     }
@@ -745,23 +795,25 @@ public class C2PhoneView extends View {
     }
 
     private void drawSoftBar(Canvas c) {
-        p.setColor("Dark".equals(theme) ? Color.rgb(18,24,27) : Color.rgb(208,218,216));
-        c.drawRect(0, 296, 240, 320, p);
+        p.setColor(Color.BLACK);
+        c.drawRect(0, 286, 240, 320, p);
         String[] soft = softLabels();
-        p.setColor("Dark".equals(theme) ? Color.WHITE : Color.rgb(12, 27, 31));
-        p.setTextSize(11);
+        p.setColor(Color.WHITE);
+        p.setTextSize(14);
         p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         p.setTextAlign(Paint.Align.LEFT);
-        c.drawText(soft[0], 6, 313, p);
+        c.drawText(soft[0], 6, 307, p);
         p.setTextAlign(Paint.Align.CENTER);
-        c.drawText(soft[1], 120, 313, p);
+        c.drawText(soft[1], 120, 307, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText(soft[2], 234, 313, p);
+        c.drawText(soft[2], 234, 307, p);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
     }
 
     private String[] softLabels() {
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
+        if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
+        if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
         if ("call".equals(page)) return new String[]{"Options", "End", "Loudsp."};
@@ -1021,7 +1073,7 @@ public class C2PhoneView extends View {
             case "dialled":
                 return new String[]{"Demo contact  14:03","Alex Morgan  12:51","12345  Yesterday"};
             case "settings":
-                return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Connectivity","Call","Phone","Accessories","Configuration","Security","Restore factory set."};
+                return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity"};
             case "profiles":
                 return new String[]{"General","Silent","Meeting","Outdoor","My style 1","My style 2","Flight"};
             case "themes":
@@ -1065,7 +1117,7 @@ public class C2PhoneView extends View {
 
     private void openSelected() {
         if ("menu".equals(page)) {
-            String[] routes = {"messaging","contacts","log","settings","gallery","media","organiser","applications","web"};
+            String[] routes = {"contacts","organiser","media","gallery","messaging","applications","log","settings","web"};
             go(routes[Math.max(0, Math.min(sel, routes.length - 1))]);
             return;
         }
@@ -1190,7 +1242,12 @@ public class C2PhoneView extends View {
             if (sel == 0) go("profiles");
             else if (sel == 1) go("themes");
             else if (sel == 5) go("shortcuts");
-            else if (sel == 6) go("connectivity");
+            else if (sel == 6) {
+                detailTitle = "Sync and backup";
+                detailText = "Phone switch\nCreate backup\nRestore backup\nData transfer\nSynchronise all";
+                go("itemDetail");
+            }
+            else if (sel == 7) go("connectivity");
             else {
                 detailTitle = itemsFor(page)[sel];
                 detailText = "Setting available in this native recreation.";
