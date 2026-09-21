@@ -444,7 +444,7 @@ public class C2PhoneView extends View {
         c.drawRect(28, 7, 38, 14, p);
         p.setStyle(Paint.Style.FILL);
         c.drawRect(30, 9, 35, 12, p);
-        if (hasUnreadSms()) drawUnreadEnvelope(c, 194, 5, Color.WHITE);
+        if (hasUnreadSms()) drawUnreadEnvelope(c, 176, 5, Color.WHITE);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
         p.setTextSize(14);
@@ -1033,6 +1033,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(16);
         c.drawText("Confirm", 120, 118, p);
+        p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(13);
         drawWrappedText(c, confirmText, 35, 145, 170, 17, 3);
     }
@@ -2899,11 +2900,10 @@ public class C2PhoneView extends View {
         } else if ("deleteSms".equals(action)) {
             HashSet<Long> targets = new HashSet<>();
             if (!markedSmsIds.isEmpty()) targets.addAll(markedSmsIds);
-            else if (activeMessageId > 0) targets.add(activeMessageId);
-            else {
+            else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
                 if (m != null) targets.add(m.id);
-            }
+            } else if (activeMessageId > 0) targets.add(activeMessageId);
             hiddenSmsIds.addAll(targets);
             markedSmsIds.clear();
             saveLongSet("sms_hidden", hiddenSmsIds);
