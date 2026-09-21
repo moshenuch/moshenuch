@@ -163,7 +163,12 @@ public class C2PhoneView extends View {
         super(context);
         wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
         for (int i = 0; i < menuIcons.length; i++) menuIcons[i] = RebornAssets.main(i);
-        String[] ids = {"0595","0540","0513","0628","0715","0703","0558","0599","0593","0922","0917","0562","0570","1066","0415","0724"};
+        String[] ids = {
+                "0595","0540","0513","0628","0715","0703","0558","0599",
+                "0593","0922","0917","0562","0570","1066","0415","0724",
+                "0557","0661","0528","0569","0580",
+                "0567","0722","0596","0619","0625","0624"
+        };
         for (String id : ids) listIcons.put(id, RebornAssets.list(id));
         setBackgroundColor(Color.BLACK);
         setFocusable(true);
@@ -545,7 +550,8 @@ public class C2PhoneView extends View {
         int start = Math.max(0, Math.min(sel - (visible - 1), Math.max(0, items.length - visible)));
         float rowH = (286f - 42f) / visible;
         boolean showIcons = !"conversations".equals(page) && !"contactsNames".equals(page)
-                && (page.equals("messaging") || page.equals("settings") || page.equals("contacts") || page.equals("gallery") || page.equals("media"));
+                && (page.equals("messaging") || page.equals("settings") || page.equals("contacts")
+                || page.equals("gallery") || page.equals("media") || page.equals("organiser"));
         for (int row = 0; row < visible && start + row < items.length; row++) {
             int idx = start + row;
             float y = 42 + row * rowH;
@@ -560,6 +566,8 @@ public class C2PhoneView extends View {
             if ("conversation".equals(page)) textX = 36;
             Bitmap icon = showIcons ? iconForRow(page, idx) : null;
             if (icon != null) c.drawBitmap(icon, null, new RectF(10, y + 8, 40, y + 38), p);
+            else if ("media".equals(page) && idx == 4) drawVoiceRecorderIcon(c, 10, y + 8, 30, selected);
+            else if ("media".equals(page) && idx == 5) drawEqualiserIcon(c, 10, y + 8, 30, selected);
 
             if ("conversations".equals(page) && idx < smsThreads.size()) {
                 SmsThread t = smsThreads.get(idx);
@@ -620,15 +628,52 @@ public class C2PhoneView extends View {
         } else if ("contacts".equals(pg)) {
             String[] ids = {"0593","0922","0917","0599","0562","0558","0589","0572"};
             if (idx < ids.length) id = ids[idx];
+        } else if ("organiser".equals(pg)) {
+            String[] ids = {"0557","0715","0661","0703","0528","0558","0569","0580"};
+            if (idx < ids.length) id = ids[idx];
+        } else if ("media".equals(pg)) {
+            String[] ids = {"0567","0722",null,"0596",null,null};
+            if (idx < ids.length) id = ids[idx];
+        } else if ("gallery".equals(pg)) {
+            String[] ids = {null,"0619","0625","0624"};
+            if (idx < ids.length) id = ids[idx];
         }
         Bitmap b = id == null ? null : listIcons.get(id);
         if (b != null) return b;
         if ("messaging".equals(pg)) return menuIcons[0];
         if ("contacts".equals(pg)) return menuIcons[1];
         if ("settings".equals(pg)) return menuIcons[3];
-        if ("gallery".equals(pg)) return menuIcons[4];
-        if ("media".equals(pg)) return menuIcons[5];
+        if ("gallery".equals(pg) && idx == 0) return menuIcons[4];
+        if ("media".equals(pg) && idx == 2) return menuIcons[5];
         return null;
+    }
+
+    private void drawVoiceRecorderIcon(Canvas c, float x, float y, float size, boolean selected) {
+        int fg = selected ? Color.BLACK : Color.WHITE;
+        p.setColor(Color.rgb(70, 110, 190));
+        c.drawRoundRect(new RectF(x + 8, y + 2, x + 22, y + 19), 7, 7, p);
+        p.setColor(fg);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(2);
+        c.drawArc(new RectF(x + 5, y + 8, x + 25, y + 26), 0, 180, false, p);
+        c.drawLine(x + 15, y + 19, x + 15, y + 27, p);
+        c.drawLine(x + 10, y + 27, x + 20, y + 27, p);
+        p.setStyle(Paint.Style.FILL);
+    }
+
+    private void drawEqualiserIcon(Canvas c, float x, float y, float size, boolean selected) {
+        int fg = selected ? Color.BLACK : Color.WHITE;
+        float[] heights = {10, 20, 14, 24};
+        for (int i = 0; i < 4; i++) {
+            float bx = x + 3 + i * 7;
+            p.setColor(i % 2 == 0 ? Color.rgb(60, 150, 230) : Color.rgb(90, 200, 110));
+            c.drawRoundRect(new RectF(bx, y + 27 - heights[i], bx + 5, y + 27), 1, 1, p);
+        }
+        p.setColor(fg);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1);
+        c.drawRect(x + 1, y + 1, x + 30, y + 29, p);
+        p.setStyle(Paint.Style.FILL);
     }
 
     private String subtitleFor(String pg, int idx) {
