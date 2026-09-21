@@ -1,12 +1,16 @@
 package com.moshenuch.c2reborn;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 
 public class MainActivity extends Activity {
+    private static final int REQ_PHONE_DATA = 201;
     private C2PhoneView phoneView;
 
     @Override
@@ -19,6 +23,42 @@ public class MainActivity extends Activity {
         hideSystemUi();
         phoneView = new C2PhoneView(this);
         setContentView(phoneView);
+        requestPhonePermissions();
+    }
+
+    private void requestPhonePermissions() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        String[] permissions = {
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.WRITE_CONTACTS,
+                Manifest.permission.READ_SMS,
+                Manifest.permission.SEND_SMS,
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.ANSWER_PHONE_CALLS,
+                Manifest.permission.READ_CALL_LOG
+        };
+        boolean missing = false;
+        for (String permission : permissions) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                missing = true;
+                break;
+            }
+        }
+        if (missing) requestPermissions(permissions, REQ_PHONE_DATA);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQ_PHONE_DATA && phoneView != null) phoneView.onPermissionsChanged();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        hideSystemUi();
+        if (phoneView != null) phoneView.onPermissionsChanged();
     }
 
     private void hideSystemUi() {

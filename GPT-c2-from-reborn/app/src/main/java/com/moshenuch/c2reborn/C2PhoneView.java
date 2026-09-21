@@ -1,5 +1,6 @@
 package com.moshenuch.c2reborn;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -12,6 +13,8 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.SystemClock;
+import android.provider.CallLog;
+import android.provider.Telephony;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -42,6 +45,7 @@ public class C2PhoneView extends View {
     private final Bitmap[] menuIcons = new Bitmap[9];
     private final HashMap<String, Bitmap> listIcons = new HashMap<>();
     private final SharedPreferences prefs;
+    private final AndroidBackend backend;
     private final Deque<PageState> history = new ArrayDeque<>();
 
     private float fitScale = 1f, offX = 0f, offY = 0f;
@@ -58,6 +62,13 @@ public class C2PhoneView extends View {
     private boolean alarmRepeat = false;
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    private final ArrayList<AndroidBackend.DeviceSms> deviceSms = new ArrayList<>();
+    private final ArrayList<AndroidBackend.DeviceSms> smsInbox = new ArrayList<>();
+    private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
+    private final ArrayList<AndroidBackend.DeviceCall> deviceCalls = new ArrayList<>();
+    private boolean deviceContactsActive = false;
+    private boolean deviceSmsActive = false;
+    private boolean deviceCallsActive = false;
     private final ArrayList<String> notes = new ArrayList<>();
     private final ArrayList<String> todos = new ArrayList<>();
     private final ArrayList<String> calendar = new ArrayList<>();
@@ -146,8 +157,61 @@ public class C2PhoneView extends View {
         setBackgroundColor(Color.BLACK);
         setFocusable(true);
         setFocusableInTouchMode(true);
+        backend = new AndroidBackend(context);
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
         loadState();
+        refreshDeviceData();
+    }
+
+    public void onPermissionsChanged() {
+        refreshDeviceData();
+        invalidate();
+    }
+
+    private void refreshDeviceData() {
+        refreshContactsFromPhone();
+        refreshSmsFromPhone();
+        refreshCallsFromPhone();
+    }
+
+    private void refreshContactsFromPhone() {
+        deviceContactsActive = backend.has(Manifest.permission.READ_CONTACTS);
+        if (!deviceContactsActive) return;
+        ArrayList<AndroidBackend.DeviceContact> real = backend.loadContacts();
+        contacts.clear();
+        for (AndroidBackend.DeviceContact c : real) {
+            contacts.add(new Contact(c.name, c.number, c.contactId, c.rawContactId, true));
+        }
+        if (contactIndex >= contacts.size()) contactIndex = Math.max(0, contacts.size() - 1);
+    }
+
+    private void refreshSmsFromPhone() {
+        deviceSmsActive = backend.has(Manifest.permission.READ_SMS);
+        if (!deviceSmsActive) return;
+        deviceSms.clear();
+        deviceSms.addAll(backend.loadSms(800));
+        smsInbox.clear();
+        smsThreads.clear();
+        for (AndroidBackend.DeviceSms m : deviceSms) {
+            if (m.type == Telephony.Sms.MESSAGE_TYPE_INBOX) smsInbox.add(m);
+            boolean seen = false;
+            for (SmsThread t : smsThreads) {
+                if (t.threadId == m.threadId) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) smsThreads.add(new SmsThread(m.threadId, m.address, m.body, m.date));
+        }
+        if ("conversations".equals(page) && sel >= smsThreads.size()) sel = Math.max(0, smsThreads.size() - 1);
+        if ("inbox".equals(page) && sel >= smsInbox.size()) sel = Math.max(0, smsInbox.size() - 1);
+    }
+
+    private void refreshCallsFromPhone() {
+        deviceCallsActive = backend.has(Manifest.permission.READ_CALL_LOG);
+        if (!deviceCallsActive) return;
+        deviceCalls.clear();
+        deviceCalls.addAll(backend.loadCalls(300));
     }
 
     private void loadState() {
@@ -198,6 +262,7 @@ public class C2PhoneView extends View {
     }
 
     private void saveContacts() {
+        if (deviceContactsActive) return;
         JSONArray a = new JSONArray();
         try {
             for (Contact c : contacts) {
@@ -427,7 +492,9 @@ public class C2PhoneView extends View {
 
     private void drawListPage(Canvas c) {
         if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
-        String title = "conversations".equals(page) ? "Conversations " + (sel + 1) + "/179" : titleFor(page);
+        String[] titleItems = itemsFor(page);
+        String title = "conversations".equals(page) && titleItems.length > 0
+                ? "Conversations " + (sel + 1) + "/" + titleItems.length : titleFor(page);
         drawStatus(c, title);
         String[] items = itemsFor(page);
 
@@ -513,15 +580,15 @@ public class C2PhoneView extends View {
         }
         if ("notes".equals(pg) && idx < notes.size()) return "";
         if ("contactsNames".equals(pg) && idx < contacts.size()) return contacts.get(idx).number;
-        if ("conversations".equals(pg)) {
-            if (idx == 0) return "Sent 13:12";
-            if (idx == 1) return "Received 11:57";
-            if (idx == 2) return "Sent 12:49";
-            if (idx == 3) return "Received 13:03";
+        if ("conversations".equals(pg) && deviceSmsActive && idx < smsThreads.size()) {
+            SmsThread t = smsThreads.get(idx);
+            String text = t.body == null ? "" : t.body.replace("\n", " ");
+            if (text.length() > 25) text = text.substring(0, 25) + "…";
+            return text;
         }
         if ("messaging".equals(pg)) {
-            if (idx == 1) return "179 conversations";
-            if (idx == 2) return "44 messages";
+            if (idx == 1) return deviceSmsActive ? smsThreads.size() + " conversations" : "SMS permission required";
+            if (idx == 2) return drafts.size() + " messages";
         }
         if ("settings".equals(pg) && idx == 1) return "Dark.nth";
         if ("drafts".equals(pg) && idx < drafts.size()) return "Draft";
@@ -1052,22 +1119,23 @@ public class C2PhoneView extends View {
             case "messaging":
                 return new String[]{"Create message","Conversations","Drafts","Outbox","Sent items","Saved items","Delivery reports","E-mail","IMs","Voice messages","Info messages","Serv. commands","Delete messages","Message settings"};
             case "inbox": {
-                String[] a = new String[24];
-                for (int i = 0; i < a.length; i++) a[i] = inboxName(i);
-                return a;
+                if (deviceSmsActive) {
+                    String[] a = new String[smsInbox.size()];
+                    for (int i = 0; i < a.length; i++) a[i] = contactNameFor(smsInbox.get(i).address);
+                    return a;
+                }
+                return new String[]{"Allow SMS permission"};
             }
             case "conversations": {
-                String[] a = new String[179];
-                for (int i = 0; i < a.length; i++) {
-                    if (i == 0) a[i] = "Alex Morgan";
-                    else if (i == 1) a[i] = "Nokia service";
-                    else if (i == 2) a[i] = "Demo contact";
-                    else a[i] = "Conversation " + (i + 1);
+                if (deviceSmsActive) {
+                    String[] a = new String[smsThreads.size()];
+                    for (int i = 0; i < a.length; i++) a[i] = contactNameFor(smsThreads.get(i).address);
+                    return a;
                 }
-                return a;
+                return new String[]{"Allow SMS permission"};
             }
             case "sent":
-                return new String[]{"Alex Morgan","Demo contact","Nokia service"};
+                return sentSmsItems();
             case "drafts":
                 return drafts.isEmpty() ? new String[]{"(empty)"} : drafts.toArray(new String[0]);
             case "outbox":
@@ -1109,13 +1177,13 @@ public class C2PhoneView extends View {
             case "log":
                 return new String[]{"All calls","Missed calls","Received calls","Dialled numbers","Message recipients","Call duration","Packet data counter","Packet data timer"};
             case "calllog":
-                return new String[]{"Alex Morgan  13:12","Demo contact  11:47","Nokia service  09:03"};
+                return callItemsFor(0);
             case "missed":
-                return new String[]{"Unknown  08:42","Demo contact  Yesterday"};
+                return callItemsFor(CallLog.Calls.MISSED_TYPE);
             case "received":
-                return new String[]{"Alex Morgan  13:12","Demo contact  Yesterday"};
+                return callItemsFor(CallLog.Calls.INCOMING_TYPE);
             case "dialled":
-                return new String[]{"Demo contact  14:03","Alex Morgan  12:51","12345  Yesterday"};
+                return callItemsFor(CallLog.Calls.OUTGOING_TYPE);
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity"};
             case "profiles":
@@ -1164,6 +1232,9 @@ public class C2PhoneView extends View {
     private void openSelected() {
         if ("menu".equals(page)) {
             String[] routes = {"contacts","organiser","media","gallery","messaging","applications","log","settings","web"};
+            if (sel == 0) refreshContactsFromPhone();
+            if (sel == 4) refreshSmsFromPhone();
+            if (sel == 6) refreshCallsFromPhone();
             go(routes[Math.max(0, Math.min(sel, routes.length - 1))]);
             return;
         }
@@ -1189,8 +1260,14 @@ public class C2PhoneView extends View {
         }
 
         if ("conversations".equals(page)) {
-            detailTitle = itemsFor(page)[sel];
-            detailText = "16-09-2026\n00:59  Can you test the native version?\n01:00  Yes - checking it now.\n\nConversation " + (sel + 1) + " of 179";
+            if (deviceSmsActive && sel < smsThreads.size()) {
+                SmsThread t = smsThreads.get(sel);
+                detailTitle = contactNameFor(t.address);
+                detailText = buildThreadDetail(t.threadId);
+            } else {
+                detailTitle = "SMS";
+                detailText = "Allow SMS permission to use the phone message database.";
+            }
             go("itemDetail");
             return;
         }
@@ -1244,7 +1321,10 @@ public class C2PhoneView extends View {
         }
 
         if ("contacts".equals(page)) {
-            if (sel == 0) go("contactsNames");
+            if (sel == 0) {
+                refreshContactsFromPhone();
+                go("contactsNames");
+            }
             else if (sel == 1) beginContactEdit(-1);
             else {
                 detailTitle = itemsFor(page)[sel];
@@ -1277,9 +1357,7 @@ public class C2PhoneView extends View {
         }
 
         if (Arrays.asList("calllog","missed","received","dialled").contains(page)) {
-            String item = itemsFor(page)[sel];
-            int cut = item.indexOf("  ");
-            dial = cut > 0 ? item.substring(0, cut) : item;
+            dial = callNumberAt(page, sel);
             showNotice("Ready to call");
             return;
         }
@@ -1560,9 +1638,24 @@ public class C2PhoneView extends View {
                 showNotice("Enter name and number");
                 return;
             }
-            if (editIndex >= 0 && editIndex < contacts.size()) contacts.set(editIndex, new Contact(name, num));
-            else contacts.add(0, new Contact(name, num));
-            saveContacts();
+            if (deviceContactsActive) {
+                boolean ok;
+                if (editIndex >= 0 && editIndex < contacts.size()) {
+                    Contact old = contacts.get(editIndex);
+                    ok = backend.updateContact(old.contactId, old.rawContactId, name, num);
+                } else {
+                    ok = backend.addContact(name, num);
+                }
+                if (!ok) {
+                    showNotice("Contacts permission required");
+                    return;
+                }
+                refreshContactsFromPhone();
+            } else {
+                if (editIndex >= 0 && editIndex < contacts.size()) contacts.set(editIndex, new Contact(name, num));
+                else contacts.add(0, new Contact(name, num));
+                saveContacts();
+            }
             backTo("contactsNames");
             showNotice("Contact saved");
             return;
@@ -1622,15 +1715,26 @@ public class C2PhoneView extends View {
         callStarted = SystemClock.elapsedRealtime();
         loudspeaker = false;
         go("call");
+        if (!backend.placeCall(who)) showNotice("Unable to start call");
+    }
+
+    private void toggleSpeaker() {
+        loudspeaker = !loudspeaker;
+        backend.setSpeakerphone(loudspeaker);
+        showNotice(loudspeaker ? "Loudspeaker on" : "Loudspeaker off");
     }
 
     private void endCall() {
+        backend.endCall();
+        backend.setSpeakerphone(false);
         activeCall = "";
         callStarted = 0;
+        loudspeaker = false;
         history.clear();
         page = "home";
         sel = 0;
         showNotice("Call ended");
+        postDelayed(this::refreshCallsFromPhone, 700);
         invalidate();
     }
 
@@ -1645,6 +1749,10 @@ public class C2PhoneView extends View {
             showNotice("Write message");
             return;
         }
+        if (!backend.sendSms(recipient.trim(), messageBody)) {
+            showNotice("SMS permission required");
+            return;
+        }
         drafts.remove(messageBody);
         saveStringList("drafts", drafts);
         history.clear();
@@ -1653,6 +1761,7 @@ public class C2PhoneView extends View {
         showNotice("Message sent");
         recipient = "";
         messageBody = "";
+        postDelayed(this::refreshSmsFromPhone, 1200);
         invalidate();
     }
 
@@ -1771,9 +1880,7 @@ public class C2PhoneView extends View {
             else if ("contactDetail".equals(page)) startCall(contacts.get(contactIndex).number);
             else if ("home".equals(page)) go("dialled");
             else if (Arrays.asList("calllog","missed","received","dialled").contains(page)) {
-                String item = itemsFor(page)[sel];
-                int cut = item.indexOf("  ");
-                startCall(cut > 0 ? item.substring(0, cut) : item);
+                startCall(callNumberAt(page, sel));
             }
             return;
         }
@@ -1843,8 +1950,8 @@ public class C2PhoneView extends View {
         }
 
         if ("call".equals(page)) {
-            if ("OK".equals(key)) loudspeaker = !loudspeaker;
-            else if ("RSK".equals(key)) loudspeaker = !loudspeaker;
+            if ("OK".equals(key)) toggleSpeaker();
+            else if ("RSK".equals(key)) toggleSpeaker();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
             return;
@@ -2468,10 +2575,8 @@ public class C2PhoneView extends View {
             } else if ("Add new >".equals(choice)) beginContactEdit(-1);
             else if ("Edit >".equals(choice)) beginContactEdit(contactIndex);
             else if ("Delete contact".equals(choice)) {
-                contacts.remove(contactIndex);
-                saveContacts();
+                deleteContactAt(contactIndex);
                 sel = Math.max(0,sel-1);
-                showNotice("Contact deleted");
             } else if ("Search".equals(choice)) showNotice("Search");
             else if ("Mark >".equals(choice)) showNotice("Mark");
         } else if ("contactDetail".equals(page)) {
@@ -2479,10 +2584,8 @@ public class C2PhoneView extends View {
             if ("Call".equals(choice)) startCall(ct.number);
             else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
             else if ("Delete".equals(choice)) {
-                contacts.remove(contactIndex);
-                saveContacts();
+                deleteContactAt(contactIndex);
                 back();
-                showNotice("Contact deleted");
             } else if ("Send message >".equals(choice)) {
                 recipient = ct.number;
                 messageBody = "";
@@ -2502,9 +2605,7 @@ public class C2PhoneView extends View {
             } else showNotice(choice);
         } else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page)) {
             if ("Call".equals(choice)) {
-                String item = itemsFor(page)[sel];
-                int cut = item.indexOf("  ");
-                startCall(cut > 0 ? item.substring(0,cut) : item);
+                startCall(callNumberAt(page, sel));
             } else if ("Clear list".equals(choice)) showNotice("List cleared");
             else showNotice(choice);
         } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
@@ -2560,8 +2661,7 @@ public class C2PhoneView extends View {
             } else if ("Add to contact".equals(choice)) showNotice("Add to contact");
         } else if ("call".equals(page)) {
             if ("Loudspeaker".equals(choice)) {
-                loudspeaker = !loudspeaker;
-                showNotice(loudspeaker ? "Loudspeaker on" : "Loudspeaker off");
+                toggleSpeaker();
             } else if ("Contacts".equals(choice)) go("contactsNames");
             else if ("Main menu".equals(choice)) go("menu");
             else if ("End call".equals(choice)) endCall();
@@ -2627,17 +2727,117 @@ public class C2PhoneView extends View {
     }
 
     private String inboxName(int i) {
-        if (i == 0) return "Alex Morgan";
-        if (i == 1) return "Nokia service";
-        if (i == 2) return "Demo contact";
-        return "Demo contact " + (i + 1);
+        if (deviceSmsActive && i >= 0 && i < smsInbox.size()) return contactNameFor(smsInbox.get(i).address);
+        return "SMS";
+    }
+
+    private String inboxAddress(int i) {
+        if (deviceSmsActive && i >= 0 && i < smsInbox.size()) return smsInbox.get(i).address;
+        return "";
     }
 
     private String inboxBody(int i) {
-        if (i == 0) return "Can you test the native version?";
-        if (i == 1) return "Welcome to your Nokia C2-01 recreation.";
-        if (i == 2) return "This message is stored locally in the APK simulation.";
-        return "Demo message " + (i + 1) + ".";
+        if (deviceSmsActive && i >= 0 && i < smsInbox.size()) return smsInbox.get(i).body;
+        return "Allow SMS permission to read phone messages.";
+    }
+
+    private String contactNameFor(String number) {
+        String clean = digitsOnly(number);
+        for (Contact c : contacts) {
+            String other = digitsOnly(c.number);
+            if (!clean.isEmpty() && !other.isEmpty()) {
+                int n = Math.min(8, Math.min(clean.length(), other.length()));
+                if (n >= 6 && clean.substring(clean.length() - n).equals(other.substring(other.length() - n)))
+                    return c.name;
+            }
+        }
+        return number == null || number.isEmpty() ? "Unknown" : number;
+    }
+
+    private String digitsOnly(String value) {
+        if (value == null) return "";
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (Character.isDigit(ch)) b.append(ch);
+        }
+        return b.toString();
+    }
+
+    private String buildThreadDetail(long threadId) {
+        StringBuilder b = new StringBuilder();
+        SimpleDateFormat fmt = new SimpleDateFormat("dd-MM HH:mm", Locale.UK);
+        int count = 0;
+        for (int i = deviceSms.size() - 1; i >= 0; i--) {
+            AndroidBackend.DeviceSms m = deviceSms.get(i);
+            if (m.threadId != threadId) continue;
+            b.append(fmt.format(new Date(m.date))).append("  ");
+            b.append(m.type == Telephony.Sms.MESSAGE_TYPE_SENT ? "Me: " : "");
+            b.append(m.body).append("\n");
+            count++;
+            if (count >= 20) break;
+        }
+        return b.length() == 0 ? "(empty)" : b.toString().trim();
+    }
+
+    private String[] sentSmsItems() {
+        if (!deviceSmsActive) return new String[]{"Allow SMS permission"};
+        ArrayList<String> out = new ArrayList<>();
+        for (AndroidBackend.DeviceSms m : deviceSms) {
+            if (m.type == Telephony.Sms.MESSAGE_TYPE_SENT) {
+                out.add(contactNameFor(m.address));
+                if (out.size() >= 100) break;
+            }
+        }
+        return out.toArray(new String[0]);
+    }
+
+    private String[] callItemsFor(int filterType) {
+        if (!deviceCallsActive) return new String[]{"Allow call log permission"};
+        ArrayList<String> out = new ArrayList<>();
+        SimpleDateFormat fmt = new SimpleDateFormat("dd/MM HH:mm", Locale.UK);
+        for (AndroidBackend.DeviceCall c : deviceCalls) {
+            if (filterType != 0 && c.type != filterType) continue;
+            String label = c.name == null || c.name.isEmpty() ? contactNameFor(c.number) : c.name;
+            out.add(label + "  " + fmt.format(new Date(c.date)));
+        }
+        return out.toArray(new String[0]);
+    }
+
+    private AndroidBackend.DeviceCall callRecordForPage(String pg, int index) {
+        int filter = 0;
+        if ("missed".equals(pg)) filter = CallLog.Calls.MISSED_TYPE;
+        else if ("received".equals(pg)) filter = CallLog.Calls.INCOMING_TYPE;
+        else if ("dialled".equals(pg)) filter = CallLog.Calls.OUTGOING_TYPE;
+        int n = 0;
+        for (AndroidBackend.DeviceCall c : deviceCalls) {
+            if (filter != 0 && c.type != filter) continue;
+            if (n == index) return c;
+            n++;
+        }
+        return null;
+    }
+
+    private String callNumberAt(String pg, int index) {
+        AndroidBackend.DeviceCall c = callRecordForPage(pg, index);
+        if (c != null) return c.number;
+        return "";
+    }
+
+    private void deleteContactAt(int index) {
+        if (index < 0 || index >= contacts.size()) return;
+        Contact c = contacts.get(index);
+        if (deviceContactsActive) {
+            if (!backend.deleteContact(c.contactId)) {
+                showNotice("Unable to delete contact");
+                return;
+            }
+            refreshContactsFromPhone();
+        } else {
+            contacts.remove(index);
+            saveContacts();
+        }
+        showNotice("Contact deleted");
     }
 
     private String formatSeconds(long sec) {
@@ -2703,12 +2903,36 @@ public class C2PhoneView extends View {
         }
     }
 
+    private static class SmsThread {
+        final long threadId;
+        final String address;
+        final String body;
+        final long date;
+        SmsThread(long threadId, String address, String body, long date) {
+            this.threadId = threadId;
+            this.address = address == null ? "" : address;
+            this.body = body == null ? "" : body;
+            this.date = date;
+        }
+    }
+
     private static class Contact {
         final String name;
         final String number;
+        final long contactId;
+        final long rawContactId;
+        final boolean device;
+
         Contact(String name, String number) {
+            this(name, number, -1, -1, false);
+        }
+
+        Contact(String name, String number, long contactId, long rawContactId, boolean device) {
             this.name = name == null ? "" : name;
             this.number = number == null ? "" : number;
+            this.contactId = contactId;
+            this.rawContactId = rawContactId;
+            this.device = device;
         }
     }
 }
