@@ -29,8 +29,10 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class C2PhoneView extends View {
     private static final float DW = 360f;
@@ -66,6 +68,12 @@ public class C2PhoneView extends View {
     private final ArrayList<AndroidBackend.DeviceSms> smsInbox = new ArrayList<>();
     private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceCall> deviceCalls = new ArrayList<>();
+    private final HashSet<Long> localReadSmsIds = new HashSet<>();
+    private final HashSet<Long> hiddenSmsIds = new HashSet<>();
+    private final HashSet<Long> markedThreadIds = new HashSet<>();
+    private final HashSet<Long> markedSmsIds = new HashSet<>();
+    private long activeThreadId = -1L;
+    private long activeMessageId = -1L;
     private boolean deviceContactsActive = false;
     private boolean deviceSmsActive = false;
     private boolean deviceCallsActive = false;
@@ -125,6 +133,9 @@ public class C2PhoneView extends View {
 
     private boolean optionsOpen = false;
     private int optionSel = 0;
+    private boolean confirmOpen = false;
+    private String confirmText = "";
+    private String confirmAction = "";
     private boolean locked = false;
     private int unlockStep = 0;
     private String[] optionItems = new String[0];
@@ -189,7 +200,9 @@ public class C2PhoneView extends View {
         deviceSmsActive = backend.has(Manifest.permission.READ_SMS);
         if (!deviceSmsActive) return;
         deviceSms.clear();
-        deviceSms.addAll(backend.loadSms(800));
+        for (AndroidBackend.DeviceSms m : backend.loadSms(800)) {
+            if (!hiddenSmsIds.contains(m.id)) deviceSms.add(m);
+        }
         smsInbox.clear();
         smsThreads.clear();
         for (AndroidBackend.DeviceSms m : deviceSms) {
@@ -205,6 +218,8 @@ public class C2PhoneView extends View {
         }
         if ("conversations".equals(page) && sel >= smsThreads.size()) sel = Math.max(0, smsThreads.size() - 1);
         if ("inbox".equals(page) && sel >= smsInbox.size()) sel = Math.max(0, smsInbox.size() - 1);
+        if ("conversation".equals(page) && sel >= conversationMessages().size())
+            sel = Math.max(0, conversationMessages().size() - 1);
     }
 
     private void refreshCallsFromPhone() {
@@ -227,6 +242,8 @@ public class C2PhoneView extends View {
         loadStringList("todos", todos);
         loadStringList("calendar", calendar);
         loadStringList("drafts", drafts);
+        loadLongSet("sms_local_read", localReadSmsIds);
+        loadLongSet("sms_hidden", hiddenSmsIds);
 
         try {
             JSONArray a = new JSONArray(prefs.getString("contacts", "[]"));
@@ -259,6 +276,20 @@ public class C2PhoneView extends View {
         JSONArray a = new JSONArray();
         for (String s : values) a.put(s);
         prefs.edit().putString(key, a.toString()).apply();
+    }
+
+    private void loadLongSet(String key, Set<Long> out) {
+        try {
+            Set<String> stored = prefs.getStringSet(key, null);
+            if (stored == null) return;
+            for (String v : stored) out.add(Long.parseLong(v));
+        } catch (Exception ignored) {}
+    }
+
+    private void saveLongSet(String key, Set<Long> values) {
+        HashSet<String> out = new HashSet<>();
+        for (Long v : values) out.add(String.valueOf(v));
+        prefs.edit().putStringSet(key, out).apply();
     }
 
     private void saveContacts() {
@@ -378,6 +409,7 @@ public class C2PhoneView extends View {
         drawSoftBar(c);
 
         if (optionsOpen) drawOptions(c);
+        if (confirmOpen) drawConfirm(c);
         if (noticeUntil > SystemClock.uptimeMillis() && !notice.isEmpty()) drawNotice(c);
     }
 
@@ -412,6 +444,7 @@ public class C2PhoneView extends View {
         c.drawRect(28, 7, 38, 14, p);
         p.setStyle(Paint.Style.FILL);
         c.drawRect(30, 9, 35, 12, p);
+        if (hasUnreadSms()) drawUnreadEnvelope(c, 194, 5, Color.WHITE);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
         p.setTextSize(14);
@@ -441,6 +474,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(10);
         c.drawText(bluetooth ? "ᛒ  ▮▮▮" : "▮▮▮", 232, 15, p);
+        if (hasUnreadSms()) drawUnreadEnvelope(c, 183, 5, Color.WHITE);
 
         p.setTextAlign(Paint.Align.CENTER);
         p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -494,7 +528,8 @@ public class C2PhoneView extends View {
         if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
         String[] titleItems = itemsFor(page);
         String title = "conversations".equals(page) && titleItems.length > 0
-                ? "Conversations " + (sel + 1) + "/" + titleItems.length : titleFor(page);
+                ? "Conversations " + (sel + 1) + "/" + titleItems.length
+                : "conversation".equals(page) ? "Conversation" : titleFor(page);
         drawStatus(c, title);
         String[] items = itemsFor(page);
 
@@ -521,8 +556,35 @@ public class C2PhoneView extends View {
             }
             int textColor = selected ? Color.BLACK : Color.WHITE;
             float textX = showIcons ? 49 : 10;
+            if ("conversations".equals(page)) textX = 20;
+            if ("conversation".equals(page)) textX = 36;
             Bitmap icon = showIcons ? iconForRow(page, idx) : null;
             if (icon != null) c.drawBitmap(icon, null, new RectF(10, y + 8, 40, y + 38), p);
+
+            if ("conversations".equals(page) && idx < smsThreads.size()) {
+                SmsThread t = smsThreads.get(idx);
+                if (markedThreadIds.contains(t.threadId)) {
+                    p.setColor(textColor);
+                    p.setTextSize(13);
+                    p.setTextAlign(Paint.Align.LEFT);
+                    c.drawText("✓", 6, y + 23, p);
+                }
+                if (threadUnread(t.threadId)) {
+                    p.setColor(Color.rgb(220, 40, 45));
+                    c.drawCircle(226, y + 18, 4, p);
+                }
+            } else if ("conversation".equals(page)) {
+                AndroidBackend.DeviceSms m = conversationMessageAt(idx);
+                if (m != null) {
+                    drawMessageEnvelope(c, 9, y + 12, !isSmsUnread(m), textColor);
+                    if (markedSmsIds.contains(m.id)) {
+                        p.setColor(textColor);
+                        p.setTextSize(12);
+                        p.setTextAlign(Paint.Align.RIGHT);
+                        c.drawText("✓", 229, y + 23, p);
+                    }
+                }
+            }
             p.setColor(textColor);
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(15);
@@ -580,6 +642,13 @@ public class C2PhoneView extends View {
         }
         if ("notes".equals(pg) && idx < notes.size()) return "";
         if ("contactsNames".equals(pg) && idx < contacts.size()) return contacts.get(idx).number;
+        if ("conversation".equals(pg)) {
+            AndroidBackend.DeviceSms m = conversationMessageAt(idx);
+            if (m != null) {
+                String dir = m.type == Telephony.Sms.MESSAGE_TYPE_SENT ? "Sent " : "Received ";
+                return dir + new SimpleDateFormat("HH:mm", Locale.UK).format(new Date(m.date));
+            }
+        }
         if ("conversations".equals(pg) && deviceSmsActive && idx < smsThreads.size()) {
             SmsThread t = smsThreads.get(idx);
             String text = t.body == null ? "" : t.body.replace("\n", " ");
@@ -661,14 +730,15 @@ public class C2PhoneView extends View {
     }
 
     private void drawMessageRead(Canvas c) {
-        String name = inboxName(inboxIndex);
+        AndroidBackend.DeviceSms m = smsById(activeMessageId);
+        String name = m == null ? inboxName(inboxIndex) : contactNameFor(m.address);
         drawStatus(c, name);
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(12);
-        c.drawText("Received", 8, 38, p);
+        c.drawText(m != null && m.type == Telephony.Sms.MESSAGE_TYPE_SENT ? "Sent" : "Received", 8, 38, p);
         p.setTextSize(14);
-        drawWrappedText(c, inboxBody(inboxIndex), 8, 66, 220, 18, 11);
+        drawWrappedText(c, m == null ? inboxBody(inboxIndex) : m.body, 8, 66, 220, 18, 11);
     }
 
     private void drawContactDetail(Canvas c) {
@@ -898,10 +968,12 @@ public class C2PhoneView extends View {
     }
 
     private String[] softLabels() {
+        if (confirmOpen) return new String[]{"Yes", "", "No"};
         if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
         if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
+        if ("conversation".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
         if ("call".equals(page)) return new String[]{"Options", "End", "Loudsp."};
@@ -947,6 +1019,22 @@ public class C2PhoneView extends View {
             p.setTextSize(17);
             c.drawText(optionItems[idx], 8, y + 25, p);
         }
+    }
+
+    private void drawConfirm(Canvas c) {
+        p.setColor(Color.rgb(235,235,235));
+        c.drawRoundRect(new RectF(20, 92, 220, 190), 5, 5, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(2);
+        p.setColor(Color.rgb(60,60,60));
+        c.drawRoundRect(new RectF(20, 92, 220, 190), 5, 5, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.BLACK);
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setTextSize(16);
+        c.drawText("Confirm", 120, 118, p);
+        p.setTextSize(13);
+        drawWrappedText(c, confirmText, 35, 145, 170, 17, 3);
     }
 
     private void drawNotice(Canvas c) {
@@ -1068,6 +1156,7 @@ public class C2PhoneView extends View {
             case "messaging": return "Messaging";
             case "inbox": return "Inbox";
             case "conversations": return "Conversations";
+            case "conversation": return "Conversation";
             case "sent": return "Sent items";
             case "drafts": return "Drafts";
             case "outbox": return "Outbox";
@@ -1133,6 +1222,15 @@ public class C2PhoneView extends View {
                     return a;
                 }
                 return new String[]{"Allow SMS permission"};
+            }
+            case "conversation": {
+                ArrayList<AndroidBackend.DeviceSms> msgs = conversationMessages();
+                String[] a = new String[msgs.size()];
+                for (int i = 0; i < msgs.size(); i++) {
+                    String body = msgs.get(i).body == null ? "" : msgs.get(i).body.replace("\n", " ");
+                    a[i] = body.length() > 28 ? body.substring(0, 28) + "…" : body;
+                }
+                return a;
             }
             case "sent":
                 return sentSmsItems();
@@ -1255,20 +1353,29 @@ public class C2PhoneView extends View {
 
         if ("inbox".equals(page)) {
             inboxIndex = sel;
+            if (deviceSmsActive && sel < smsInbox.size()) {
+                activeMessageId = smsInbox.get(sel).id;
+                markSmsReadLocally(activeMessageId);
+            }
             go("messageRead");
             return;
         }
 
         if ("conversations".equals(page)) {
             if (deviceSmsActive && sel < smsThreads.size()) {
-                SmsThread t = smsThreads.get(sel);
-                detailTitle = contactNameFor(t.address);
-                detailText = buildThreadDetail(t.threadId);
-            } else {
-                detailTitle = "SMS";
-                detailText = "Allow SMS permission to use the phone message database.";
+                activeThreadId = smsThreads.get(sel).threadId;
+                go("conversation");
+            } else showNotice("SMS permission required");
+            return;
+        }
+
+        if ("conversation".equals(page)) {
+            AndroidBackend.DeviceSms m = conversationMessageAt(sel);
+            if (m != null) {
+                activeMessageId = m.id;
+                markSmsReadLocally(m.id);
+                go("messageRead");
             }
-            go("itemDetail");
             return;
         }
 
@@ -1832,6 +1939,17 @@ public class C2PhoneView extends View {
     private void press(String key) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
 
+        if (confirmOpen) {
+            if ("LSK".equals(key) || "OK".equals(key)) executeConfirmed();
+            else if ("RSK".equals(key) || "END".equals(key)) {
+                confirmOpen = false;
+                confirmAction = "";
+                confirmText = "";
+                invalidate();
+            }
+            return;
+        }
+
         if (locked) {
             if (unlockStep == 0 && "LSK".equals(key)) {
                 unlockStep = 1;
@@ -1878,6 +1996,10 @@ public class C2PhoneView extends View {
         if ("CALL".equals(key)) {
             if ("dial".equals(page)) startCall(dial);
             else if ("contactDetail".equals(page)) startCall(contacts.get(contactIndex).number);
+            else if ("conversation".equals(page)) {
+                AndroidBackend.DeviceSms m = conversationMessageAt(sel);
+                if (m != null) startCall(m.address);
+            }
             else if ("home".equals(page)) go("dialled");
             else if (Arrays.asList("calllog","missed","received","dialled").contains(page)) {
                 startCall(callNumberAt(page, sel));
@@ -2013,7 +2135,7 @@ public class C2PhoneView extends View {
 
         if ("messageRead".equals(page)) {
             if ("OK".equals(key)) {
-                recipient = inboxName(inboxIndex);
+                recipient = activeMessageAddress();
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
@@ -2398,6 +2520,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
         else if ("conversations".equals(page))
             optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all"};
+        else if ("conversation".equals(page))
+            optionItems = new String[]{"Reply","Delete","Call","Move","Go to Drafts","Conversation details","Mark"};
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
         else if ("contacts".equals(page))
@@ -2504,28 +2628,56 @@ public class C2PhoneView extends View {
             else if ("IM messages".equals(choice)) go("ims");
         } else if ("conversations".equals(page)) {
             if ("Call".equals(choice)) {
-                if (sel == 0 && !contacts.isEmpty()) startCall(contacts.get(0).number);
-                else showNotice("No number");
+                if (sel < smsThreads.size()) startCall(smsThreads.get(sel).address);
             } else if ("Conversation details".equals(choice)) {
                 detailTitle = "Message details";
                 detailText = "Type: Conversation\nContact: " + itemsFor("conversations")[sel];
                 go("itemDetail");
-            } else if ("Delete conversation".equals(choice)) showNotice("Conversation deleted");
-            else if ("Inbox view >".equals(choice)) go("inbox");
+            } else if ("Delete conversation".equals(choice)) {
+                int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
+                requestConfirm("deleteThreads", "Delete " + n + (n == 1 ? " conversation?" : " conversations?"));
+            } else if ("Inbox view >".equals(choice)) go("inbox");
             else if ("New message >".equals(choice)) {
                 recipient = "";
                 messageBody = "";
                 composeFocus = 0;
                 go("compose");
-            } else if ("Mark >".equals(choice) || "Mark all".equals(choice)) showNotice(choice.replace(" >",""));
+            } else if ("Mark >".equals(choice)) {
+                if (sel < smsThreads.size()) {
+                    long id = smsThreads.get(sel).threadId;
+                    if (!markedThreadIds.add(id)) markedThreadIds.remove(id);
+                    showNotice(markedThreadIds.contains(id) ? "Marked" : "Unmarked");
+                }
+            } else if ("Mark all".equals(choice)) {
+                markedThreadIds.clear();
+                for (SmsThread t : smsThreads) markedThreadIds.add(t.threadId);
+                showNotice("All marked");
+            }
+        } else if ("conversation".equals(page)) {
+            AndroidBackend.DeviceSms m = conversationMessageAt(sel);
+            if ("Reply".equals(choice) && m != null) {
+                recipient = m.address;
+                messageBody = "";
+                composeFocus = 1;
+                go("compose");
+            } else if ("Delete".equals(choice)) {
+                int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
+                requestConfirm("deleteSms", "Delete " + n + (n == 1 ? " message?" : " messages?"));
+            } else if ("Call".equals(choice) && m != null) startCall(m.address);
+            else if ("Go to Drafts".equals(choice)) go("drafts");
+            else if ("Conversation details".equals(choice)) showNotice("Conversation details");
+            else if ("Mark".equals(choice) && m != null) {
+                if (!markedSmsIds.add(m.id)) markedSmsIds.remove(m.id);
+                showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
+            } else showNotice(choice);
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
             if ("Reply".equals(choice) || "Reply as".equals(choice)) {
                 recipient = inboxName(inboxIndex);
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
-            } else if ("Call".equals(choice)) startCall(inboxName(inboxIndex));
-            else if ("Delete".equals(choice)) showNotice("Message deleted");
+            } else if ("Call".equals(choice)) startCall(activeMessageAddress());
+            else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Delete this message?");
             else if ("Forward".equals(choice) || "Edit".equals(choice) || "New message".equals(choice)) {
                 recipient = "";
                 messageBody = "Forwarded message";
@@ -2575,8 +2727,7 @@ public class C2PhoneView extends View {
             } else if ("Add new >".equals(choice)) beginContactEdit(-1);
             else if ("Edit >".equals(choice)) beginContactEdit(contactIndex);
             else if ("Delete contact".equals(choice)) {
-                deleteContactAt(contactIndex);
-                sel = Math.max(0,sel-1);
+                requestConfirm("deleteContact", "Delete this contact?");
             } else if ("Search".equals(choice)) showNotice("Search");
             else if ("Mark >".equals(choice)) showNotice("Mark");
         } else if ("contactDetail".equals(page)) {
@@ -2584,8 +2735,7 @@ public class C2PhoneView extends View {
             if ("Call".equals(choice)) startCall(ct.number);
             else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
             else if ("Delete".equals(choice)) {
-                deleteContactAt(contactIndex);
-                back();
+                requestConfirm("deleteContact", "Delete this contact?");
             } else if ("Send message >".equals(choice)) {
                 recipient = ct.number;
                 messageBody = "";
@@ -2718,6 +2868,130 @@ public class C2PhoneView extends View {
             else showNotice(choice);
         }
         invalidate();
+    }
+
+    private void requestConfirm(String action, String text) {
+        confirmAction = action;
+        confirmText = text;
+        confirmOpen = true;
+        optionsOpen = false;
+        invalidate();
+    }
+
+    private void executeConfirmed() {
+        String action = confirmAction;
+        confirmOpen = false;
+        confirmAction = "";
+        confirmText = "";
+
+        if ("deleteThreads".equals(action)) {
+            HashSet<Long> targets = new HashSet<>();
+            if (!markedThreadIds.isEmpty()) targets.addAll(markedThreadIds);
+            else if (sel >= 0 && sel < smsThreads.size()) targets.add(smsThreads.get(sel).threadId);
+            for (AndroidBackend.DeviceSms m : deviceSms) {
+                if (targets.contains(m.threadId)) hiddenSmsIds.add(m.id);
+            }
+            markedThreadIds.clear();
+            saveLongSet("sms_hidden", hiddenSmsIds);
+            refreshSmsFromPhone();
+            sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
+            showNotice("Deleted");
+        } else if ("deleteSms".equals(action)) {
+            HashSet<Long> targets = new HashSet<>();
+            if (!markedSmsIds.isEmpty()) targets.addAll(markedSmsIds);
+            else if (activeMessageId > 0) targets.add(activeMessageId);
+            else {
+                AndroidBackend.DeviceSms m = conversationMessageAt(sel);
+                if (m != null) targets.add(m.id);
+            }
+            hiddenSmsIds.addAll(targets);
+            markedSmsIds.clear();
+            saveLongSet("sms_hidden", hiddenSmsIds);
+            refreshSmsFromPhone();
+            if ("messageRead".equals(page)) back();
+            showNotice("Deleted");
+        } else if ("deleteContact".equals(action)) {
+            deleteContactAt(contactIndex);
+            if ("contactDetail".equals(page)) back();
+            sel = Math.max(0, sel - 1);
+        }
+        invalidate();
+    }
+
+    private void markSmsReadLocally(long id) {
+        if (id <= 0) return;
+        localReadSmsIds.add(id);
+        saveLongSet("sms_local_read", localReadSmsIds);
+        invalidate();
+    }
+
+    private boolean isSmsUnread(AndroidBackend.DeviceSms m) {
+        return m != null
+                && m.type == Telephony.Sms.MESSAGE_TYPE_INBOX
+                && !m.read
+                && !localReadSmsIds.contains(m.id);
+    }
+
+    private boolean threadUnread(long threadId) {
+        for (AndroidBackend.DeviceSms m : deviceSms) {
+            if (m.threadId == threadId && isSmsUnread(m)) return true;
+        }
+        return false;
+    }
+
+    private boolean hasUnreadSms() {
+        for (AndroidBackend.DeviceSms m : deviceSms) if (isSmsUnread(m)) return true;
+        return false;
+    }
+
+    private ArrayList<AndroidBackend.DeviceSms> conversationMessages() {
+        ArrayList<AndroidBackend.DeviceSms> out = new ArrayList<>();
+        if (activeThreadId < 0) return out;
+        for (AndroidBackend.DeviceSms m : deviceSms) if (m.threadId == activeThreadId) out.add(m);
+        return out;
+    }
+
+    private AndroidBackend.DeviceSms conversationMessageAt(int index) {
+        ArrayList<AndroidBackend.DeviceSms> msgs = conversationMessages();
+        return index >= 0 && index < msgs.size() ? msgs.get(index) : null;
+    }
+
+    private AndroidBackend.DeviceSms smsById(long id) {
+        for (AndroidBackend.DeviceSms m : deviceSms) if (m.id == id) return m;
+        return null;
+    }
+
+    private String activeMessageAddress() {
+        AndroidBackend.DeviceSms m = smsById(activeMessageId);
+        return m == null ? inboxAddress(inboxIndex) : m.address;
+    }
+
+    private void drawUnreadEnvelope(Canvas c, float x, float y, int color) {
+        p.setColor(color);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.2f);
+        c.drawRect(x, y, x + 13, y + 9, p);
+        c.drawLine(x, y, x + 6.5f, y + 5, p);
+        c.drawLine(x + 13, y, x + 6.5f, y + 5, p);
+        p.setStyle(Paint.Style.FILL);
+    }
+
+    private void drawMessageEnvelope(Canvas c, float x, float y, boolean open, int color) {
+        p.setColor(color);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.3f);
+        if (!open) {
+            c.drawRect(x, y, x + 16, y + 11, p);
+            c.drawLine(x, y, x + 8, y + 6, p);
+            c.drawLine(x + 16, y, x + 8, y + 6, p);
+        } else {
+            c.drawLine(x, y + 5, x + 8, y, p);
+            c.drawLine(x + 8, y, x + 16, y + 5, p);
+            c.drawRect(x, y + 5, x + 16, y + 13, p);
+            c.drawLine(x, y + 13, x + 8, y + 7, p);
+            c.drawLine(x + 16, y + 13, x + 8, y + 7, p);
+        }
+        p.setStyle(Paint.Style.FILL);
     }
 
     private void showNotice(String text) {

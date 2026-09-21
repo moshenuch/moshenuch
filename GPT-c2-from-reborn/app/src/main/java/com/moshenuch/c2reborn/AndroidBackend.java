@@ -41,14 +41,16 @@ public final class AndroidBackend {
         public final String body;
         public final long date;
         public final int type;
+        public final boolean read;
 
-        DeviceSms(long id, long threadId, String address, String body, long date, int type) {
+        DeviceSms(long id, long threadId, String address, String body, long date, int type, boolean read) {
             this.id = id;
             this.threadId = threadId;
             this.address = address == null ? "" : address;
             this.body = body == null ? "" : body;
             this.date = date;
             this.type = type;
+            this.read = read;
         }
     }
 
@@ -209,7 +211,8 @@ public final class AndroidBackend {
                 Telephony.Sms.ADDRESS,
                 Telephony.Sms.BODY,
                 Telephony.Sms.DATE,
-                Telephony.Sms.TYPE
+                Telephony.Sms.TYPE,
+                Telephony.Sms.READ
         };
         Cursor c = null;
         try {
@@ -218,7 +221,7 @@ public final class AndroidBackend {
             while (c != null && c.moveToNext() && out.size() < max) {
                 out.add(new DeviceSms(
                         c.getLong(0), c.getLong(1), c.getString(2),
-                        c.getString(3), c.getLong(4), c.getInt(5)));
+                        c.getString(3), c.getLong(4), c.getInt(5), c.getInt(6) != 0));
             }
         } catch (Exception ignored) {
         } finally {
