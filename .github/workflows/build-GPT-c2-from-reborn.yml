@@ -36,7 +36,7 @@ jobs:
       - name: Read app version
         id: version
         run: |
-          VERSION=$(grep -oP 'versionName "\\K[^"]+' GPT-c2-from-reborn/app/build.gradle)
+          VERSION=$(sed -n 's/.*versionName "\\([^"]*\\)".*/\\1/p' GPT-c2-from-reborn/app/build.gradle)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Prepare APK
