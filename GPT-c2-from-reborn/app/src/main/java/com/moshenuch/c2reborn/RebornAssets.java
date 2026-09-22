@@ -5,10 +5,7 @@ import android.graphics.BitmapFactory;
 import android.util.Base64;
 
 public final class RebornAssets {
-    private static Bitmap decode(String s) {
-        byte[] b = Base64.decode(s, Base64.DEFAULT);
-        return BitmapFactory.decodeByteArray(b, 0, b.length);
-    }
+    private static Bitmap decode(String s) { byte[] b=Base64.decode(s,Base64.DEFAULT); return BitmapFactory.decodeByteArray(b,0,b.length); }
     private static final String A0="iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAFoklEQVRo3u2ZaUyURxzGTfqtSdN+IsrtwbHAAoKAgCT90KTRL23SmDTV1LYKilQt1QpySLVIW6+iYI1VtN5WtHjgUUGKy3IuCFKqpkWKmCK1IIcsC7X69Jk3kqCy+I712DUvyZOdvDM78/zm/c9/ZpZRAEa9yBqlAWqAGqAGqAFqgBqgBqgB2g3gvb+X0RL1uj1JeBbG1QCKhsG4GgV7kvCsvBgVgK+Ixk3GENxtnmIXajWFDgI6qgZMW+SKon163G2aYtMSHoVXacDM1HFIjnPB9tUeMP8ajjuNkTYl4Ul4S13gijXLxsoD1hwLxL5MT6R+7IKMJW648vMk3Pkt0iYkvAhPifOcsYOQwqs04K0L4fjl5ESc2u6LL+JdsZygJ7b64N/LEc9VZ3f5KV6WL3BRvAmPwqs04GCHzcXBMO7XIzN5LJJjnbEpbRzaK0Jx+2LEM9Wt2snIyZiAlPkuWJPgrni6cjYYAwxV4VMacGjn7ZWhqP4xAHvXeiIl1gWr+EYbGBa3G8KfiRp/ClLGFGPv+HKC4uWvsvsnWR7wgUHMnMF6QhXu8MXnDI9kxn/+Zh3+qQ9/qirM8UXqfGesXOiKk9/5KB56qsMemgRpQGsDNp0JRsUBf2SnjENitBOyGbo3DCEY4AQ8SXUzaratHI+kGCesTxgLw249fj8dBAvrhvMlD1jHjqzoRkkITD/44+A6TyQRMp2zW8U1MVAT9kRUfzhA6TN5rjP2fOWhjHW9eBJG8iQNOHCeMzmC+kxhaMgLRAEzaxrXRlK0M3LXeKKLJ6B+1j2ujm30QkqMM1ZwD87fpEMdYbu43h7lRx6Qca5GzQyb8t1+yOJmm/CRI7IS3dHM1G1hppVRW2Ewspgdl812xDruccXcAhpPTIRaH9KA/VWcUZVqZ/hU7vHD4fWeSPjQEekLvFG5Sw8LZ16NanncSprthKQ5Tti1aoLSVxu3ABkP0oCyb6C3LAT1B/1RvPtNpC+OYnLQYeeK8bhJo31cs9Z0lOt44bujMfcdB+Rwj609oEc3n8uOLw+ocvaHqv/CTFwzzkPZ/qnYvMwdS2c5YvVCFzTlBcB8btJ9amX4bVjsprTJ+swNh3nkyuM+e5lr7nHGlgbsY7KQUX/tDAxc/FT57OB6Mu30xaGvPbD0/TFIZtgeYfkiM63Q6W+8sJIZMnHWGBxgSFZwb71+KghNRwJRmuODS7n+kB1fGtBs4EyrlKXmPfQ3xCufg896eCBuIEzRtzqs43Vm8YzRSCKo0JKZYxTA0xu8UMOzZSfDePB7144HwsjMfIlbg+hDrQd5QNG5CllMhKuPR1/5W8PWtxwNRBUzYlG2DrkZHopEuXwrs+ShAKvfMW7xQc33fugR8Cp8SAP2suMRVRSGvppoWC7Ew1w6DY9q/ze3jj8I1MhE9CcBuguCRmzfwnVbwqNgNSfnUW2F5K9LBcGwpt5CwlUTro5whmkYqe3/0VUmHAND3LTNF13cb0dqKw8oOhxOZ0LRVzUHlvOfoLd4Kqy2e0Jq5hs3ZHnDxIN2l7j7WWknDdjDzh7SqRCYK+bw7S1iiE7FsG2egq4xq5ZmE3KLDp35w7eRBuxmR0PVc4Jw5bNhroxjSLyBB+ufttoYrsaN3qjiuhTlB+vlAUUiuKeek1NgLptLwDilPLTuWaqNb9KY6aVIlIfWSQN28aYg1J3PX7DK4hSJ8uDz56XrvIuWrPdSJMqDz6UBO8U15Wgkeo3zFYmyeGYLauXh3LDWS5Eoi2fygHn8occQq0iUO5nNbEmtewi52lORKMtvE+dieVSK5uxE4CZDwRbVRrByHtDP8dYvn2QKPkDH/ono2Ku3ad3gZbucb1EacHqUw/Hpka/Zhd6e/OpxaUAqxs4kPDuoAXyJ0t37gj1JL7xr/8LWADVADVAD1AA1QA3wxdF/+uQUm5Hm2KsAAAAASUVORK5CYII=";
     private static final String A1="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";
     private static final String A2="iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAICklEQVRo3u1ae2xT1x3+7iN+xLFJmvfbIcTk0aCo2UQzRjs6hoo0pq5U21RF06qoVGxFaKs2iW0SEm2zdY02bQxQu7JCNTFVq8tIQqCpulHQAqwYaAJhSUnzcBLHSYwf13Z87/W9Z3/ECUmI7Wu7SSjKkX7y69zkfuf8vu/3OJcihOBBHjQe8LEKcBXgKsBVgEs62IVfUBSl6MKjvd+reUhd/FS0eQGJc2kY/bHvFr/uWi5Qc0MfG88feNvy492pat1hJXM1jB6eO4H9G3+oe+LyO75rK76DCkahIU37mj/oxC33h5CIEHFyMpuGgSt8asZa9gCAZwFw9zsHs2iG1jsFa1RwAOAPOiGwLrAqKhdA1v0uMvoE/x8T7fcfvNKxU8G8L6eK7vnztZeCUL9XtP31hi8XQAX5/I9ebvtmdkn1r0Ez0GSUNeVs2lu7YgBlQkGWlRshFKIULanGhx87LBFGbycloFi1PqV404kvgBJx7iABCAGIHIuFja/ML44PHlRpdKarQwBPG6DNrgLNakxrdx49nCgf4wJIQgBlhUYieOnuP1xsSM0qqu+bAGzu6e9UawqhWlMIVpdZnygf4wcoUzHbwvHMz96uzTd9tck9BfxvbP5v2uwqMBpDwnxMbAdlZTYzf2HIeXjzMyckwuivDgGitCBlZJKQnFuTMB/jBEhNux6hFNm00Mzn3c//2teoUutMncMELj8BIfcarTZAk1UJilWbSp5+Ky4+JuSise3gXRdtaPxwZ1qO8cUhB8GQI7I6qQz5UBkKwOoy6guf/F3DsrqoYgWd46Jff/qlUmP1Y2/5eODTYXnRnVtomswK0Co91OmlTdl1e2qXUUUpRUYIwPtkAFBv+f6+d2ma0V/qkyAGyZzVCm8UzSI5ZwMoWqXXFX0tJj7GHwdjiIGCn2DkOo+9hz59UaNbU9s5JMHll0GIcqPVemiyKkCzKpPxqTcU83Gxckn/WnPDvvx1GfvCZzIhk5Wtx/A1HmkZ1bVZRRW1o04Zt+1yXOuq0udD8k0CMqkv2NZ4Ybj9l29Gu4Za2PilKMoEYH1T2wt/yilOMzqmhuEVnfdc6ObH4ebtUW/KeiWAsU4Vtu34N2hNET7qliBK8TebiRyEz3oJUsDFcQPnt4xfOmSJVNEv5qLjACYbnzvRyk+JQjKbhmFPDwZdXfPMNWWP6prOQRH2bh513ziIFEMhLP1BiEFZEe/C8pFioM2unuZjwaNR+bgYQBcA2x0713J0/9l2NZOCsrS6mJJrWaYQ4Aj6O6awtmwXcvK2o3tEwrhHmWpGM1qlhyazHBSjNhXtOBSRj+FExgrA2nH6pvnCP7ss6ZoC5KWsj2mx+zv80CVXYUPNAUx6ZNwaCcaanUe0JH0eVIY8sMnp9flbX26IhYOz7RQAJgDbG99/fk9eaUauxXYGXsEZlSdjXQFM9qjx+Jb3EBRT8a9OD8TgTArGglEbwNAAozZAUtgW4h23F+GjCME1CBCZ4wYubJn45IhlIQcjAQSAdACmtGz9s7899cIuwgqqK6NnEZTD92IEn4zuFg+Ki3bDF6jDkN2H4ALRZGmgrqYYo6jEBKdMcDyfnY0sPsFAb//J574CgIulbegAYHPauZZjB84Yn3/1O982pW/EjfEL4WWZpUCzFAYGjwA4Am2ICEQGfJNBSDwRtOrt50vLj20duSWCEFlhciHDO3jeMvHJG5YwU3oBlALoAiDF0ja0AtBebLtprtxYkrtpx4ba/JRyDHt6Fic1S6FsmwGCb/6NOwcFJGey+Pyc91xRhdECgq3hyoywQVuX0wugNUpTi4kVoARgEID66P5Ws7EyL2/d2kdynVPj4PjF+chqabDau/oVcEkAAby2YNd4d8C86YlSYCZLUZgtEFkGnaTlAPQA8IbrUgIQ4knV/KGdPPf7n/zdzE+JQlXmZjCUKqqaigECR7+AKbfkuHHS9T4Ay2wjKhZZxuyLF8BoGHMlkotO83Gcazn+6pl2DatDecajUePh5G0B4hQRbp50nwZwbmaFCWKPf4racwkm21YA1stnbpj/09JpyUjOR4Fhfdhw5RoSIPpk9H/MnffaxebQ9Q4yb3fiqLmWEOAMH68fO9BqHu2btJWlPwJdUto9JVLAI4OzB+EcEHpHr/pPhVRuYMbXpndFjnH3lh7gPD7+ce80HzfkbAYD1exiSyKBo48H75Ycn33gbgFwMQROSqz3uDwA5/Hxb79pa1ezOlRmbZwto+708RD9crDvI087z0mtAGz3nCoRxMjB+RnKcrTurQCs//3ghvni6S5Lpq4AhYZycKNB8JyMkSu+Dmc/3zJH4ea3BBBnRbGMAGf5+M4rzebRzyds69bUgBsVwNnEgeHL3mYAtwD0LXZUcZeDCg0E8VSRiR6+zPLx4E9PmAN+URCmZK63zWkG0BECJ4XvWhEQWZmF+pQx3yCLxIcDgM01wbX85Vf/yB93ugMCJ7UDGEbY09wFYULxEdXKAJzNV3uv9zfP5Wfk270bJpQl2yQukfmiAM7mq6HPfZEmuyaGBBBAy4oAif5UhyxwACEIese4lQI4w8frSmrXj81NDmPV4/aR3slsf4AF6KTIqxdwgkiC4O45ORDrTUUreJdiJAOoYDSpu1JKvlWtfsiUS1G0OuzuSTwf9I45PL2nuiTefTxU7zmiufNKAgQAY6gdUht6r0TILAC6Q6EH9ztAAMjD9GMlSk+MHCHhkhIC+KCN1acNVwGuAlwFuKTj/1hT8XcmLueMAAAAAElFTkSuQmCC";
@@ -45,53 +42,45 @@ public final class RebornAssets {
     private static final String I0619="iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAEyUlEQVRo3u2aXWhbZRjH/2+SJk2adm1Xq+26Iu1oZxFaEZXphUNEvFCYFRkrgooXftzqwLleCIKzDkHEm0lv5hBFuprhbhQc682gu2nHSmsLa9lK+v1l0jY5J+d5Hi9O0vUjzdJzshjKeeG9SU7ec37v//0/z/O+OUpEsJ+bC/u8OYAOoAPoADqADqADuI+bJ9OXSikAcI/+2Xaqsb74/b0MfDes9TW+PPANgPV8Q20uPz0PuNb9U9eRdxvqiruF93aT+hrf8WsXW2Zfemf4RwBUqEv0cGtz4FmwwEo/1hrsutTV+Eohe9ArLLDa3Qqlr71Y8d2HJx9tKtwgI9YBhQUBn2rq/KD2AoDywgRkwOoSTfVHDriPD/U++RWAQEFFUfMKBVVkP5s0HQl8tHrrubZin0uzO5ZhyOoPl6Y//rTr7qRtQOVWUO7cpEsfcEzI/gmCWwEVZZ4/APwGYMWegqmlVmjNzHUB24BCAiEuPL4sJ/3BgGxCFh5groIMSUECIncKsi3A4YkYJsJ6zvluja4DQE2yb8gB4A6A6B49aB0wEiHUHT2BupYTOQV8oePQJ53fl0Q3f9bd3f1t59mzc3sDZHtBRkjgD9aisvaZXIu4o/yrrq4uzbsHzZKNISIYWwei2/YVGgsWEvZImwMKzYGt26Q9KQhbgCaciGA8Bszk3o6IkZhp0RKg3TxIyTGY4VMuBFzKFszCai+qgu3bINhcKVYVtL1EhcEbgNbhRmY+w2ykF2tlN/HEY19vghAwc9rkn52ChtgKMikFvUrgd99XcC52GdX+N7MaZ+DeGYRXQgBcCC+GoEjhqfpzG4ApK+Q/0Sf3haaCgD+5RIdXTmMm1oO1RD9ays9nHOLG+BlMLIYA3J+cifkQwArPN5yDBzAVTFPeZKEg204TzAwmgtcF+AUYXDbhAGAm1gORCForzqPIVbbj93+Pfo6xua1wqTY2HQJI4eTRL8BEaZeoK1sPWu7MEDY96FWCoZXTCK/3bLnHbPwv9C+cghsR+F2A3wUojuLXm+0YDodgJNSufTgcwsC9i+YkWlNQIAbb9CBDmDC4/CXGo5fTqrFEI7g+04FXa38Bk8LP/e9hJjKW1aHDejwCYbIYRe16kJIeJMZsdAR6fPcHno3/g6t6B6YnfZhcHk07EWlvYZjjC/8PCnISjpiQ0AFNy6zIlDYK3adA5IVQdoAGCYjJWppALhQkM8jouoIWz+6hK6sMzE15wZyNggATWfUg2/ZgKorqmoIWzz7Tl1cmMD/rhXDmSaGEJKMo59+DsqEgI6EDura3UuZAuYGF+aKMkAaZNmDrHrRXqjEzyIKCqVZaRlha8EBE7aogEdko1WwV22ahwJzyoLVitCTI+HfJk27DAMMQMFv04HKUdK5y2/MgMcgg6BqgadZ3E/4gIbK8E9IwBGRY9GD7haXbb7QVX7X6UEtrjLcOlzTVkNHU3vA2YsaavbMmVqBt6aO65CCYDEuAOoDbvw/GSwGUWn2o11ESJKKm2sChh3bIRkSWgkzq7P+6nZv3XrkSvdbXt/qwTxLHJyYWt3+mMr1tmPwLOxeHQ08DaM7DaekNAEMiMpVPwIMAHkd+mg7gjoisZwW4H5rznowD6AA6gA6gA5ih/QcPtst7eo00agAAAABJRU5ErkJggg==";
     private static final String I0625="iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAFFklEQVRo3u2aQUxbdRzHP49Cga61WztXKMKSQkDItpLMuPAuLjq3yzzMi/EwXWLinBz1uNsWEzyoBy8TOehuHvQgHLwYjYq7yMQJG5gswgvr2g1osVAK7//+HrrXdLQF+lqaF9Jf8j/02//79337/f2+//f7t4qUkv0cdezzqBGsEawRrBGsEawRrBHcx1G/3ZuKogA4Zn7of7Ozo+mdUhaeW0j/3Hnm9sfAWrVJ5T5+1u8w1/H1UNel0HNNX0qjtA/paG08/eNXfdGX357+AhB2TdH2cI/rRQyJlTEQdg/dHOo8a+cadEpDYnU4FDznXzr02XtvBLrtazLSOkFpSFyNSvfVy8EbwEF7EjTAaoqa41mv4/Tf3x77CHDZykUzMxSUhvJ3k+4u15Xk5Kn+psa6dLlr6bpMfn4z8v6HQ3Na2QQVh4LiqMx22QgDUpR/guBQ4NAz9d8D3wDx8hQ0U81ukdnrXGUTlEIihWE/frv80ncmaGRI2o9gpUxGSFsSpHIKGvZUUFaK4P5X0K4mY4MaTCQFo7+t7AnB8TurAH7AnXu3gAZslKQgFgn+NbvG8vphjp26UHGCl1459trlqy0nc7GRkZHRkZGRFPCgKvugNCSeg0FOvXplL0Q8vxXo7+//o+SH7UwNWhwG3J6YQFVVhoeHEUIghEBVVVRVZXBwMIsNDg4WxVRV3RYbHh5GVVWuX79u0UV1aykqhZG1cyklQog8qzexQvNyt4LdYtXd6A1wu9yEw2GOHDmCrusAhMNhAEKhUBYLhUJIKQtimQ6iOObz+ejr62N+fp5oNPp0s7Ade0VRun//5OgHz7c3vmuF369Ta/yT7OHMW58W7gocDpqbmwFIpVJ5Cu+4BdTXs76+TjweJ5VKcevWrcvXrl0blVI+KMlFrSooDcna2hqzs7MF33e73XR2dgKgaRrJZHJX6z569IiFhQXOnTsHwP3795mZmaGhocFqDVp0UZE5tjCMwtcbhpFVzTCMovPMeotEIkQikew1m5ub2VQVQpjHnFV8VNuBoBAiW0dCiILz0uk0sViMSCSSnWvGxsZGlqiu62UQ1K3vg1YVTKfTzM/PE4vFiq6/VcG6urrqumgmRY2SCCYSCWKxWJ4bFgpTwTJT1ChLQaQsuk/lElxaWuLu3bskEoldr28quLm5ad8aXF5eJh6PMzU1RTweL2n5ypmMLivuopFIhHg8Tk9PT/Ymt5pIKSla7No9ftg2niKo6zqapqFpGrqu4/V681SouoLL/4kN47DDooKZOlxdXUXTtDyr13U9zyisKGjWoCUFX7+xdOdCf9OoFYKPkwbSk/S36r8MFKtBUwWzMyhHQSsEN4A73/257gE8VkgeP+46+kJb24Db7cbtzjTfDx8+BMDpdGZv0u/34/F4cDqd+Hy+rLOaKrW0tORh5rUHDhygra2N6enpkgmaZ/8/We1KY7HYybGxsUvhcJgTJ04AMDY2BkAgEODs2czPh+Pj40Sj0YIYwMWLF4ti9+7dY3JykpWVlZIJCuDfJ8NKBAulY24/aGK5/eBWLFetQth2qV3PHkdraysdHR34fL7sDfX29gLgcrmyWHt7O36/vyCWS6YQ5vP56O3tLdgP7jnBQCBAV1fXU65nvs7FgsGgZczr9eL1ekmn09VXcGJiYnFubm6UKsTi4uJiXtO+Q0df7mcGge4noxoxC8yW1NGXGY+B5txzyj0OAUR3reB+iNp/1WoEbR7/AwzwdQS+C/aUAAAAAElFTkSuQmCC";
     private static final String I0624="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";
-    public static Bitmap main(int i) {
-        switch (i) {
-            case 0: return decode(A0);
-            case 1: return decode(A1);
-            case 2: return decode(A2);
-            case 3: return decode(A3);
-            case 4: return decode(A4);
-            case 5: return decode(A5);
-            case 6: return decode(A6);
-            case 7: return decode(A7);
-            case 8: return decode(A8);
-            default: return null;
-        }
-    }
-
-    public static Bitmap list(String id) {
-        switch (id) {
-            case "1066": return decode(I1066);
-            case "0595": return decode(I0595);
-            case "0540": return decode(I0540);
-            case "0513": return decode(I0513);
-            case "0628": return decode(I0628);
-            case "0715": return decode(I0715);
-            case "0703": return decode(I0703);
-            case "0558": return decode(I0558);
-            case "0599": return decode(I0599);
-            case "0593": return decode(I0593);
-            case "0922": return decode(I0922);
-            case "0917": return decode(I0917);
-            case "0562": return decode(I0562);
-            case "0570": return decode(I0570);
-            case "0415": return decode(I0415);
-            case "0724": return decode(I0724);
-            case "0557": return decode(I0557);
-            case "0661": return decode(I0661);
-            case "0528": return decode(I0528);
-            case "0569": return decode(I0569);
-            case "0580": return decode(I0580);
-            case "0567": return decode(I0567);
-            case "0722": return decode(I0722);
-            case "0596": return decode(I0596);
-            case "0619": return decode(I0619);
-            case "0625": return decode(I0625);
-            case "0624": return decode(I0624);
-            default: return null;
-        }
-    }
-
+    public static Bitmap main(int i) { switch(i) {
+        case 0: return decode(A0);
+        case 1: return decode(A1);
+        case 2: return decode(A2);
+        case 3: return decode(A3);
+        case 4: return decode(A4);
+        case 5: return decode(A5);
+        case 6: return decode(A6);
+        case 7: return decode(A7);
+        case 8: return decode(A8);
+        default: return null; } }
+    public static Bitmap list(String id) { switch(id) {
+        case "1066": return decode(I1066);
+        case "0595": return decode(I0595);
+        case "0540": return decode(I0540);
+        case "0513": return decode(I0513);
+        case "0628": return decode(I0628);
+        case "0715": return decode(I0715);
+        case "0703": return decode(I0703);
+        case "0558": return decode(I0558);
+        case "0599": return decode(I0599);
+        case "0593": return decode(I0593);
+        case "0922": return decode(I0922);
+        case "0917": return decode(I0917);
+        case "0562": return decode(I0562);
+        case "0570": return decode(I0570);
+        case "0415": return decode(I0415);
+        case "0724": return decode(I0724);
+        case "0557": return decode(I0557);
+        case "0661": return decode(I0661);
+        case "0528": return decode(I0528);
+        case "0569": return decode(I0569);
+        case "0580": return decode(I0580);
+        case "0567": return decode(I0567);
+        case "0722": return decode(I0722);
+        case "0596": return decode(I0596);
+        case "0619": return decode(I0619);
+        case "0625": return decode(I0625);
+        case "0624": return decode(I0624);
+        default: return null; } }
     private RebornAssets() {}
 }

@@ -167,7 +167,7 @@ public class C2PhoneView extends View {
                 "0595","0540","0513","0628","0715","0703","0558","0599",
                 "0593","0922","0917","0562","0570","1066","0415","0724",
                 "0557","0661","0528","0569","0580",
-                "0567","0722","0596","0619","0625","0624"
+                "0567","0722","0596","0619","0625","0624","0909"
         };
         for (String id : ids) listIcons.put(id, RebornAssets.list(id));
         setBackgroundColor(Color.BLACK);
@@ -635,7 +635,7 @@ public class C2PhoneView extends View {
             String[] ids = {"0567","0722",null,"0596",null,null};
             if (idx < ids.length) id = ids[idx];
         } else if ("gallery".equals(pg)) {
-            String[] ids = {null,"0619","0625","0624"};
+            String[] ids = {"0909","0619","0625","0624"};
             if (idx < ids.length) id = ids[idx];
         }
         Bitmap b = id == null ? null : listIcons.get(id);
