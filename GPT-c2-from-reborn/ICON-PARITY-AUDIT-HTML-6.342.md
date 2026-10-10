@@ -38,3 +38,11 @@ The source `rows()` implementation maps page/index to `listIcons` entries. The b
 3. Find source bitmap references for Gallery theme/graphics/tones/recordings/received files entries. The icon maps reference `GALth`, `GALgr`, `GALto`, `GALre`, `GALrc` but these were not extracted in this pass.
 4. Audit each remaining dynamically rendered icon, softkey icon, status icon and modal icon, including themes and accessibility/pressed/disabled states.
 5. Real handset/emulator screenshot-by-screenshot parity is **not verified**. The user-provided conversation screenshot was used as a visual cue and code paths were checked; this pass is an implementation step, not a full device-certification.
+
+## APK v1.3.0 — native conversation parity improvement
+
+- Replaced fixed-height conversation list rows with variable-height HTML-inspired SMS bubble cards.
+- Sent bubble uses SMS_SENT, incoming unread uses SMS_UNREAD, incoming locally opened uses SMS_READ; bitmap selection is stateful on every draw.
+- Dynamic three-line previews with ellipses, message timestamps, navy/default and white/selected surfaces, bubble tails, selected-item scrolling, and a 1/N header count.
+- Restored HTML center action distinction: incoming short/nontruncated message Reply; sent or truncated message Open. No automatic read-on-conversation-entry.
+- Follow-up: device screenshots need comparison for pixel geometry/fonts and same-day versus historical dates; no full equivalence claim.

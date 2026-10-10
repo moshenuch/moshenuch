@@ -79,6 +79,7 @@ public class C2PhoneView extends View {
     private final HashSet<Long> markedSmsIds = new HashSet<>();
     private long activeThreadId = -1L;
     private long activeMessageId = -1L;
+    private float conversationScrollY = 0f;
     private boolean deviceContactsActive = false;
     private boolean deviceSmsActive = false;
     private boolean deviceCallsActive = false;
@@ -438,6 +439,7 @@ public class C2PhoneView extends View {
         else if ("music".equals(page)) drawMusic(c);
         else if ("browser".equals(page)) drawBrowser(c);
         else if ("messageRead".equals(page)) drawMessageRead(c);
+        else if ("conversation".equals(page)) drawConversation(c);
         else if ("contactDetail".equals(page)) drawContactDetail(c);
         else if ("edit".equals(page)) drawEditor(c);
         else if ("alarmEdit".equals(page)) drawAlarmEdit(c);
@@ -539,7 +541,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.2.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.3.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -665,6 +667,176 @@ public class C2PhoneView extends View {
             c.drawRect(235, y, 237, y + h, p);
         }
     }
+
+
+    /**
+     * Native conversation renderer following the HTML v6.342 .thread/.bubble styling.
+     * Selection alone never clears unread. Only opening a message changes local read state.
+     */
+    private void drawConversation(Canvas c) {
+        if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
+        ArrayList<AndroidBackend.DeviceSms> messages = conversationMessages();
+        String contact = messages.isEmpty() ? "Conversation" : contactNameFor(messages.get(0).address);
+        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTextSize(15);
+        if (contact == null || contact.isEmpty()) contact = "Conversation";
+        while (contact.length() > 1 && p.measureText(contact) > 182)
+            contact = contact.substring(0, contact.length() - 1);
+        drawStatus(c, contact);
+        if (messages.isEmpty()) {
+            p.setColor(Color.WHITE);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(13);
+            c.drawText("(empty)", 120, 145, p);
+            return;
+        }
+        sel = Math.max(0, Math.min(sel, messages.size() - 1));
+        p.setColor(Color.WHITE);
+        p.setTextAlign(Paint.Align.RIGHT);
+        p.setTextSize(15);
+        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        c.drawText((sel + 1) + "/" + messages.size(), 234, 37, p);
+        p.setTypeface(android.graphics.Typeface.DEFAULT);
+
+        final int count = messages.size();
+        final float[] tops = new float[count];
+        final float[] heights = new float[count];
+        final ArrayList<ArrayList<String>> previews = new ArrayList<>(count);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(14f);
+        for (int i = 0; i < count; i++) {
+            tops[i] = i == 0 ? 46 : tops[i - 1] + heights[i - 1] + 5;
+            ArrayList<String> lines = smsBubbleLines(messages.get(i).body, 3);
+            previews.add(lines);
+            heights[i] = 24 + 15.8f * Math.max(1, lines.size());
+        }
+        float totalHeight = tops[count - 1] + heights[count - 1] - 46;
+        float maxScroll = Math.max(0, totalHeight - 233);
+        float selectedTop = tops[sel] - conversationScrollY;
+        float selectedBottom = selectedTop + heights[sel];
+        if (selectedBottom > 281) conversationScrollY += selectedBottom - 281;
+        if (selectedTop < 46) conversationScrollY -= 46 - selectedTop;
+        conversationScrollY = Math.max(0, Math.min(maxScroll, conversationScrollY));
+
+        c.save();
+        c.clipRect(1, 43, 239, 285);
+        for (int i = 0; i < count; i++) {
+            AndroidBackend.DeviceSms m = messages.get(i);
+            float y = tops[i] - conversationScrollY;
+            float h = heights[i];
+            if (y > 287 || y + h < 42) continue;
+            boolean chosen = i == sel;
+            boolean sent = m.type != Telephony.Sms.MESSAGE_TYPE_INBOX;
+            float x = sent ? 11 : 5;
+            float right = sent ? 235 : 230;
+            int bg = chosen ? Color.rgb(244, 244, 244) : Color.rgb(29, 42, 71);
+            p.setColor(bg);
+            c.drawRoundRect(new RectF(x, y, right, y + h), 3, 3, p);
+            if (chosen) {
+                p.setColor(Color.rgb(154, 163, 181));
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(0.7f);
+                c.drawRoundRect(new RectF(x, y, right, y + h), 3, 3, p);
+                p.setStyle(Paint.Style.FILL);
+            }
+
+            Path tail = new Path();
+            if (sent) {
+                tail.moveTo(right, y + h - 4);
+                tail.lineTo(right, y + h + 6);
+                tail.lineTo(right - 9, y + h - 4);
+            } else {
+                tail.moveTo(x, y + h - 4);
+                tail.lineTo(x, y + h + 6);
+                tail.lineTo(x + 9, y + h - 4);
+            }
+            tail.close();
+            p.setColor(bg);
+            c.drawPath(tail, p);
+
+            String kind = sent ? "SMS_SENT" : (isSmsUnread(m) ? "SMS_UNREAD" : "SMS_READ");
+            Bitmap icon = RebornIconAtlas.get(kind);
+            if (icon != null) c.drawBitmap(icon, null, new RectF(x + 4, y + 3, x + 22, y + 21), p);
+            String time = smsDisplayTime(m.date);
+            p.setColor(chosen ? Color.rgb(85, 85, 85) : Color.rgb(143, 163, 200));
+            p.setTextAlign(Paint.Align.RIGHT);
+            p.setTextSize(10);
+            p.setTypeface(android.graphics.Typeface.DEFAULT);
+            c.drawText(time, right - 6, y + 13, p);
+
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setTextSize(14);
+            p.setColor(chosen ? Color.rgb(20, 20, 20) : Color.rgb(223, 230, 245));
+            ArrayList<String> lines = previews.get(i);
+            for (int j = 0; j < lines.size(); j++)
+                c.drawText(lines.get(j), x + 27, y + 34 + j * 15.8f, p);
+            if (markedSmsIds.contains(m.id)) {
+                p.setTextAlign(Paint.Align.RIGHT);
+                p.setColor(Color.rgb(30, 158, 62));
+                p.setTextSize(12);
+                c.drawText("✓", right - 6, y + h - 3, p);
+            }
+        }
+        c.restore();
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
+    private String smsDisplayTime(long millis) {
+        long stamp = millis > 0 ? millis : System.currentTimeMillis();
+        SimpleDateFormat day = new SimpleDateFormat("yyyyMMdd", Locale.UK);
+        String fmt = day.format(new Date(stamp)).equals(day.format(new Date())) ? "HH:mm" : "dd-MM-yyyy";
+        return new SimpleDateFormat(fmt, Locale.UK).format(new Date(stamp));
+    }
+
+    /**
+     * Limit body text to the HTML's three-line message preview, with an ellipsis if truncated.
+     * Use Android Paint measurements rather than fixed character counts.
+     */
+    private ArrayList<String> smsBubbleLines(String text, int limit) {
+        ArrayList<String> lines = new ArrayList<>();
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(14f);
+        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        String[] paragraphs = (text == null ? "" : text.replace("\r", "")).split("\n", -1);
+        for (String para : paragraphs) {
+            String line = "";
+            for (String word : para.trim().split("\\s+")) {
+                if (word.isEmpty()) continue;
+                String trial = line.isEmpty() ? word : line + " " + word;
+                if (p.measureText(trial) <= 190) { line = trial; continue; }
+                if (!line.isEmpty()) { lines.add(line); line = ""; }
+                while (word.length() > 1 && p.measureText(word) > 190) {
+                    int split = 1;
+                    while (split < word.length() && p.measureText(word.substring(0, split + 1)) <= 190) split++;
+                    lines.add(word.substring(0, split));
+                    word = word.substring(split);
+                }
+                line = word;
+                if (lines.size() > limit) break;
+            }
+            if (!line.isEmpty() || para.isEmpty()) lines.add(line);
+            if (lines.size() > limit) break;
+        }
+        if (lines.size() > limit) {
+            while (lines.size() > limit) lines.remove(lines.size() - 1);
+            String last = lines.get(limit - 1);
+            while (last.length() > 0 && p.measureText(last + "…") > 190)
+                last = last.substring(0, last.length() - 1);
+            lines.set(limit - 1, last + "…");
+        }
+        if (lines.isEmpty()) lines.add("");
+        return lines;
+    }
+
+    private boolean smsPreviewTruncated(AndroidBackend.DeviceSms m) {
+        return m != null && smsBubbleLines(m.body, 4).size() > 3;
+    }
+
+    /** HTML uses Reply for short received bubbles, Open for sent/truncated bubbles. */
+    private boolean smsConversationCenterOpens(AndroidBackend.DeviceSms m) {
+        return m == null || m.type != Telephony.Sms.MESSAGE_TYPE_INBOX || smsPreviewTruncated(m);
+    }
+
 
     /** Native list-item icons: exact mapping from the HTML v6.342 rows() screen map. */
     private Bitmap iconForRow(String pg, int idx) {
@@ -1086,7 +1258,7 @@ public class C2PhoneView extends View {
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
         if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
-        if ("conversation".equals(page)) return new String[]{"Options", "Open", "Back"};
+        if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
         if ("call".equals(page)) return new String[]{"Options", "End", "Loudsp."};
@@ -1406,7 +1578,7 @@ public class C2PhoneView extends View {
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","About"};
             case "aboutNative":
-                return new String[]{"APK version: 1.1.0","HTML reference: v6.342","Partial native update","No WebView"};
+                return new String[]{"APK version: 1.3.0","HTML reference: v6.342","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
                 "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
@@ -1510,9 +1682,16 @@ public class C2PhoneView extends View {
         if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms m = conversationMessageAt(sel);
             if (m != null) {
-                activeMessageId = m.id;
-                markSmsReadLocally(m.id);
-                go("messageRead");
+                if (!smsConversationCenterOpens(m)) {
+                    recipient = m.address;
+                    messageBody = "";
+                    composeFocus = 1;
+                    go("compose");
+                } else {
+                    activeMessageId = m.id;
+                    markSmsReadLocally(m.id);
+                    go("messageRead");
+                }
             }
             return;
         }
@@ -1977,6 +2156,7 @@ public class C2PhoneView extends View {
         }
         page = target;
         sel = 0;
+        if ("conversation".equals(target)) conversationScrollY = 0f;
         optionsOpen = false;
         invalidate();
     }
