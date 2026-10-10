@@ -62,6 +62,11 @@ public class C2PhoneView extends View {
     private String alarmTime = "07:00";
     private boolean alarmOn = false;
     private boolean alarmRepeat = false;
+    // Reborn HTML 6.342 call-filter controls are demo only: no interception of real Android calls.
+    private boolean blacklistEnabled = false;
+    private boolean whitelistEnabled = false;
+    private final ArrayList<String> blacklistNumbers = new ArrayList<>();
+    private final ArrayList<String> whitelistNumbers = new ArrayList<>();
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceSms> deviceSms = new ArrayList<>();
@@ -242,6 +247,10 @@ public class C2PhoneView extends View {
         alarmTime = prefs.getString("alarmTime", "07:00");
         alarmOn = prefs.getBoolean("alarmOn", false);
         alarmRepeat = prefs.getBoolean("alarmRepeat", false);
+        blacklistEnabled = prefs.getBoolean("rebornBlacklistOn", false);
+        whitelistEnabled = prefs.getBoolean("rebornWhitelistOn", false);
+        loadStringList("rebornBlacklist", blacklistNumbers);
+        loadStringList("rebornWhitelist", whitelistNumbers);
 
         loadStringList("notes", notes);
         loadStringList("todos", todos);
@@ -309,6 +318,30 @@ public class C2PhoneView extends View {
             }
         } catch (Exception ignored) {}
         prefs.edit().putString("contacts", a.toString()).apply();
+    }
+
+    private void saveFilterSettings() {
+        prefs.edit().putBoolean("rebornBlacklistOn", blacklistEnabled)
+                .putBoolean("rebornWhitelistOn", whitelistEnabled).apply();
+        saveStringList("rebornBlacklist", blacklistNumbers);
+        saveStringList("rebornWhitelist", whitelistNumbers);
+    }
+
+    private String[] displayFilterPool(ArrayList<String> pool) {
+        String[] names = new String[pool.size()];
+        for (int i = 0; i < pool.size(); i++) names[i] = contactNameFor(pool.get(i));
+        return names;
+    }
+
+    private void addNumberToFilter(boolean black, String number) {
+        if (number == null) return;
+        String key = number.replaceAll("[^0-9+]", "").replaceAll("(?<=.)\\+", "");
+        if (key.isEmpty()) { showNotice("No phone number"); return; }
+        ArrayList<String> pool = black ? blacklistNumbers : whitelistNumbers;
+        if (pool.contains(key)) { showNotice("Already on list"); return; }
+        pool.add(key);
+        saveFilterSettings();
+        showNotice(black ? "Added to blacklist" : "Added to whitelist");
     }
 
     private void saveSettings() {
@@ -498,7 +531,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("Native", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.1.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -1222,6 +1255,13 @@ public class C2PhoneView extends View {
             case "contactsNames": return "Names";
             case "log": return "Log";
             case "settings": return "Settings";
+            case "callsettings": return "Call settings";
+            case "callfilter": return "Call filtering";
+            case "blackmode": return "Reject blacklist";
+            case "whitemode": return "Whitelist mode";
+            case "blackpool": return "Blacklist numbers";
+            case "whitepool": return "Whitelist numbers";
+            case "aboutNative": return "About";
             case "profiles": return "Profiles";
             case "themes": return "Themes";
             case "connectivity": return "Connectivity";
@@ -1329,7 +1369,24 @@ public class C2PhoneView extends View {
             case "dialled":
                 return callItemsFor(CallLog.Calls.OUTGOING_TYPE);
             case "settings":
-                return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity"};
+                return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","About"};
+            case "aboutNative":
+                return new String[]{"APK version: 1.1.0","HTML reference: v6.342","Partial native update","No WebView"};
+            case "callsettings":
+                return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
+                "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
+                "Summary after call","Send my caller ID","Send net caller ID","Slide call handling","Call filtering"};
+            case "callfilter":
+                return new String[]{"Reject unknown callers (pending)",
+                  "Reject blacklist: " + (blacklistEnabled ? "On" : "Off"),
+                  "Blacklist numbers (" + blacklistNumbers.size() + ")",
+                  "Whitelist mode: " + (whitelistEnabled ? "On" : "Off"),
+                  "Whitelist numbers (" + whitelistNumbers.size() + ")",
+                  "Demo only: not real call blocking"};
+            case "blackmode": return new String[]{"Off","On"};
+            case "whitemode": return new String[]{"Off","On"};
+            case "blackpool": return displayFilterPool(blacklistNumbers);
+            case "whitepool": return displayFilterPool(whitelistNumbers);
             case "profiles":
                 return new String[]{"General","Silent","Meeting","Outdoor","My style 1","My style 2","Flight"};
             case "themes":
@@ -1525,6 +1582,8 @@ public class C2PhoneView extends View {
                 go("itemDetail");
             }
             else if (sel == 7) go("connectivity");
+            else if (sel == 8) go("callsettings");
+            else if (sel == 9) go("aboutNative");
             else {
                 detailTitle = itemsFor(page)[sel];
                 detailText = "Setting available in this native recreation.";
@@ -1532,6 +1591,34 @@ public class C2PhoneView extends View {
             }
             return;
         }
+
+        if ("callsettings".equals(page)) {
+            if (sel == 13) go("callfilter");
+            else showNotice("Not implemented in native APK");
+            return;
+        }
+        if ("callfilter".equals(page)) {
+            if (sel == 1) { go("blackmode"); sel = blacklistEnabled ? 1 : 0; }
+            else if (sel == 2) go("blackpool");
+            else if (sel == 3) { go("whitemode"); sel = whitelistEnabled ? 1 : 0; }
+            else if (sel == 4) go("whitepool");
+            else if (sel == 0) showNotice("Unknown callers: definition pending");
+            else showNotice("Real Android calls are not blocked");
+            return;
+        }
+        if ("blackmode".equals(page) || "whitemode".equals(page)) {
+            if ("blackmode".equals(page)) blacklistEnabled = sel == 1;
+            else whitelistEnabled = sel == 1;
+            saveFilterSettings();
+            back();
+            return;
+        }
+        if ("blackpool".equals(page) || "whitepool".equals(page)) {
+            ArrayList<String> pool = "blackpool".equals(page) ? blacklistNumbers : whitelistNumbers;
+            if (!pool.isEmpty()) requestConfirm("removeFromFilter", "Remove " + pool.get(Math.min(sel,pool.size()-1)) + "?");
+            return;
+        }
+        if ("aboutNative".equals(page)) { showNotice("Native APK 1.1.0"); return; }
 
         if ("profiles".equals(page)) {
             profile = itemsFor(page)[sel];
@@ -2573,15 +2660,23 @@ public class C2PhoneView extends View {
         else if ("contacts".equals(page))
             optionItems = new String[]{"Open","Search","Add new","Memory status"};
         else if ("contactsNames".equals(page))
-            optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >","Delete contact","Mark >"};
+            optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
+              "Delete contact","Mark >","Add to blacklist","Add to whitelist"};
         else if ("contactDetail".equals(page))
-            optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >","View conversations","Add image >","Use number","Set as default","Change type >","Copy number","Send business card >","Add to group","Speed dial"};
+            optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >",
+              "View conversations","Add image >","Use number","Set as default","Change type >",
+              "Copy number","Send business card >","Add to group","Speed dial",
+              "Add to blacklist","Add to whitelist"};
         else if ("log".equals(page))
             optionItems = new String[]{"View","Call","Send message","Save","Delete","Clear lists","Call timers"};
         else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
             optionItems = new String[]{"Call","Send message","Save to contacts","Delete","Clear list"};
         else if ("settings".equals(page))
             optionItems = new String[]{"Open","Search","Help"};
+        else if ("blackpool".equals(page) || "whitepool".equals(page))
+            optionItems = new String[]{"Remove"};
+        else if ("callsettings".equals(page) || "callfilter".equals(page))
+            optionItems = new String[]{"Open","Help"};
         else if ("profiles".equals(page))
             optionItems = new String[]{"Activate","Personalise","Timed"};
         else if ("gallery".equals(page))
@@ -2760,6 +2855,11 @@ public class C2PhoneView extends View {
                 detailText = "Phone memory\nSIM card";
                 go("itemDetail");
             }
+        } else if ("blackpool".equals(page) || "whitepool".equals(page)) {
+            if ("Remove".equals(choice)) openSelected();
+        } else if ("callsettings".equals(page) || "callfilter".equals(page)) {
+            if ("Open".equals(choice)) openSelected();
+            else showNotice("Demo controls only");
         } else if ("contactsNames".equals(page)) {
             if (contacts.isEmpty()) return;
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
@@ -2776,6 +2876,8 @@ public class C2PhoneView extends View {
                 requestConfirm("deleteContact", "Delete this contact?");
             } else if ("Search".equals(choice)) showNotice("Search");
             else if ("Mark >".equals(choice)) showNotice("Mark");
+            else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
+                addNumberToFilter("Add to blacklist".equals(choice), ct.number);
         } else if ("contactDetail".equals(page)) {
             Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
             if ("Call".equals(choice)) startCall(ct.number);
@@ -2789,6 +2891,8 @@ public class C2PhoneView extends View {
                 go("compose");
             } else if ("View conversations".equals(choice)) go("conversations");
             else if ("Use number".equals(choice) || "Copy number".equals(choice)) showNotice(ct.number);
+            else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
+                addNumberToFilter("Add to blacklist".equals(choice), ct.number);
             else showNotice(choice.replace(" >",""));
         } else if ("log".equals(page)) {
             if ("View".equals(choice)) openSelected();
@@ -2930,7 +3034,15 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("deleteThreads".equals(action)) {
+        if ("removeFromFilter".equals(action)) {
+            ArrayList<String> pool = "blackpool".equals(page) ? blacklistNumbers : whitelistNumbers;
+            if (sel >= 0 && sel < pool.size()) {
+                pool.remove(sel);
+                saveFilterSettings();
+                sel = Math.min(sel, Math.max(0, pool.size()-1));
+                showNotice("Removed");
+            }
+        } else if ("deleteThreads".equals(action)) {
             HashSet<Long> targets = new HashSet<>();
             if (!markedThreadIds.isEmpty()) targets.addAll(markedThreadIds);
             else if (sel >= 0 && sel < smsThreads.size()) targets.add(smsThreads.get(sel).threadId);
