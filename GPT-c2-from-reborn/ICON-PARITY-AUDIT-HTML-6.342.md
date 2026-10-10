@@ -55,3 +55,13 @@ only the first four. The native Gallery now has all nine entries using the match
 bitmap keys: `MEMCARD 0619 0625 0620 GALth GALgr GALto GALre GALrc`.
 Six additional gallery bitmap assets were extracted from the HTML source, not drawn
 as substitutes. Opening the additional entries is still placeholder functionality.
+
+## APK v1.5.0 — top-level row order/icon alignment
+
+From actual HTML `screens` arrays and `maps` ID lists:
+
+- Settings: source has 15 items including **Lights** at index 3, **Phone** at 10, Accessories, Configuration, Security and factory reset. Previously native had 10, so the exact bitmap keys mapped to the wrong labels after index 2. Restored exact source ordering with 15 rows, fixed routing indices, moved native About to Options.
+- Contacts: source 10, previously native 8. Added Move contacts and Copy contacts using exact PNG IDs `9007` and `9006`.
+- Log: source 14, previously native 8. Added omitted log list names; last `Simulate missed call` lacks a distinct list-ID mapping in original `maps.log`, so the native list uses the existing Missed calls bitmap until precisely characterized.
+- Organiser: source 9, previously native 8. Added Dictionary using existing `DICT` source icon, renamed Countd. timer exactly.
+- Still unverified: nested screens, Options submenus, screen-specific icon variations, operator themes, tactile UX and final dimensions.

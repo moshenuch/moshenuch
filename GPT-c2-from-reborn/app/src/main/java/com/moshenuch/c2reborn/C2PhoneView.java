@@ -541,7 +541,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.4.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.5.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -855,13 +855,13 @@ public class C2PhoneView extends View {
                 ids = new String[]{"0595","0608","0513","0628","0574","0571","0692","0915","0568","0560","Iphone","Iacc","Icfg","Isec","Irst"};
                 break;
             case "contacts":
-                ids = new String[]{"0593","0922","0626","0599","0562","0605","0585","0572"};
+                ids = new String[]{"0593","0922","0626","0599","0562","0605","0585","0572","9007","9006"};
                 break;
             case "gallery":
                 ids = new String[]{"MEMCARD","0619","0625","0620","GALth","GALgr","GALto","GALre","GALrc"};
                 break;
             case "log":
-                ids = new String[]{"0719","0565","0566","0563","0603","0572","0564","0921","0579","0580","0601","0627","0916"};
+                ids = new String[]{"0719","0565","0566","0563","0603","0572","0564","0921","0579","0580","0601","0627","0916","0565"};
                 break;
             case "applications":
                 ids = new String[]{"0617","0616","0534","0639"};
@@ -1559,14 +1559,14 @@ public class C2PhoneView extends View {
             case "emojiPicker":
                 return new String[]{"☺","☹","♥","★","♪","✓","☀","☕"};
             case "contacts":
-                return new String[]{"Names","Add new","Synchronise all","Settings","Groups","Speed dials","Service numbers","Del. all contacts"};
+                return new String[]{"Names","Add new","Synchronise all","Settings","Groups","Speed dials","Service numbers","Del. all contacts","Move contacts","Copy contacts"};
             case "contactsNames": {
                 String[] a = new String[contacts.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
                 return a;
             }
             case "log":
-                return new String[]{"All calls","Missed calls","Received calls","Dialled numbers","Message recipients","Call duration","Packet data counter","Packet data timer"};
+                return new String[]{"All calls","Missed calls","Received calls","Dialled numbers","Msg. recipients","Clear log lists","Video & voice calls","Internet call durat.","Data counter","Pack. data timer","Message log","Positioning","Sync log","Simulate missed call"};
             case "calllog":
                 return callItemsFor(0);
             case "missed":
@@ -1576,9 +1576,9 @@ public class C2PhoneView extends View {
             case "dialled":
                 return callItemsFor(CallLog.Calls.OUTGOING_TYPE);
             case "settings":
-                return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","About"};
+                return new String[]{"Profiles","Themes","Tones","Lights","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","Phone","Accessories","Configuration","Security","Rest. factory sett."};
             case "aboutNative":
-                return new String[]{"APK version: 1.4.0","HTML reference: v6.342","Partial native update","No WebView"};
+                return new String[]{"APK version: 1.5.0","HTML reference: v6.342","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
                 "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
@@ -1611,7 +1611,7 @@ public class C2PhoneView extends View {
             case "media":
                 return new String[]{"Camera","Video camera","Media player","Radio","Voice recorder","Equaliser"};
             case "organiser":
-                return new String[]{"Alarm clock","Calendar","Maps","To-do list","Notes","Calculator","Countdown timer","Stopwatch"};
+                return new String[]{"Alarm clock","Calendar","Maps","To-do list","Notes","Calculator","Countd. timer","Stopwatch","Dictionary"};
             case "maps":
                 return new String[]{"Current position","Find address","Favourites","Route planner"};
             case "scientific":
@@ -1770,7 +1770,7 @@ public class C2PhoneView extends View {
         }
 
         if ("log".equals(page)) {
-            String[] routes = {"calllog","missed","received","dialled","itemDetail","itemDetail","itemDetail","itemDetail"};
+            String[] routes = {"calllog","missed","received","dialled"};
             if (sel < 4) go(routes[sel]);
             else {
                 detailTitle = itemsFor(page)[sel];
@@ -1789,15 +1789,14 @@ public class C2PhoneView extends View {
         if ("settings".equals(page)) {
             if (sel == 0) go("profiles");
             else if (sel == 1) go("themes");
-            else if (sel == 5) go("shortcuts");
-            else if (sel == 6) {
+            else if (sel == 6) go("shortcuts");
+            else if (sel == 7) {
                 detailTitle = "Sync and backup";
                 detailText = "Phone switch\nCreate backup\nRestore backup\nData transfer\nSynchronise all";
                 go("itemDetail");
             }
-            else if (sel == 7) go("connectivity");
-            else if (sel == 8) go("callsettings");
-            else if (sel == 9) go("aboutNative");
+            else if (sel == 8) go("connectivity");
+            else if (sel == 9) go("callsettings");
             else {
                 detailTitle = itemsFor(page)[sel];
                 detailText = "Setting available in this native recreation.";
@@ -1901,6 +1900,11 @@ public class C2PhoneView extends View {
             else if (sel == 5) go("calculator");
             else if (sel == 6) go("countdown");
             else if (sel == 7) go("stopwatch");
+            else if (sel == 8) {
+                detailTitle = "Dictionary";
+                detailText = "Dictionary is not yet implemented in this native port.";
+                go("itemDetail");
+            }
             return;
         }
 
@@ -2887,7 +2891,7 @@ public class C2PhoneView extends View {
         else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
             optionItems = new String[]{"Call","Send message","Save to contacts","Delete","Clear list"};
         else if ("settings".equals(page))
-            optionItems = new String[]{"Open","Search","Help"};
+            optionItems = new String[]{"Open","Search","Help","About APK"};
         else if ("blackpool".equals(page) || "whitepool".equals(page))
             optionItems = new String[]{"Remove"};
         else if ("callsettings".equals(page) || "callfilter".equals(page))
@@ -3125,6 +3129,7 @@ public class C2PhoneView extends View {
             else showNotice(choice);
         } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
             if ("Open".equals(choice)) openSelected();
+            else if ("About APK".equals(choice) && "settings".equals(page)) go("aboutNative");
             else showNotice(choice);
         } else if ("profiles".equals(page)) {
             if ("Activate".equals(choice)) {

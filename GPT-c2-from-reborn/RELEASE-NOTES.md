@@ -1,16 +1,15 @@
-GPT c2 from reborn — APK v1.4.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.5.0 / HTML reference v6.342
 
-Native Android Java, not WebView. Source blob 8966ff284125bd6fa752a78f6bc4a51fd47a03a4.
-New in APK v1.4.0:
-- All 9 original Gallery folder entries and their exact HTML bitmap icons are mapped.
-- Source-correct Memory card, Themes, Graphics, Tones, Recordings and Received files icons.
-- Preserves APK v1.3.0's native SMS conversation bubble layout, timestamps, truncation,
-  exact read/unread/sent envelope icons, dynamic selection and auto-scroll.
-- Preserves earlier SMS notifications, contacts, phone data, status icons and menu asset improvements.
+NATIVE Android Java, no WebView. Source HTML Git blob 8966ff284125bd6fa752a78f6bc4a51fd47a03a4.
+Now aligns primary menu row ordering/count more closely to HTML v6.342:
+- Settings: all 15 original entries with source-exact icons and corrected navigation indices;
+  native About APK is accessible through Settings > Options > About APK (not a bogus HTML row).
+- Contacts: all 10 original entries, including newly extracted exact Move/Copy contacts icons.
+- Log: all 14 source menu entries; some entries are information-only pending implementation.
+- Organiser: all 9 source entries, including Dictionary with original icon.
+- Gallery: all 9 original entries and exact folder icons from v1.4.0.
+- SMS: Nokia-style conversation bubble layout/scroll and state-aware envelope icons from v1.3.0.
 
-LIMITATIONS: Not all Gallery folder functionality is implemented; unimplemented entries
-currently open informational folder placeholders. The native UI still needs broader
-screen-by-screen comparison, especially all Options and nested-menu behaviours.
-Device/emulator pixel parity has not been confirmed.
-Android restrictions prevent a non-default SMS app from updating device SMS read/delete state.
-Debug APK signatures may change between GitHub builds.
+LIMITATIONS: Many nested feature screens and Options actions remain placeholders, not a
+fully equivalent HTML port. A device screenshot parity check is still required.
+Real SMS read/delete mutations are locally simulated due to Android provider restrictions.
