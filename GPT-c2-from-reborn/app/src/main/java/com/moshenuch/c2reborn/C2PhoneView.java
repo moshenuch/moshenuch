@@ -482,7 +482,11 @@ public class C2PhoneView extends View {
         c.drawRect(28, 7, 38, 14, p);
         p.setStyle(Paint.Style.FILL);
         c.drawRect(30, 9, 35, 12, p);
-        if (hasUnreadSms()) drawUnreadEnvelope(c, 176, 5, Color.WHITE);
+        if (hasUnreadSms()) {
+            Bitmap statusMail = RebornIconAtlas.get("STATUS_MSG");
+            if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(174, 3, 197, 19), p);
+            else drawUnreadEnvelope(c, 176, 5, Color.WHITE);
+        }
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
         p.setTextSize(14);
@@ -512,7 +516,11 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(10);
         c.drawText(bluetooth ? "ᛒ  ▮▮▮" : "▮▮▮", 232, 15, p);
-        if (hasUnreadSms()) drawUnreadEnvelope(c, 183, 5, Color.WHITE);
+        if (hasUnreadSms()) {
+            Bitmap statusMail = RebornIconAtlas.get("STATUS_MSG");
+            if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(181, 3, 204, 19), p);
+            else drawUnreadEnvelope(c, 183, 5, Color.WHITE);
+        }
 
         p.setTextAlign(Paint.Align.CENTER);
         p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -531,7 +539,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.1.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.2.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -584,7 +592,9 @@ public class C2PhoneView extends View {
         float rowH = (286f - 42f) / visible;
         boolean showIcons = !"conversations".equals(page) && !"contactsNames".equals(page)
                 && (page.equals("messaging") || page.equals("settings") || page.equals("contacts")
-                || page.equals("gallery") || page.equals("media") || page.equals("organiser"));
+                || page.equals("gallery") || page.equals("media") || page.equals("organiser")
+                || page.equals("log") || page.equals("applications") || page.equals("inbox")
+                || page.equals("sent"));
         for (int row = 0; row < visible && start + row < items.length; row++) {
             int idx = start + row;
             float y = 42 + row * rowH;
@@ -604,6 +614,9 @@ public class C2PhoneView extends View {
 
             if ("conversations".equals(page) && idx < smsThreads.size()) {
                 SmsThread t = smsThreads.get(idx);
+                Bitmap threadIcon = RebornIconAtlas.get(threadUnread(t.threadId) ? "THREAD_UNREAD" :
+                        (isThreadLatestSent(t.threadId) ? "THREAD_SENT" : "THREAD_READ"));
+                if (threadIcon != null) c.drawBitmap(threadIcon, null, new RectF(3, y + 11, 29, y + 37), p);
                 if (markedThreadIds.contains(t.threadId)) {
                     p.setColor(textColor);
                     p.setTextSize(13);
@@ -617,7 +630,10 @@ public class C2PhoneView extends View {
             } else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(idx);
                 if (m != null) {
-                    drawMessageEnvelope(c, 9, y + 12, !isSmsUnread(m), textColor);
+                    String iconState = m.type != Telephony.Sms.MESSAGE_TYPE_INBOX ? "SMS_SENT" :
+                            (isSmsUnread(m) ? "SMS_UNREAD" : "SMS_READ");
+                    Bitmap msgBitmap = RebornIconAtlas.get(iconState);
+                    if (msgBitmap != null) c.drawBitmap(msgBitmap, null, new RectF(8, y + 10, 31, y + 33), p);
                     if (markedSmsIds.contains(m.id)) {
                         p.setColor(textColor);
                         p.setTextSize(12);
@@ -650,35 +666,54 @@ public class C2PhoneView extends View {
         }
     }
 
+    /** Native list-item icons: exact mapping from the HTML v6.342 rows() screen map. */
     private Bitmap iconForRow(String pg, int idx) {
-        String id = null;
-        if ("messaging".equals(pg)) {
-            String[] ids = {"0570","1066","0415","0724","0570","0599","0570","0570","0570","0570","0570","0570","0570","0595"};
-            if (idx < ids.length) id = ids[idx];
-        } else if ("settings".equals(pg)) {
-            String[] ids = {"0595","0540","0513","0628","0715","0703","0558","0599"};
-            if (idx < ids.length) id = ids[idx];
-        } else if ("contacts".equals(pg)) {
-            String[] ids = {"0593","0922","0917","0599","0562","0558","0589","0572"};
-            if (idx < ids.length) id = ids[idx];
-        } else if ("organiser".equals(pg)) {
-            String[] ids = {"0557","0715","0661","0703","0528","0558","0569","0580"};
-            if (idx < ids.length) id = ids[idx];
-        } else if ("media".equals(pg)) {
-            String[] ids = {"0567","0722",null,"0596",null,null};
-            if (idx < ids.length) id = ids[idx];
-        } else if ("gallery".equals(pg)) {
-            String[] ids = {"0909","0619","0625","0624"};
-            if (idx < ids.length) id = ids[idx];
+        String[] ids;
+        switch (pg) {
+            case "messaging":
+                ids = new String[]{"0570","9001","0724","9002","0603","0602","0723","0415","0582","9003","0584","0598","0572","0604"};
+                break;
+            case "organiser":
+                ids = new String[]{"0557","0715","0661","0703","0528","0558","0569","0580","DICT"};
+                break;
+            case "media":
+                ids = new String[]{"GT23","GT54","GT03","0596","GT57","GTeq"};
+                break;
+            case "settings":
+                ids = new String[]{"0595","0608","0513","0628","0574","0571","0692","0915","0568","0560","Iphone","Iacc","Icfg","Isec","Irst"};
+                break;
+            case "contacts":
+                ids = new String[]{"0593","0922","0626","0599","0562","0605","0585","0572"};
+                break;
+            case "gallery":
+                ids = new String[]{"0534","0619","0625","0620"};
+                break;
+            case "log":
+                ids = new String[]{"0719","0565","0566","0563","0603","0572","0564","0921","0579","0580","0601","0627","0916"};
+                break;
+            case "applications":
+                ids = new String[]{"0617","0616","0534","0639"};
+                break;
+            case "inbox":
+                return RebornIconAtlas.get(idx >= 0 && idx < smsInbox.size() && isSmsUnread(smsInbox.get(idx)) ? "SMS_UNREAD" : "SMS_READ");
+            case "sent":
+                return RebornIconAtlas.get("SMS_SENT");
+            default:
+                return null;
         }
-        Bitmap b = id == null ? null : listIcons.get(id);
-        if (b != null) return b;
-        if ("messaging".equals(pg)) return menuIcons[0];
-        if ("contacts".equals(pg)) return menuIcons[1];
-        if ("settings".equals(pg)) return menuIcons[3];
-        if ("gallery".equals(pg) && idx == 0) return menuIcons[4];
-        if ("media".equals(pg) && idx == 2) return menuIcons[5];
-        return null;
+        if (idx < 0 || idx >= ids.length) return null;
+        Bitmap exact = RebornIconAtlas.get(ids[idx]);
+        return exact != null ? exact : listIcons.get(ids[idx]);
+    }
+
+    /** Uses the newest actual SMS record, never guessing direction from an address. */
+    private boolean isThreadLatestSent(long threadId) {
+        AndroidBackend.DeviceSms latest = null;
+        for (AndroidBackend.DeviceSms msg : deviceSms) {
+            if (msg.threadId != threadId) continue;
+            if (latest == null || msg.date > latest.date) latest = msg;
+        }
+        return latest != null && latest.type != Telephony.Sms.MESSAGE_TYPE_INBOX;
     }
 
     private void drawVoiceRecorderIcon(Canvas c, float x, float y, float size, boolean selected) {

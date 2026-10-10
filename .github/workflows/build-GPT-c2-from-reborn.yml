@@ -60,7 +60,10 @@ jobs:
           body: |
             APK version: v${{ steps.version.outputs.version }}
             HTML reference: v${{ steps.html.outputs.version }} (source commit a8d1dab8273ff4dbdcb63cbc1ec1cac3354e10b8).
-            Partial native port only: contact filtering options, call filtering lists and About page.
+            Partial native port: source-exact SMS envelope sprites (unread/read/sent), conversation folder icons,
+            message-status glyph, and exact list-row icons from the v6.342 icon map for Messaging,
+            Organiser, Media, Settings, Contacts, Gallery, Log and Applications.
+            Other layouts and behaviours still require parity work; this is not an exact clone.
             Call filtering controls do not block real Android calls.
             Native Android build of GPT c2 from reborn, based on the Nokia C2-01 recreation.
             No WebView: the phone shell, menus and interactions are implemented in Android code.
