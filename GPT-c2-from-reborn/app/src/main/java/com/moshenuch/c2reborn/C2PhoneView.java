@@ -541,7 +541,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.3.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.4.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -858,7 +858,7 @@ public class C2PhoneView extends View {
                 ids = new String[]{"0593","0922","0626","0599","0562","0605","0585","0572"};
                 break;
             case "gallery":
-                ids = new String[]{"0534","0619","0625","0620"};
+                ids = new String[]{"MEMCARD","0619","0625","0620","GALth","GALgr","GALto","GALre","GALrc"};
                 break;
             case "log":
                 ids = new String[]{"0719","0565","0566","0563","0603","0572","0564","0921","0579","0580","0601","0627","0916"};
@@ -1578,7 +1578,7 @@ public class C2PhoneView extends View {
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","About"};
             case "aboutNative":
-                return new String[]{"APK version: 1.3.0","HTML reference: v6.342","Partial native update","No WebView"};
+                return new String[]{"APK version: 1.4.0","HTML reference: v6.342","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
                 "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
@@ -1607,7 +1607,7 @@ public class C2PhoneView extends View {
             case "goto":
                 return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
             case "gallery":
-                return new String[]{"Memory card","Images","Video clips","Music files"};
+                return new String[]{"Memory card","Images","Video clips","Music files","Themes","Graphics","Tones","Recordings","Received files"};
             case "media":
                 return new String[]{"Camera","Video camera","Media player","Radio","Voice recorder","Equaliser"};
             case "organiser":

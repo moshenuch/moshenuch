@@ -46,3 +46,12 @@ The source `rows()` implementation maps page/index to `listIcons` entries. The b
 - Dynamic three-line previews with ellipses, message timestamps, navy/default and white/selected surfaces, bubble tails, selected-item scrolling, and a 1/N header count.
 - Restored HTML center action distinction: incoming short/nontruncated message Reply; sent or truncated message Open. No automatic read-on-conversation-entry.
 - Follow-up: device screenshots need comparison for pixel geometry/fonts and same-day versus historical dates; no full equivalence claim.
+
+## APK v1.4.0 — Gallery icon pass
+
+Source `screens.gallery` contains nine rows: Memory card, Images, Video clips,
+Music files, Themes, Graphics, Tones, Recordings, Received files. Prior APKs showed
+only the first four. The native Gallery now has all nine entries using the matching
+bitmap keys: `MEMCARD 0619 0625 0620 GALth GALgr GALto GALre GALrc`.
+Six additional gallery bitmap assets were extracted from the HTML source, not drawn
+as substitutes. Opening the additional entries is still placeholder functionality.
