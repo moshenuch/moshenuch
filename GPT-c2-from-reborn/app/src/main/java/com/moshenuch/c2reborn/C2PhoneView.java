@@ -203,6 +203,8 @@ public class C2PhoneView extends View {
     private String menuView = NativeMenuLayout.GRID_WITH_LABELS;
     private boolean menuOrganising = false;
     private int menuMovingFrom = -1;
+    // Organisable, persistent and independently visible Go to shortcuts.
+    private final NativeGoToShortcuts goToShortcuts = new NativeGoToShortcuts();
 
     private final String[] t9Words = {
             "a","am","an","and","are","as","at","be","call","can","come","day","do","for",
@@ -426,6 +428,17 @@ public class C2PhoneView extends View {
             storedMenu.clear();
         }
         menuOrder.addAll(NativeMenuLayout.validatedOrder(storedMenu));
+        try {
+            ArrayList<Integer> order = new ArrayList<>();
+            ArrayList<Integer> visible = new ArrayList<>();
+            JSONArray storedOrder = new JSONArray(prefs.getString("goto_order_v1", "[]"));
+            JSONArray storedVisible = new JSONArray(prefs.getString("goto_visible_v1", "[]"));
+            for (int i = 0; i < storedOrder.length(); i++) order.add(storedOrder.getInt(i));
+            for (int i = 0; i < storedVisible.length(); i++) visible.add(storedVisible.getInt(i));
+            goToShortcuts.restore(order, visible);
+        } catch (Exception ignored) {
+            goToShortcuts.restoreDefaults();
+        }
         profile = prefs.getString("profile", "General");
         theme = prefs.getString("theme", "Dark");
         if ("Nokia".equals(theme)) theme = "Dark";
@@ -661,6 +674,15 @@ public class C2PhoneView extends View {
         pool.add(key);
         saveFilterSettings();
         showNotice(black ? "Added to blacklist" : "Added to whitelist");
+    }
+
+    private void saveGoToShortcuts() {
+        JSONArray order = new JSONArray();
+        JSONArray visible = new JSONArray();
+        for (Integer id : goToShortcuts.order()) order.put(id);
+        for (Integer id : goToShortcuts.enabledIds()) visible.put(id);
+        prefs.edit().putString("goto_order_v1", order.toString())
+                .putString("goto_visible_v1", visible.toString()).apply();
     }
 
     private void saveMenuPreferences() {
