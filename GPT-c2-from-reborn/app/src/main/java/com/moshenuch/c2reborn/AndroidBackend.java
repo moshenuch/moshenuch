@@ -26,6 +26,13 @@ public final class AndroidBackend {
         public final long phoneDataId;
         public final String name;
         public final String number;
+        /** All phone numbers belonging to this aggregated Android contact. */
+        public final ArrayList<String> numbers = new ArrayList<>();
+
+        void addNumber(String value) {
+            if (value != null && !value.trim().isEmpty() && !numbers.contains(value))
+                numbers.add(value);
+        }
 
         DeviceContact(long contactId, long rawContactId, long phoneDataId, String name, String number) {
             this.contactId = contactId;
@@ -33,6 +40,7 @@ public final class AndroidBackend {
             this.phoneDataId = phoneDataId;
             this.name = name == null ? "" : name;
             this.number = number == null ? "" : number;
+            addNumber(this.number);
         }
     }
 
@@ -102,12 +110,17 @@ public final class AndroidBackend {
                     ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                     projection, null, null,
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE NOCASE ASC");
-            long lastContact = -1;
+            // Merge all phone rows by CONTACT_ID, even if their rows are not adjacent.
+            java.util.HashMap<Long, DeviceContact> byId = new java.util.HashMap<>();
             while (c != null && c.moveToNext()) {
-                long contactId = c.getLong(0);
-                if (contactId == lastContact) continue;
-                lastContact = contactId;
-                out.add(new DeviceContact(contactId, c.getLong(1), c.getLong(4), c.getString(2), c.getString(3)));
+                long id = c.getLong(0);
+                DeviceContact contact = byId.get(id);
+                if (contact == null) {
+                    contact = new DeviceContact(id, c.getLong(1), c.getLong(4),
+                            c.getString(2), c.getString(3));
+                    byId.put(id, contact);
+                    out.add(contact);
+                } else contact.addNumber(c.getString(3));
             }
         } catch (Exception ignored) {
         } finally {
