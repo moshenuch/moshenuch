@@ -5073,8 +5073,8 @@ public class C2PhoneView extends View {
                     if (setSmsReadStateLocally(smsById(id), unread)) changed++;
                 if (changed > 0) {
                     persistSmsReadOverrides();
-                    showNotice(changed + (changed == 1 ? " received SMS marked " :
-                            " received SMS marked ") + (unread ? "unread" : "read") + " in app");
+                    showNotice(changed + " received SMS marked " +
+                            (unread ? "unread" : "read") + " in app");
                 } else showNotice("Select received messages to mark");
             } else if ("Mark all".equals(choice)) {
                 markedSmsIds.clear();
