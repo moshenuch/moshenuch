@@ -190,12 +190,69 @@ public class MainActivity extends Activity {
             }
             Uri result = C2MediaProvider.complete(this, pending, false, null);
             if (result == null) throw new java.io.IOException("Photo could not be saved");
+            Uri shared = publishPhotoToPictures(jpeg);
             showNativeCameraPreview(false);
-            if (phoneView != null) phoneView.onCameraCaptureCompleted(false, result);
+            if (phoneView != null)
+                phoneView.onCameraCaptureCompleted(false, shared != null ? shared : result);
+            if (shared == null && phoneView != null)
+                phoneView.onCameraCaptureFailed("Photo saved privately; shared Pictures unavailable");
         } catch (Exception ex) {
             android.util.Log.e("C2Camera", "In-house photo save failed", ex);
             C2MediaProvider.discard(this, pending);
             onNativePhotoFailed("Unable to save photo");
+        }
+    }
+
+    /** Android Q+ scoped-storage photo visible in other Gallery applications. */
+    private Uri publishPhotoToPictures(byte[] jpeg) {
+        if (Build.VERSION.SDK_INT < 29) return null;
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME,
+                "C2_" + System.currentTimeMillis() + ".jpg");
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_PICTURES + "/C2 Reborn");
+        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+        Uri uri = null;
+        try {
+            uri = getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) return null;
+            try (java.io.OutputStream out = getContentResolver().openOutputStream(uri)) {
+                if (out == null) throw new java.io.IOException("MediaStore stream unavailable");
+                out.write(jpeg);
+            }
+            android.content.ContentValues published = new android.content.ContentValues();
+            published.put(MediaStore.Images.Media.IS_PENDING, 0);
+            getContentResolver().update(uri, published, null, null);
+            return uri;
+        } catch (Exception ex) {
+            android.util.Log.e("C2Camera", "Unable to publish photo to Pictures", ex);
+            if (uri != null) try { getContentResolver().delete(uri, null, null); }
+            catch (Exception ignored) { }
+            return null;
+        }
+    }
+
+    void shareCapturedPhoto(Uri uri) {
+        if (uri == null) return;
+        android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
+        send.setType("image/jpeg");
+        send.putExtra(android.content.Intent.EXTRA_STREAM, uri);
+        send.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(android.content.Intent.createChooser(send, "Send photo"));
+        } catch (Exception ex) {
+            if (phoneView != null) phoneView.onCameraCaptureFailed("No sharing app available");
+        }
+    }
+
+    boolean deleteCapturedPhoto(Uri uri) {
+        if (uri == null) return false;
+        try { return getContentResolver().delete(uri, null, null) > 0; }
+        catch (Exception ex) {
+            android.util.Log.e("C2Camera", "Unable to delete photo", ex);
+            return false;
         }
     }
 
