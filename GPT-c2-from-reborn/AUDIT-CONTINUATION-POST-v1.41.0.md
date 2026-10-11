@@ -4,6 +4,16 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## User emulator audit: APK v1.40.0 (historical, not v1.41.0 confirmation)
+
+**Verified on screen:** shortcut assignment/rejection notices readable; Settings > Phone stub has no overlap; My shortcuts Restore defaults confirmation offers Yes and resets Left to Go to.
+
+**Still failing in v1.40.0:** Calculator title upper half clipped. **Later source fix in v1.41.0** moved content below header, but on-device retest is still pending.
+
+**UI parity mismatch:** My shortcuts root displays Options / Select / Back but Nokia reference expects Select / Back only. In current source, the left Options binding is used for Restore defaults; do not simply hide it without specifying an alternative accessible reset path. Defer this non-core correction until Contacts/SMS/Phone priorities are covered, unless parity testing discovers a safe fix.
+
+**Pending emulator tests:** conversation Mark subset; Messaging templates and Saved; Menu/Go to Organise. Do not mark these verified without user results.
+
 ## Current mandatory scope: Contacts, SMS and Phone — function AND graphics
 
 Prioritize Contacts, Messaging/SMS and Phone over all unrelated features. **Visual parity is an acceptance criterion, not deferred polish.** Match the read-only HTML v6.343 and Nokia C2-01 reference in both behavior and rendering.
