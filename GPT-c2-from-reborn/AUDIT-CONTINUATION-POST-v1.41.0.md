@@ -1,3 +1,11 @@
+## New parity category — Camera and Video recorder (requested 2026-10-11)
+
+Moti requests the **Camera view** and **Video recorder** be treated as a first-class Nokia C2-01 parity category, at the same level of scrutiny as Contacts, SMS, Home, and Log. Required: in-house Nokia-style viewfinder UI rather than handing the entire screen to the stock Android camera, faithful status indicators, per-mode Options/submenus and softkey behaviour, image capture/shutter flow, saved-photo preview and gallery integration, video record/stop/save/review flow. Native hardware camera input and permissions must still function; avoid WebView. Verify screen layout, icon style, touch/physical-key mapping, correct camera orientation, lifecycle, and permission denial paths against forthcoming footage from Moti.
+
+**Reference footage is pending.** Do not assert detailed Nokia control mapping or pixel-matched UI before reviewing it. Existing native implementation routes Camera/Video recorder menu choices through startCameraCapture(...); that external capture path should be audited and replaced/extended with an embedded viewfinder as appropriate, without regressing actual camera hardware functionality.
+
+Priority: retain currently verified calling, contacts, SMS and Log behaviour; add Camera/Video recorder to outstanding parity work; first baseline audit once footage arrives.
+
 ## v1.53.0 on-screen audit and v1.54.0 source changes
 
 **Verified in v1.53.0:** Log marked-row tick renders; Names/Log Options popups show Select; Delete selected confirmation now says Nokia "Delete?" with Yes/No; Settings Demo data is accessible and seeds conversations successfully; unread SMS dot clears when entering a conversation.
