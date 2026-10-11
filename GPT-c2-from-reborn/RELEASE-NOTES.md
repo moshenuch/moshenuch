@@ -1,18 +1,13 @@
-GPT c2 from reborn — APK v1.8.2 / HTML reference v6.342
+GPT c2 from reborn — APK v1.9.0 / HTML reference v6.342
 
-Native Java/Canvas. This HTML version is a reference; the APK remains a partial native implementation.
+- Original Nokia firmware checkbox sprites p0456/p0457 now render marked/unmarked states
+  in Contacts Names, Conversations, and individual SMS selection views.
+- Original firmware radio sprites p0460/p0461 now render On/Off choices in
+  blacklist and whitelist mode screens.
+- The PNG bytes come from a pinned upstream v6.342 icon-pool file, checked and
+  restored as Android assets by the GitHub Actions build, not invented icons.
+- APK v1.8.2's structured SMS drafts, multi-mark, and deletion-safety improvements remain.
 
-- Drafts are now structured records retaining recipient, body text, input mode and creation time.
-- Existing body-only drafts from older APK releases migrate automatically; their original text is preserved.
-- Opening a saved draft restores its recipient and editing mode. Saving again updates that draft rather than creating duplicate copies.
-- Editing a draft and then sending the SMS removes only that specific draft, not every draft with the same text.
-- Drafts > Options now has Open, Delete draft and Delete all drafts. Destructive actions require confirmation.
-- Other v1.7.1 fixes remain, including real SMS reply addressing, per-number contact editing, Contacts marking, honest local SMS deletion semantics and dynamic APK version labels.
-
-UNVERIFIED: visual parity for most nested icons/fonts and detailed SMS states, cellular send/delivery confirmation, remaining Options, native Gallery/Media features, handset UI testing and full HTML behavior parity. No WebView.
-
-- SMS conversation threads and individual messages now support Mark all and Unmark all from Options.
-- Switching to another conversation clears message selections, preventing accidental deletion of messages previously marked in a different thread.
-- Empty conversation lists no longer prompt to delete a nonexistent thread.
-
-- Inbox/MessageRead deletion now ignores marked SMS from other screens or conversations, always targeting the actual highlighted/opened SMS ID.
+This is a native Android implementation, not a WebView. HTML reference v6.342
+does not imply full feature or pixel-perfect parity. Nested menu Options,
+fonts, Gallery/Media functionality and real-device visual QA remain outstanding.

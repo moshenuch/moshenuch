@@ -664,27 +664,29 @@ public class C2PhoneView extends View {
             float textX = showIcons ? 49 : 10;
             if ("conversations".equals(page)) textX = 20;
             if ("conversation".equals(page)) textX = 36;
+            if (("blackmode".equals(page) || "whitemode".equals(page)) && idx < 2) {
+                boolean enabled = "blackmode".equals(page) ? blacklistEnabled : whitelistEnabled;
+                drawFirmwareChoice(c, idx == (enabled ? 1 : 0) ? "RADIO_ON" : "RADIO_OFF",
+                        11, y + 9, 24);
+                textX = 46;
+            }
             Bitmap icon = showIcons ? iconForRow(page, idx) : null;
             if (icon != null) c.drawBitmap(icon, null, new RectF(10, y + 8, 40, y + 38), p);
             else if ("media".equals(page) && idx == 4) drawVoiceRecorderIcon(c, 10, y + 8, 30, selected);
             else if ("media".equals(page) && idx == 5) drawEqualiserIcon(c, 10, y + 8, 30, selected);
 
-            if ("contactsNames".equals(page) && markedContactIndices.contains(idx)) {
-                p.setColor(textColor);
-                p.setTextSize(13);
-                p.setTextAlign(Paint.Align.RIGHT);
-                c.drawText("✓", 229, y + 24, p);
+            if ("contactsNames".equals(page) && !markedContactIndices.isEmpty()) {
+                drawFirmwareChoice(c, markedContactIndices.contains(idx) ? "CHECK_ON" : "CHECK_OFF",
+                        205, y + 8, 22);
             }
             if ("conversations".equals(page) && idx < smsThreads.size()) {
                 SmsThread t = smsThreads.get(idx);
                 Bitmap threadIcon = RebornIconAtlas.get(threadUnread(t.threadId) ? "THREAD_UNREAD" :
                         (isThreadLatestSent(t.threadId) ? "THREAD_SENT" : "THREAD_READ"));
                 if (threadIcon != null) c.drawBitmap(threadIcon, null, new RectF(3, y + 11, 29, y + 37), p);
-                if (markedThreadIds.contains(t.threadId)) {
-                    p.setColor(textColor);
-                    p.setTextSize(13);
-                    p.setTextAlign(Paint.Align.LEFT);
-                    c.drawText("✓", 6, y + 23, p);
+                if (!markedThreadIds.isEmpty()) {
+                    drawFirmwareChoice(c, markedThreadIds.contains(t.threadId) ? "CHECK_ON" : "CHECK_OFF",
+                            198, y + 12, 18);
                 }
                 if (threadUnread(t.threadId)) {
                     p.setColor(Color.rgb(220, 40, 45));
@@ -697,11 +699,9 @@ public class C2PhoneView extends View {
                             (isSmsUnread(m) ? "SMS_UNREAD" : "SMS_READ");
                     Bitmap msgBitmap = RebornIconAtlas.get(iconState);
                     if (msgBitmap != null) c.drawBitmap(msgBitmap, null, new RectF(8, y + 10, 31, y + 33), p);
-                    if (markedSmsIds.contains(m.id)) {
-                        p.setColor(textColor);
-                        p.setTextSize(12);
-                        p.setTextAlign(Paint.Align.RIGHT);
-                        c.drawText("✓", 229, y + 23, p);
+                    if (!markedSmsIds.isEmpty()) {
+                        drawFirmwareChoice(c, markedSmsIds.contains(m.id) ? "CHECK_ON" : "CHECK_OFF",
+                                207, y + 11, 18);
                     }
                 }
             }
@@ -831,11 +831,9 @@ public class C2PhoneView extends View {
             ArrayList<String> lines = previews.get(i);
             for (int j = 0; j < lines.size(); j++)
                 c.drawText(lines.get(j), x + 27, y + 34 + j * 15.8f, p);
-            if (markedSmsIds.contains(m.id)) {
-                p.setTextAlign(Paint.Align.RIGHT);
-                p.setColor(Color.rgb(30, 158, 62));
-                p.setTextSize(12);
-                c.drawText("✓", right - 6, y + h - 3, p);
+            if (!markedSmsIds.isEmpty()) {
+                drawFirmwareChoice(c, markedSmsIds.contains(m.id) ? "CHECK_ON" : "CHECK_OFF",
+                        right - 23, y + h - 20, 18);
             }
         }
         c.restore();
@@ -947,6 +945,11 @@ public class C2PhoneView extends View {
             if (latest == null || msg.date > latest.date) latest = msg;
         }
         return latest != null && latest.type != Telephony.Sms.MESSAGE_TYPE_INBOX;
+    }
+
+    private void drawFirmwareChoice(Canvas c, String key, float x, float y, float size) {
+        Bitmap icon = RebornSelectionIcons.get(getContext(), key);
+        if (icon != null) c.drawBitmap(icon, null, new RectF(x, y, x + size, y + size), p);
     }
 
     private void drawVoiceRecorderIcon(Canvas c, float x, float y, float size, boolean selected) {
