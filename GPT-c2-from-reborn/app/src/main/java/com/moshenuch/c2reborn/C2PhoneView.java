@@ -92,6 +92,8 @@ public class C2PhoneView extends View {
     private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceCall> deviceCalls = new ArrayList<>();
     private final HashSet<Long> localReadSmsIds = new HashSet<>();
+    // Persistent local overrides; the Android SMS provider is not changed.
+    private final HashSet<Long> localUnreadSmsIds = new HashSet<>();
     private final HashSet<Long> hiddenSmsIds = new HashSet<>();
     private final HashSet<Long> markedThreadIds = new HashSet<>();
     private final HashSet<Long> markedSmsIds = new HashSet<>();
@@ -384,6 +386,7 @@ public class C2PhoneView extends View {
         loadStringList("calendar", calendar);
         loadDrafts();
         loadLongSet("sms_local_read", localReadSmsIds);
+        loadLongSet("sms_local_unread", localUnreadSmsIds);
         loadLongSet("sms_hidden", hiddenSmsIds);
         hiddenCallKeys.addAll(prefs.getStringSet("call_hidden_v1",
                 java.util.Collections.<String>emptySet()));
@@ -2008,7 +2011,7 @@ public class C2PhoneView extends View {
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Lights","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","Phone","Accessories","Configuration","Security","Rest. factory sett."};
             case "aboutNative":
-                return new String[]{"APK version: " + installedApkVersion(),"HTML reference: v6.342","Partial native update","No WebView"};
+                return new String[]{"APK version: " + installedApkVersion(),"HTML reference: v6.343","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
                 "Video-voice redial","Voice clarity","Speed dialling: " + (speedDiallingEnabled ? "On" : "Off"),
@@ -3781,18 +3784,31 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","New message","Delete draft","Delete all drafts","Inbox view","Folder details","Memory status"};
         else if ("outbox".equals(page) || "savedmessages".equals(page))
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
-        else if ("inbox".equals(page))
-            optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+        else if ("inbox".equals(page)) {
+            AndroidBackend.DeviceSms target = sel >= 0 && sel < smsInbox.size() ? smsInbox.get(sel) : null;
+            optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
+                    target != null && isSmsUnread(target) ? "Mark as read" : "Mark as unread"};
+        }
         else if ("messageRead".equals(page)) {
             AndroidBackend.DeviceSms chosen = smsById(activeMessageId);
             optionItems = chosen != null && chosen.type != Telephony.Sms.MESSAGE_TYPE_INBOX
                     ? new String[]{"Forward","Delete","Call","Message details","Conversation view","New message","Copy as template"}
-                    : new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+                    : new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
+                             chosen != null && isSmsUnread(chosen) ? "Mark as read" : "Mark as unread"};
         }
-        else if ("conversations".equals(page))
-            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all"};
-        else if ("conversation".equals(page))
-            optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+        else if ("conversations".equals(page)) {
+            SmsThread target = sel >= 0 && sel < smsThreads.size() ? smsThreads.get(sel) : null;
+            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all",
+                    target != null && threadUnread(target.threadId) ? "Mark as read" : "Mark as unread"};
+        }
+        else if ("conversation".equals(page)) {
+            AndroidBackend.DeviceSms target = conversationMessageAt(sel);
+            if (target != null && target.type == Telephony.Sms.MESSAGE_TYPE_INBOX)
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
+                        isSmsUnread(target) ? "Mark as read" : "Mark as unread"};
+            else
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+        }
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
         else if ("contacts".equals(page))
@@ -3973,6 +3989,19 @@ public class C2PhoneView extends View {
                     if (!markedThreadIds.add(id)) markedThreadIds.remove(id);
                     showNotice(markedThreadIds.contains(id) ? "Marked" : "Unmarked");
                 }
+            } else if ("Mark as read".equals(choice) || "Mark as unread".equals(choice)) {
+                boolean unread = "Mark as unread".equals(choice);
+                int changed = 0;
+                if (!markedThreadIds.isEmpty()) {
+                    for (Long id : markedThreadIds)
+                        changed += setThreadSmsReadStateLocally(id, unread);
+                } else if (sel >= 0 && sel < smsThreads.size()) {
+                    changed = setThreadSmsReadStateLocally(smsThreads.get(sel).threadId, unread);
+                }
+                if (changed > 0) {
+                    persistSmsReadOverrides();
+                    showNotice(changed + " received SMS marked " + (unread ? "unread" : "read") + " in app");
+                } else showNotice("No received SMS to mark");
             } else if ("Mark all".equals(choice)) {
                 markedThreadIds.clear();
                 for (SmsThread t : smsThreads) markedThreadIds.add(t.threadId);
@@ -4003,6 +4032,12 @@ public class C2PhoneView extends View {
             else if ("Mark".equals(choice) && m != null) {
                 if (!markedSmsIds.add(m.id)) markedSmsIds.remove(m.id);
                 showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
+            } else if ("Mark as read".equals(choice) || "Mark as unread".equals(choice)) {
+                boolean unread = "Mark as unread".equals(choice);
+                if (setSmsReadStateLocally(m, unread)) {
+                    persistSmsReadOverrides();
+                    showNotice(unread ? "Unread in this app" : "Read in this app");
+                } else showNotice("Select a received SMS");
             } else if ("Mark all".equals(choice)) {
                 markedSmsIds.clear();
                 for (AndroidBackend.DeviceSms item : conversationMessages())
@@ -4048,7 +4083,13 @@ public class C2PhoneView extends View {
                 markedSmsIds.clear();
                 go("conversation");
             } else if ("Message details".equals(choice)) showMessageDetails(selected);
-            else showNotice("Not implemented: " + choice);
+            else if ("Mark as read".equals(choice) || "Mark as unread".equals(choice)) {
+                boolean unread = "Mark as unread".equals(choice);
+                if (setSmsReadStateLocally(selected, unread)) {
+                    persistSmsReadOverrides();
+                    showNotice(unread ? "Unread in this app" : "Read in this app");
+                } else showNotice("Select a received SMS");
+            } else showNotice("Not implemented: " + choice);
         } else if ("compose".equals(page)) {
             if ("Send".equals(choice)) sendMessage();
             else if ("Preview".equals(choice)) showComposePreview();
@@ -4713,18 +4754,42 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /** Read flags inside the emulator never write to the actual Android SMS provider. */
     private void markSmsReadLocally(long id) {
-        if (id <= 0) return;
-        localReadSmsIds.add(id);
+        if (setSmsReadStateLocally(smsById(id), false)) persistSmsReadOverrides();
+    }
+
+    private boolean setSmsReadStateLocally(AndroidBackend.DeviceSms message, boolean unread) {
+        if (message == null || message.type != Telephony.Sms.MESSAGE_TYPE_INBOX) return false;
+        if (unread) {
+            localReadSmsIds.remove(message.id);
+            localUnreadSmsIds.add(message.id);
+        } else {
+            localUnreadSmsIds.remove(message.id);
+            localReadSmsIds.add(message.id);
+        }
+        return true;
+    }
+
+    private int setThreadSmsReadStateLocally(long threadId, boolean unread) {
+        int count = 0;
+        for (AndroidBackend.DeviceSms message : deviceSms)
+            if (message.threadId == threadId && setSmsReadStateLocally(message, unread))
+                count++;
+        return count;
+    }
+
+    private void persistSmsReadOverrides() {
         saveLongSet("sms_local_read", localReadSmsIds);
+        saveLongSet("sms_local_unread", localUnreadSmsIds);
         invalidate();
     }
 
     private boolean isSmsUnread(AndroidBackend.DeviceSms m) {
         return m != null
                 && m.type == Telephony.Sms.MESSAGE_TYPE_INBOX
-                && !m.read
-                && !localReadSmsIds.contains(m.id);
+                && (localUnreadSmsIds.contains(m.id) ||
+                        (!m.read && !localReadSmsIds.contains(m.id)));
     }
 
     private boolean threadUnread(long threadId) {
