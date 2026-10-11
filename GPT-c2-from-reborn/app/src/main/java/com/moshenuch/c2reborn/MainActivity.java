@@ -191,6 +191,9 @@ public class MainActivity extends Activity {
             Uri result = C2MediaProvider.complete(this, pending, false, null);
             if (result == null) throw new java.io.IOException("Photo could not be saved");
             Uri shared = publishPhotoToPictures(jpeg);
+            // Once published to Gallery, retain only the shared copy.
+            // If publication failed, keep the private file for recovery.
+            if (shared != null) deleteCapturedPhoto(result);
             showNativeCameraPreview(false);
             if (phoneView != null)
                 phoneView.onCameraCaptureCompleted(false, shared != null ? shared : result);
