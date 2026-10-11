@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# Do not allow simultaneous builds to race on the public release assets.
+concurrency:
+  group: c2-native-apk-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -272,6 +277,22 @@ jobs:
           name: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}
           path: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
 
+      - name: Publish immutable versioned APK release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: c2-native-v${{ steps.version.outputs.version }}
+          name: GPT c2 from reborn | APK v${{ steps.version.outputs.version }}
+          body: |
+            Archived audit APK v${{ steps.version.outputs.version }}.
+            HTML reference v${{ steps.html.outputs.version }}.
+            Native Android application; verify device behaviour separately.
+          artifacts: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
+          allowUpdates: true
+          removeArtifacts: false
+          replacesArtifacts: true
+          makeLatest: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish/update public APK release
         uses: ncipollo/release-action@v1
         with:
@@ -286,7 +307,27 @@ jobs:
             This release is not a verified pixel-perfect reproduction.
           artifacts: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
           allowUpdates: true
-          removeArtifacts: true
+          removeArtifacts: false
           replacesArtifacts: true
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify published APK assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          HTML: ${{ steps.html.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="GPT-c2-from-reborn-HTML-v${HTML}-APK-v${VERSION}.apk"
+          for tag in "c2-native-v${VERSION}" "c2-native-latest"; do
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+              --jq '.assets[] | select(.name == "'"$apk"'") | .size' > /tmp/c2-asset-size
+            bytes="$(head -1 /tmp/c2-asset-size)"
+            test -n "$bytes" && test "$bytes" -gt 100000 || {
+              echo "::error::Release ${tag} missing the expected APK or its size is invalid"
+              exit 1
+            }
+            echo "Verified published APK on ${tag}: ${apk} (${bytes} bytes)"
+          done
