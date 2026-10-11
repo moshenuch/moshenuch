@@ -987,57 +987,38 @@ public class C2PhoneView extends View {
     }
 
     private void drawHome(Canvas c) {
+        // Use the installed wallpaper on the whole LCD; the Home chrome is
+        // drawn separately instead of covering the image with a dark vignette.
         if (wallpaper != null) {
-            c.drawBitmap(wallpaper, null, new RectF(0, 0, 240, 296), p);
+            p.setColor(Color.WHITE);
+            p.setAlpha(255);
+            c.drawBitmap(wallpaper, null, new RectF(0, 0, 240, 286), p);
         } else {
-            p.setShader(new LinearGradient(0, 0, 240, 300,
-                    Color.rgb(40, 91, 149), Color.rgb(103, 49, 137), Shader.TileMode.CLAMP));
-            c.drawRect(0, 0, 240, 296, p);
-            p.setShader(null);
+            p.setColor(Color.rgb(143, 148, 151));
+            c.drawRect(0, 0, 240, 286, p);
         }
-        p.setColor(Color.argb(28, 0, 0, 0));
-        c.drawRect(0, 0, 240, 296, p);
-
+        p.setTypeface(fontRegular);
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.LEFT);
-        p.setTextSize(10);
-        c.drawText(profile, 8, 15, p);
-
+        p.setTextSize(13);
+        c.drawText("Demo network", 8, 23, p);
+        p.setTextSize(12);
+        c.drawText(new SimpleDateFormat("EEE dd-MM-yyyy", Locale.UK).format(new Date()), 8, 61, p);
+        c.drawText(profile, 8, 267, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        p.setTextSize(10);
-        c.drawText(bluetooth ? "ᛒ  ▮▮▮" : "▮▮▮", 232, 15, p);
+        p.setTextSize(15);
+        c.drawText(new SimpleDateFormat("HH:mm", Locale.UK).format(new Date()), 232, 22, p);
         if (hasUnreadSms()) {
             Bitmap statusMail = RebornIconAtlas.get("STATUS_MSG");
-            if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(181, 3, 204, 19), p);
-            else drawUnreadEnvelope(c, 183, 5, Color.WHITE);
+            if (statusMail != null) c.drawBitmap(statusMail, null,
+                    new RectF(208, 29, 229, 45), p);
         }
-
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setTypeface(fontBold);
-        p.setTextSize(38);
-        c.drawText(new SimpleDateFormat("HH:mm", Locale.UK).format(new Date()), 120, 94, p);
-        p.setTypeface(fontRegular);
-        p.setTextSize(13);
-        c.drawText(new SimpleDateFormat("EEE, d MMM", Locale.UK).format(new Date()), 120, 117, p);
-
         if (alarmOn) {
             p.setTextSize(11);
-            c.drawText("Alarm " + alarmTime, 120, 142, p);
+            c.drawText("Alarm " + alarmTime, 230, 266, p);
         }
-        if (demoMode) {
-            p.setColor(Color.rgb(255, 209, 70));
-            p.setTypeface(fontBold);
-            p.setTextAlign(Paint.Align.CENTER);
-            p.setTextSize(14);
-            c.drawText("DEMO DATA (DEBUG)", 120, 165, p);
-            p.setTypeface(fontRegular);
-        }
-
-        p.setTextAlign(Paint.Align.LEFT);
-        p.setTextSize(11);
-        c.drawText("GPT c2 from reborn", 10, 281, p);
-        p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.343 | APK " + installedApkVersion(), 230, 281, p);
+        // Demo data is isolated by the data backend; its warning belongs in
+        // debug diagnostics, not as an overlay on the Nokia Home display.
     }
 
     private void drawMenu(Canvas c) {
@@ -2097,10 +2078,15 @@ public class C2PhoneView extends View {
     }
 
     private void drawSoftBar(Canvas c) {
-        p.setColor(Color.BLACK);
+        boolean homeBar = "home".equals(page);
+        p.setColor(homeBar ? Color.rgb(216, 220, 222) : Color.BLACK);
         c.drawRect(0, 286, 240, 320, p);
+        if (homeBar) {
+            p.setColor(Color.rgb(132, 137, 140));
+            c.drawRect(0, 286, 240, 287, p);
+        }
         String[] soft = softLabels();
-        p.setColor(Color.WHITE);
+        p.setColor(homeBar ? Color.rgb(28, 34, 36) : Color.WHITE);
         p.setTextSize(14);
         p.setTypeface(fontBold);
         p.setTextAlign(Paint.Align.LEFT);
