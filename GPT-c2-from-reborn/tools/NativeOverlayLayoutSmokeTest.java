@@ -51,6 +51,19 @@ public final class NativeOverlayLayoutSmokeTest {
                 "Longest detail body does not overlap Nokia softkey bar");
         System.out.println("PASS: Settings Phone and item-detail title/body separation");
 
+        check(NativeOverlayLayout.calculatorPanelFits(),
+                "Calculator display and Loan panels must clear status title and softkeys");
+        check(NativeOverlayLayout.CALC_PANEL_TOP >= NativeOverlayLayout.HEADER_BOTTOM + 6f,
+                "Calculator panel must begin at least 6px below status/title header");
+        check(NativeOverlayLayout.CALC_PANEL_TOP >
+                NativeOverlayLayout.TITLE_BASELINE + 8f,
+                "Calculator panel no longer paints over bottom of title glyphs");
+        check(NativeOverlayLayout.CALC_VALUE_BASELINE > NativeOverlayLayout.CALC_PANEL_TOP,
+                "Calculator value baseline within relocated display panel");
+        check(NativeOverlayLayout.LOAN_FIRST_FIELD_TOP >= NativeOverlayLayout.HEADER_BOTTOM + 6f,
+                "Loan calculator first field no longer obscures its title");
+        System.out.println("PASS: Calculator and Loan titles remain fully visible");
+
         System.out.println("NativeOverlayLayout: all smoke tests passed");
     }
 }
