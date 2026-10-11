@@ -48,5 +48,23 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             camera = null;
         }
     }
+    void capturePhoto(MainActivity host) {
+        if (camera == null || !started) {
+            host.onNativePhotoFailed("Camera preview unavailable");
+            return;
+        }
+        started = false;
+        try {
+            camera.takePicture(null, null, (bytes, source) -> {
+                stop();
+                host.runOnUiThread(() -> host.saveNativePhoto(bytes));
+            });
+        } catch (RuntimeException ex) {
+            Log.e("C2Camera", "In-house photo capture failed", ex);
+            stop();
+            host.onNativePhotoFailed("Photo capture failed");
+        }
+    }
+
     boolean isRunning() { return started; }
 }
