@@ -969,12 +969,12 @@ public class C2PhoneView extends View {
             if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(59, 4, 78, 19), p);
             else drawUnreadEnvelope(c, 61, 5, Color.WHITE);
         }
-        if (demoMode) {
+        if (demoMode && isDemoToolsAvailable()) {
             p.setColor(Color.rgb(255, 209, 70));
             p.setTypeface(fontBold);
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(11);
-            c.drawText("DEMO", 150, 17, p);
+            if (isDemoToolsAvailable()) c.drawText("DEMO", 150, 17, p);
         }
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.RIGHT);
@@ -1623,7 +1623,10 @@ public class C2PhoneView extends View {
         drawWrappedText(c, messageBody.isEmpty() ? "Write message" : messageBody, 10, 91, 215, 17, 10);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(9);
-        c.drawText(inputMode + "  " + messageBody.length() + "/160", 229, 288, p);
+        int smsLength = messageBody.length();
+        int smsSegments = Math.max(1, (smsLength <= 160 ? 1 : (smsLength + 152) / 153));
+        int smsRemaining = smsSegments == 1 ? 160 - smsLength : smsSegments * 153 - smsLength;
+        c.drawText(smsRemaining + "/" + smsSegments, 229, 288, p);
     }
 
     private void drawDial(Canvas c) {
@@ -6350,8 +6353,7 @@ public class C2PhoneView extends View {
             return;
         }
         detailTitle = entry.kind + " detail";
-        detailText = entry.value + "\n\nOptions offers actions for this detail."
-                + "\nExtracted locally from SMS; original message unchanged.";
+        detailText = entry.value;
         go("itemDetail");
     }
 
