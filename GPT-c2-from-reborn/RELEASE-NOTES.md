@@ -1,37 +1,34 @@
-GPT c2 from reborn — APK v1.28.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.29.0 / HTML reference v6.343
 
-Native Android Java/Canvas, not a WebView.
+Native Android Java/Canvas application (NOT a WebView).
 
-Changes in v1.28.0 — source-exact Contact details artwork
-- Replaced the placeholder circle on the native Contact details screen with
-  the original CONTbust portrait PNG extracted directly from the HTML
-  v6.343 listIcons map. The original 84x84 asset is rendered at 42x42 Nokia
-  CSS-screen pixels in the correct upper-right contact header position.
-- The Nokia CONTphone telephone PNG is shown beside every contact number,
-  including selected secondary phone-number rows.
-- Restored contact-name alignment and the light selected-number row appearance
-  of the upstream Contact details screen. Names/long phone-number strings
-  are ellipsized to fit the 240-wide native LCD without cropping.
-- Retained v1.27.0 Up/Down selection and scrolling through multiple phone
-  numbers; all Contact detail actions continue to use the selected number.
-- Exact PNGs are cached and decoded inside native Android Java. No network
-  access, WebView wrapper or replacement stock icons are involved.
+New in v1.29.0 — functional Nokia Contacts Search
+- Replaces inert "Search" items in Contacts Options and Names Options with
+  an executable native contact search screen.
+- Users can start searching directly in Names by pressing a digit key.
+- Nokia multi-tap 0-9 text input searches contact names case-insensitively;
+  repeated taps cycle a key's characters until the 1050 ms interval expires.
+- # switches between abc name search and 123 number search; number search
+  checks primary and secondary Android contact numbers.
+- UP/DOWN scrolls matching contacts, centre OK opens details and physical/
+  on-screen green Call starts the selected contact's primary number.
+- Search Options provide Open, Call, Send message, Clear search and Back.
+  Send message opens the compose editor without sending anything.
+- RSK removes one query character; when query is empty it returns Back.
+  If no matching contacts exist, the list displays "No matches".
+- All search operations are read-only and use the native Contacts list.
 
-Upstream artwork provenance:
-- HTML blob: 2aabdff3423d1fdf76d1e1c5b7608348f916ce60
-- Source variables: listIcons.CONTbust (84x84) and listIcons.CONTphone (56x56).
-- Published website version: v6.343 (2026-10-11).
-
-Retained previous functions:
-- v1.27.0 individually selectable/usable multi-number Contacts.
-- v1.26.0 full contact alias matching.
-- v1.24–1.25 SMS read/unread, menu actions and contact saving.
-- Gallery, Groups, media and speed-dial native Java components.
+Previous native functionality retained:
+- v1.28.0 exact Nokia Contact portrait/phone sprites from HTML v6.343.
+- v1.27.0 scrollable contact phone numbers and per-number actions.
+- v1.26.0 secondary-number contact aliases.
+- v1.24.x SMS read/unread states and red dots, and other implemented native
+  SMS, speed dial, Gallery, music and Organiser functions.
 
 Limitations:
-- Only Contact details' two sprites are verified source-exact in this update.
-  Other screens and menus still need icon-by-icon visual comparison.
-- Device screenshots and interactions have not been tested on actual hardware.
-- CI builds and checks Android packaging; it is not a physical handset test.
-- APK signing remains ephemeral until separate signing PR #2 is configured;
-  uninstall previous version if Android reports a signing conflict.
+- Search implementation uses a native multi-tap input screen; screen geometry
+  and options ordering have not been certified pixel-identical to HTML.
+- Searches use the loaded contacts snapshot; external edits may need Refresh.
+- CI success verifies compilation / APK packaging, not physical-device input.
+- Signing still uses ephemeral debug keys until signing PR #2 is configured:
+  uninstall the previous APK if installation reports a package conflict.
