@@ -3467,13 +3467,17 @@ public class C2PhoneView extends View {
                         showNotice("Selected number cannot be edited");
                         return;
                     }
-                    ok = backend.updateContact(old.contactId,
-                            editTargetRawId, editTargetDataId, name, num);
+                    // Name-only edits should not rewrite an unchanged phone row.
+                    // That extra provider operation could fail the entire batch.
+                    ok = num.equals(editTargetNumber)
+                            ? backend.updateContactName(editTargetRawId, name)
+                            : backend.updateContact(old.contactId,
+                                    editTargetRawId, editTargetDataId, name, num);
                 } else {
                     ok = backend.addContact(name, num);
                 }
                 if (!ok) {
-                    showNotice("Contacts permission required");
+                    showNotice("Contact save failed");
                     return;
                 }
                 refreshContactsFromPhone();
