@@ -1,29 +1,30 @@
-GPT c2 from reborn — APK v1.12.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.13.0 / HTML reference v6.342
 
-NATIVE Android Java/Canvas, not a WebView; partial HTML recreation.
+Native Android Java/Canvas recreation; NOT a WebView and still not full HTML parity.
 
-This release preserves the separately committed APK v1.11.0 CALL-LOG improvements:
-- Call details, Send SMS and Save-to-Contacts actions.
-- Confirmed app-local deletion/clear, plus Restore hidden calls.
-- Real visible call counts/durations.
+Native organiser Options repair:
+- Notes: Delete and Delete all notes now require Yes/No confirmation before
+  persistent app-data mutation (previously deleted immediately).
+- Notes > Send note now opens SMS Compose with the actual complete selected text
+  and a blank recipient; it does NOT auto-send.
+- Notes > Use detail shows selected note text and character count.
+- Notes > Memory status displays actual number of local notes and text characters
+  rather than a fake phone memory capacity.
+- To-do Options > Delete requires confirmation and shows an accurate result.
+- To-do > Memory status shows actual saved entry count and text characters.
+- Calendar > Options > Edit opens the selected note in the native editor; saving
+  now UPDATES that item, not inserts a duplicate at the start.
+- Calendar > Delete and Delete all notes require confirmation.
+- Calendar > Memory status reports local saved data, and Go to today shows the
+  device-local date without pretending notes have scheduled dates.
+- Week view and Go to date remain explicitly unsupported, rather than
+  reporting fake success.
+- All changes preserve the existing JSON strings in app preferences.
 
-New Messaging audit and implementation:
-- Removed invented delivery reports marked "Delivered"/"Sent" for demo contacts.
-- Removed fictional saved-message rows; Saved items shows empty until implemented.
-- Delivery reports now explicitly say carrier delivery outcomes are not tracked.
-- Messaging > Options > Message log counts actual app-visible SMS data (up to
-  800 provider records, excluding app-local hidden messages), incoming/unread,
-  outgoing/outbox/queued, conversations and saved drafts.
-- Messaging > Options > Folder details shows scoped counts for selected folder.
-- Messaging > Options > Memory status shows app draft/hidden SMS counts,
-  loaded phone records, and unknown real storage capacity.
-- Messaging > Options > SIM messages no longer claims the SIM is empty: this
-  app cannot read or establish SIM-stored message contents.
-- Log > Message log links to the same actual SMS-counting view.
-- Compose > Options > Preview now displays current recipient, body and length
-  and can return to the editor with Back.
-- Other unimplemented Messaging/Compose Options are explicitly labelled.
+The preceding v1.12.0 and v1.11.0 fixes remain included: truthful SMS reporting,
+live message preview, executable call-log actions with reversible local hiding,
+source-exact Nokia choice icons, and structured SMS drafts.
 
-Other limitations remain: source-exact nested Options, phone-delivery results,
-SMS system roles, fonts, media/gallery, and per-screen handset visual parity.
-HTML reference 6.342 does NOT establish full behaviour parity.
+Remaining: handset screen pixel geometry, Nokia fonts, gallery/media controls,
+calendar date metadata, and nested Options routes still require work and
+real-device verification. The original HTML v6.342 tag is a reference label.

@@ -2173,6 +2173,16 @@ public class C2PhoneView extends View {
         }
     }
 
+    private void showOrganiserMemory(String title, List<String> values) {
+        int characters = 0;
+        for (String item : values) characters += item == null ? 0 : item.length();
+        detailTitle = title + " memory";
+        detailText = "Saved entries: " + values.size()
+                + "\nText characters: " + characters
+                + "\nStorage: App data\nDevice storage capacity unknown";
+        go("itemDetail");
+    }
+
     private void beginTextEdit(String kind, int index, String text) {
         editKind = kind;
         editIndex = index;
@@ -2262,7 +2272,8 @@ public class C2PhoneView extends View {
             saveStringList("todos", todos);
             backTo("todo");
         } else if ("calendar".equals(editKind)) {
-            calendar.add(0, txt);
+            if (editIndex >= 0 && editIndex < calendar.size()) calendar.set(editIndex, txt);
+            else calendar.add(0, txt);
             saveStringList("calendar", calendar);
             backTo("calendar");
         } else if ("url".equals(editKind)) {
@@ -3041,7 +3052,7 @@ public class C2PhoneView extends View {
         else if ("organiser".equals(page))
             optionItems = new String[]{"Open","Make a note","Week view","Go to date","Go to today","Settings","Memory status"};
         else if ("calendar".equals(page))
-            optionItems = new String[]{"View","Make a note","Delete","Week view","Go to date","Go to today","Memory status","Go to To-do list"};
+            optionItems = new String[]{"View","Make a note","Edit","Delete","Delete all notes","Week view","Go to date","Go to today","Memory status","Go to To-do list"};
         else if ("todo".equals(page))
             optionItems = new String[]{"Open","Add","Delete","Memory status","Go to calendar"};
         else if ("notes".equals(page))
@@ -3363,31 +3374,59 @@ public class C2PhoneView extends View {
         } else if ("notes".equals(page)) {
             if ("Make a note".equals(choice)) beginTextEdit("note",-1,"");
             else if ("Edit".equals(choice) && !notes.isEmpty()) beginTextEdit("note",sel,notes.get(sel));
-            else if ("Delete".equals(choice) && !notes.isEmpty()) {
-                notes.remove(sel);
-                saveStringList("notes",notes);
-                sel = Math.max(0,Math.min(sel,notes.size()-1));
-                showNotice("Deleted");
+            else if ("Delete".equals(choice)) {
+                if (sel >= 0 && sel < notes.size()) requestConfirm("deleteNote", "Delete the selected note?");
+                else showNotice("No note selected");
             } else if ("Delete all notes".equals(choice)) {
-                notes.clear();
-                saveStringList("notes",notes);
-                sel = 0;
-                showNotice("Notes deleted");
-            } else showNotice(choice.replace(" >",""));
+                if (!notes.isEmpty()) requestConfirm("deleteAllNotes", "Delete all " + notes.size() + " notes?");
+                else showNotice("No saved notes");
+            } else if ("Send note".equals(choice)) {
+                if (sel >= 0 && sel < notes.size()) {
+                    recipient = "";
+                    messageBody = notes.get(sel);
+                    inputMode = "T9";
+                    composeFocus = 0;
+                    go("compose");
+                } else showNotice("No note selected");
+            } else if ("Use detail >".equals(choice)) {
+                if (sel >= 0 && sel < notes.size()) {
+                    detailTitle = "Note details";
+                    detailText = "Characters: " + notes.get(sel).length() + "\n" + notes.get(sel);
+                    go("itemDetail");
+                } else showNotice("No note selected");
+            } else if ("Memory status".equals(choice)) {
+                showOrganiserMemory("Notes", notes);
+            } else showNotice("Not implemented: " + choice);
         } else if ("todo".equals(page)) {
             if ("Add".equals(choice)) beginTextEdit("todo",-1,"");
-            else if ("Delete".equals(choice) && !todos.isEmpty()) {
-                todos.remove(sel);
-                saveStringList("todos",todos);
-                sel = Math.max(0,Math.min(sel,todos.size()-1));
+            else if ("Delete".equals(choice)) {
+                if (sel >= 0 && sel < todos.size()) requestConfirm("deleteTodo", "Delete this to-do note?");
+                else showNotice("No to-do note selected");
             } else if ("Go to calendar".equals(choice)) go("calendar");
             else if ("Open".equals(choice)) openSelected();
-            else showNotice(choice);
+            else if ("Memory status".equals(choice)) showOrganiserMemory("To-do list", todos);
+            else showNotice("Not implemented: " + choice);
         } else if ("calendar".equals(page)) {
             if ("Make a note".equals(choice)) beginTextEdit("calendar",-1,"");
-            else if ("Go to To-do list".equals(choice)) go("todo");
+            else if ("Edit".equals(choice)) {
+                if (sel >= 0 && sel < calendar.size()) beginTextEdit("calendar",sel,calendar.get(sel));
+                else showNotice("No calendar note selected");
+            } else if ("Delete".equals(choice)) {
+                if (sel >= 0 && sel < calendar.size()) requestConfirm("deleteCalendar", "Delete selected calendar note?");
+                else showNotice("No calendar note selected");
+            } else if ("Delete all notes".equals(choice)) {
+                if (!calendar.isEmpty()) requestConfirm("deleteAllCalendar", "Delete all " + calendar.size() + " calendar notes?");
+                else showNotice("No calendar notes");
+            } else if ("Go to To-do list".equals(choice)) go("todo");
             else if ("View".equals(choice)) openSelected();
-            else showNotice(choice);
+            else if ("Memory status".equals(choice)) showOrganiserMemory("Calendar", calendar);
+            else if ("Go to today".equals(choice)) {
+                detailTitle = "Today";
+                detailText = new SimpleDateFormat("EEEE, dd MMM yyyy", Locale.UK).format(new Date())
+                        + "\nCalendar notes: " + calendar.size()
+                        + "\nThese saved notes do not have scheduled dates.";
+                go("itemDetail");
+            } else showNotice("Not implemented: " + choice);
         } else if ("dial".equals(page)) {
             if ("Call".equals(choice)) startCall(dial);
             else if ("Save".equals(choice) && !dial.isEmpty()) {
@@ -3477,7 +3516,38 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("restoreCalls".equals(action)) {
+        if ("deleteNote".equals(action)) {
+            if (sel >= 0 && sel < notes.size()) {
+                notes.remove(sel);
+                saveStringList("notes", notes);
+                sel = Math.min(sel, Math.max(0, notes.size() - 1));
+                showNotice("Note deleted");
+            }
+        } else if ("deleteAllNotes".equals(action)) {
+            notes.clear();
+            saveStringList("notes", notes);
+            sel = 0;
+            showNotice("All notes deleted");
+        } else if ("deleteTodo".equals(action)) {
+            if (sel >= 0 && sel < todos.size()) {
+                todos.remove(sel);
+                saveStringList("todos", todos);
+                sel = Math.min(sel, Math.max(0, todos.size() - 1));
+                showNotice("To-do note deleted");
+            }
+        } else if ("deleteCalendar".equals(action)) {
+            if (sel >= 0 && sel < calendar.size()) {
+                calendar.remove(sel);
+                saveStringList("calendar", calendar);
+                sel = Math.min(sel, Math.max(0, calendar.size() - 1));
+                showNotice("Calendar note deleted");
+            }
+        } else if ("deleteAllCalendar".equals(action)) {
+            calendar.clear();
+            saveStringList("calendar", calendar);
+            sel = 0;
+            showNotice("Calendar notes deleted");
+        } else if ("restoreCalls".equals(action)) {
             int n = hiddenCallKeys.size();
             hiddenCallKeys.clear();
             persistHiddenCalls();
