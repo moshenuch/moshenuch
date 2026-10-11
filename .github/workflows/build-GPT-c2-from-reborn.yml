@@ -32,6 +32,9 @@ jobs:
       - name: Restore pinned Nokia checkbox/radio PNG assets
         run: python3 GPT-c2-from-reborn/tools/extract_selection_icons.py
 
+      - name: Restore pinned Nokia Sans font faces
+        run: python3 GPT-c2-from-reborn/tools/extract_nokia_fonts.py
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
@@ -66,6 +69,7 @@ jobs:
             Partial native port: source-exact SMS envelope sprites (unread/read/sent), conversation folder icons,
             message-status glyph, and exact list-row icons from the v6.342 icon map for Messaging,
             Organiser, Media, Settings, Contacts, Gallery, Log and Applications.
+            Nokia Sans regular and bold faces are restored from the upstream source font archive.
             Other layouts and behaviours still require parity work; this is not an exact clone.
             Call filtering controls do not block real Android calls.
             Native Android build of GPT c2 from reborn, based on the Nokia C2-01 recreation.

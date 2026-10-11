@@ -43,6 +43,8 @@ public class C2PhoneView extends View {
     private static final float SH = 286f;
 
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Typeface fontRegular;
+    private final android.graphics.Typeface fontBold;
     private final Bitmap wallpaper;
     private final Bitmap[] menuIcons = new Bitmap[9];
     private final HashMap<String, Bitmap> listIcons = new HashMap<>();
@@ -171,6 +173,9 @@ public class C2PhoneView extends View {
 
     public C2PhoneView(Context context) {
         super(context);
+        fontRegular = NokiaFontFaces.get(context, false);
+        fontBold = NokiaFontFaces.get(context, true);
+        p.setTypeface(fontRegular);
         wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
         for (int i = 0; i < menuIcons.length; i++) menuIcons[i] = RebornAssets.main(i);
         String[] ids = {
@@ -461,11 +466,11 @@ public class C2PhoneView extends View {
         c.drawRoundRect(new RectF(155, 27, 205, 30), 2, 2, p);
 
         p.setColor(Color.rgb(220,220,220));
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(18);
         c.drawText("NOKIA", 180, 61, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(10);
         c.drawText("C2", 78, 59, p);
@@ -551,7 +556,7 @@ public class C2PhoneView extends View {
             else drawUnreadEnvelope(c, 61, 5, Color.WHITE);
         }
         p.setTextAlign(Paint.Align.RIGHT);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(14);
         c.drawText(new SimpleDateFormat("HH:mm", Locale.UK).format(new Date()), 232, 17, p);
         p.setTextAlign(Paint.Align.LEFT);
@@ -586,10 +591,10 @@ public class C2PhoneView extends View {
         }
 
         p.setTextAlign(Paint.Align.CENTER);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextSize(38);
         c.drawText(new SimpleDateFormat("HH:mm", Locale.UK).format(new Date()), 120, 94, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(13);
         c.drawText(new SimpleDateFormat("EEE, d MMM", Locale.UK).format(new Date()), 120, 117, p);
 
@@ -628,7 +633,7 @@ public class C2PhoneView extends View {
             p.setColor(Color.WHITE);
             p.setTextAlign(Paint.Align.CENTER);
             p.setTextSize(11);
-            p.setTypeface(android.graphics.Typeface.DEFAULT);
+            p.setTypeface(fontRegular);
             c.drawText(mainMenu[i], x + 37.5f, y + 60, p);
         }
     }
@@ -714,9 +719,9 @@ public class C2PhoneView extends View {
             p.setColor(textColor);
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(15);
-            p.setTypeface(selected ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
+            p.setTypeface(selected ? fontBold : fontRegular);
             c.drawText(items[idx], textX, y + 24, p);
-            p.setTypeface(android.graphics.Typeface.DEFAULT);
+            p.setTypeface(fontRegular);
             String sub = subtitleFor(page, idx);
             if (!sub.isEmpty()) {
                 p.setColor(selected ? Color.DKGRAY : Color.LTGRAY);
@@ -744,7 +749,7 @@ public class C2PhoneView extends View {
         if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
         ArrayList<AndroidBackend.DeviceSms> messages = conversationMessages();
         String contact = messages.isEmpty() ? "Conversation" : contactNameFor(messages.get(0).address);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextSize(15);
         if (contact == null || contact.isEmpty()) contact = "Conversation";
         while (contact.length() > 1 && p.measureText(contact) > 182)
@@ -761,9 +766,9 @@ public class C2PhoneView extends View {
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(15);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         c.drawText((sel + 1) + "/" + messages.size(), 234, 37, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
 
         final int count = messages.size();
         final float[] tops = new float[count];
@@ -828,7 +833,7 @@ public class C2PhoneView extends View {
             p.setColor(chosen ? Color.rgb(85, 85, 85) : Color.rgb(143, 163, 200));
             p.setTextAlign(Paint.Align.RIGHT);
             p.setTextSize(10);
-            p.setTypeface(android.graphics.Typeface.DEFAULT);
+            p.setTypeface(fontRegular);
             c.drawText(time, right - 6, y + 13, p);
 
             p.setTextAlign(Paint.Align.LEFT);
@@ -861,7 +866,7 @@ public class C2PhoneView extends View {
         ArrayList<String> lines = new ArrayList<>();
         p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(14f);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         String[] paragraphs = (text == null ? "" : text.replace("\r", "")).split("\n", -1);
         for (String para : paragraphs) {
             String line = "";
@@ -1071,10 +1076,10 @@ public class C2PhoneView extends View {
         drawStatus(c, "Call");
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.CENTER);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextSize(20);
         c.drawText(activeCall, 120, 86, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(13);
         long secs = Math.max(0, (SystemClock.elapsedRealtime() - callStarted) / 1000L);
         c.drawText(formatSeconds(secs), 120, 119, p);
@@ -1118,10 +1123,10 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(40);
         c.drawText("●", 120, 92, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextSize(18);
         c.drawText(ct.name, 120, 135, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(15);
         c.drawText(ct.number, 120, 165, p);
         p.setTextSize(11);
@@ -1273,10 +1278,10 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(42);
         c.drawText("♪", 120, 92, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextSize(16);
         c.drawText(tracks[musicTrack], 120, 128, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(11);
         c.drawText((musicTrack + 1) + "/" + tracks.length, 120, 148, p);
 
@@ -1327,14 +1332,14 @@ public class C2PhoneView extends View {
         String[] soft = softLabels();
         p.setColor(Color.WHITE);
         p.setTextSize(14);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         p.setTextAlign(Paint.Align.LEFT);
         c.drawText(soft[0], 6, 307, p);
         p.setTextAlign(Paint.Align.CENTER);
         c.drawText(soft[1], 120, 307, p);
         p.setTextAlign(Paint.Align.RIGHT);
         c.drawText(soft[2], 234, 307, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
     }
 
     private String[] softLabels() {
@@ -1372,7 +1377,7 @@ public class C2PhoneView extends View {
         c.drawRect(0, 0, 240, 28, p);
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.LEFT);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
         p.setTextSize(18);
         c.drawText("Options", 6, 21, p);
         p.setTextAlign(Paint.Align.RIGHT);
@@ -1440,9 +1445,9 @@ public class C2PhoneView extends View {
         c.drawText("◀", 155, 476, p);
         c.drawText("▶", 205, 476, p);
         p.setTextSize(10);
-        p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        p.setTypeface(fontBold);
         c.drawText("OK", 180, 477, p);
-        p.setTypeface(android.graphics.Typeface.DEFAULT);
+        p.setTypeface(fontRegular);
 
         p.setShader(new LinearGradient(0, 453, 0, 491,
                 Color.rgb(35,38,38), Color.rgb(5,7,7), Shader.TileMode.CLAMP));
@@ -1478,11 +1483,11 @@ public class C2PhoneView extends View {
                 p.setStyle(Paint.Style.FILL);
 
                 p.setColor(Color.rgb(47,184,233));
-                p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                p.setTypeface(fontBold);
                 p.setTextSize(16);
                 p.setTextAlign(Paint.Align.CENTER);
                 c.drawText(labels[i][0], kr.centerX(), kr.top + 26, p);
-                p.setTypeface(android.graphics.Typeface.DEFAULT);
+                p.setTypeface(fontRegular);
                 p.setTextSize(8);
                 if (i != 0 && i != 9 && i != 10 && i != 11)
                     c.drawText(labels[i][1], kr.centerX() + 20, kr.top + 26, p);
