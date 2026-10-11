@@ -104,6 +104,36 @@ jobs:
             tools/NativeAuditFixturesSmokeTest.java
           java -cp build/audit-fixtures-smoke com.moshenuch.c2reborn.NativeAuditFixturesSmokeTest
 
+      - name: Test bulk SMS marking and production wiring
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/sms-bulk-smoke
+          javac -d build/sms-bulk-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeSmsBulkSelection.java \
+            app/src/main/java/com/moshenuch/c2reborn/NativeAuditFixtures.java \
+            tools/NativeSmsBulkSelectionSmokeTest.java
+          {
+            echo "Native SMS bulk selection — v1.37.0"
+            java -cp build/sms-bulk-smoke com.moshenuch.c2reborn.NativeSmsBulkSelectionSmokeTest
+            python3 tools/audit_sms_bulk_wiring.py
+            echo "These are source/model checks, not proof of real emulator interaction."
+          } | tee build/sms-bulk-smoke/audit.txt
+          {
+            echo "## SMS bulk read/unread — build-side audit"
+            echo '~~~text'
+            cat build/sms-bulk-smoke/audit.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bulk SMS selection audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-SMS-bulk-audit-v1.37.0
+          path: GPT-c2-from-reborn/build/sms-bulk-smoke/audit.txt
+          if-no-files-found: error
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
