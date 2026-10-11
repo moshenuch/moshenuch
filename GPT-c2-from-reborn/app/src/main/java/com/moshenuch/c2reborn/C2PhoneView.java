@@ -4132,9 +4132,20 @@ public class C2PhoneView extends View {
     private void handleEditKey(String key) {
         if ("contact".equals(editKind) && ("UP".equals(key) || "DOWN".equals(key))) {
             editField = editField == 0 ? 1 : 0;
+            inputMode = editField == 1 ? "123" : "Abc";
             resetTap();
-        } else if ("OK".equals(key) || "LSK".equals(key)) saveEdit();
-        else if ("RSK".equals(key)) {
+        } else if ("contact".equals(editKind) && "OK".equals(key)) {
+            // The first OK commits the name's multi-tap character and advances
+            // to Number. OK in Number saves; the left Save softkey saves directly.
+            resetTap();
+            if (editField == 0) {
+                editField = 1;
+                inputMode = "123";
+            } else saveEdit();
+        } else if ("OK".equals(key) || "LSK".equals(key)) {
+            resetTap();
+            saveEdit();
+        } else if ("RSK".equals(key)) {
             resetTap();
             if ("contact".equals(editKind)) deleteContactEditorChar();
             else if (!editBuffer.isEmpty()) editBuffer = editBuffer.substring(0, editBuffer.length() - 1);
