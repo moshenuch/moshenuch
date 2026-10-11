@@ -4144,7 +4144,15 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("RSK".equals(key)) back();
+        // An empty call log still has a usable Options softkey. Previously
+        // the generic list handler dropped LSK when itemsFor(page) was empty.
+        if ("LSK".equals(key) &&
+                ("log".equals(page) || "calllog".equals(page) ||
+                 "missed".equals(page) || "received".equals(page) ||
+                 "dialled".equals(page))) {
+            if (items.length == 0) showNotice("No options");
+            else openOptionsForPage();
+        } else if ("RSK".equals(key)) back();
     }
 
     private void beginContactSearch() {
