@@ -24,3 +24,10 @@
 
 ## Release verification
 APK v1.8.0 GitHub Actions compile/publish to be checked after commit. No device instrumentation for draft migration was run.
+
+## APK v1.8.1 — additional SMS Options safety audit
+- Implemented Mark all and Unmark all on individual message and conversation-thread lists; Delete acts on marked items after confirmation.
+- Corrected a cross-thread marking hazard: opening a different thread now clears the previous thread's selection.
+- Guarded Conversation details/Delete conversation when no actual thread is selected, avoiding an action on permission-placeholder rows.
+- Marked indicators still use generic check glyphs. Firmware p0456/p0457 bitmap parity is pending source asset extraction and screenshot testing.
+- Source-only changes: compile and release pipeline verification still required.

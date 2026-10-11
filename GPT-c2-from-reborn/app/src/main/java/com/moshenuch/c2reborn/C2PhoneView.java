@@ -1755,6 +1755,8 @@ public class C2PhoneView extends View {
         if ("conversations".equals(page)) {
             if (deviceSmsActive && sel < smsThreads.size()) {
                 activeThreadId = smsThreads.get(sel).threadId;
+                // Marks belong only to the conversation in which they were made.
+                markedSmsIds.clear();
                 go("conversation");
             } else showNotice("SMS permission required");
             return;
@@ -2962,9 +2964,9 @@ public class C2PhoneView extends View {
         else if ("inbox".equals(page) || "messageRead".equals(page))
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
         else if ("conversations".equals(page))
-            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all"};
+            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all"};
         else if ("conversation".equals(page))
-            optionItems = new String[]{"Reply","Delete","Call","Move","Go to Drafts","Conversation details","Mark"};
+            optionItems = new String[]{"Reply","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
         else if ("contacts".equals(page))
@@ -3092,12 +3094,18 @@ public class C2PhoneView extends View {
             if ("Call".equals(choice)) {
                 if (sel < smsThreads.size()) startCall(smsThreads.get(sel).address);
             } else if ("Conversation details".equals(choice)) {
-                detailTitle = "Message details";
-                detailText = "Type: Conversation\nContact: " + itemsFor("conversations")[sel];
-                go("itemDetail");
+                if (sel >= 0 && sel < smsThreads.size()) {
+                    detailTitle = "Message details";
+                    detailText = "Type: Conversation\nContact: " + itemsFor("conversations")[sel];
+                    go("itemDetail");
+                } else showNotice("No conversation selected");
             } else if ("Delete conversation".equals(choice)) {
-                int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
-                requestConfirm("deleteThreads", "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
+                if (smsThreads.isEmpty()) {
+                    showNotice("No conversation selected");
+                } else {
+                    int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
+                    requestConfirm("deleteThreads", "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
+                }
             } else if ("Inbox view >".equals(choice)) go("inbox");
             else if ("New message >".equals(choice)) {
                 recipient = "";
@@ -3114,6 +3122,9 @@ public class C2PhoneView extends View {
                 markedThreadIds.clear();
                 for (SmsThread t : smsThreads) markedThreadIds.add(t.threadId);
                 showNotice("All marked");
+            } else if ("Unmark all".equals(choice)) {
+                markedThreadIds.clear();
+                showNotice("Marks cleared");
             }
         } else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms m = conversationMessageAt(sel);
@@ -3131,6 +3142,14 @@ public class C2PhoneView extends View {
             else if ("Mark".equals(choice) && m != null) {
                 if (!markedSmsIds.add(m.id)) markedSmsIds.remove(m.id);
                 showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
+            } else if ("Mark all".equals(choice)) {
+                markedSmsIds.clear();
+                for (AndroidBackend.DeviceSms item : conversationMessages())
+                    markedSmsIds.add(item.id);
+                showNotice("All messages marked");
+            } else if ("Unmark all".equals(choice)) {
+                markedSmsIds.clear();
+                showNotice("Marks cleared");
             } else showNotice(choice);
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
             // An Inbox Options action must refer to the highlighted row, not a

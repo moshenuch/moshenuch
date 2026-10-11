@@ -1,4 +1,4 @@
-GPT c2 from reborn — APK v1.8.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.8.1 / HTML reference v6.342
 
 Native Java/Canvas. This HTML version is a reference; the APK remains a partial native implementation.
 
@@ -10,3 +10,7 @@ Native Java/Canvas. This HTML version is a reference; the APK remains a partial 
 - Other v1.7.1 fixes remain, including real SMS reply addressing, per-number contact editing, Contacts marking, honest local SMS deletion semantics and dynamic APK version labels.
 
 UNVERIFIED: visual parity for most nested icons/fonts and detailed SMS states, cellular send/delivery confirmation, remaining Options, native Gallery/Media features, handset UI testing and full HTML behavior parity. No WebView.
+
+- SMS conversation threads and individual messages now support Mark all and Unmark all from Options.
+- Switching to another conversation clears message selections, preventing accidental deletion of messages previously marked in a different thread.
+- Empty conversation lists no longer prompt to delete a nonexistent thread.
