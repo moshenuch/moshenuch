@@ -1656,7 +1656,10 @@ public class C2PhoneView extends View {
         c.drawText(contactNameFor(activeCall), 120, 86, p);
         p.setTypeface(fontRegular);
         p.setTextSize(13);
-        long secs = Math.max(0, (SystemClock.elapsedRealtime() - callStarted) / 1000L);
+        long connectedAt = C2InCallService.connectTime();
+        long secs = connectedAt > 0
+                ? Math.max(0, (System.currentTimeMillis() - connectedAt) / 1000L)
+                : 0L;
         c.drawText(formatSeconds(secs), 120, 119, p);
         p.setTextSize(12);
         c.drawText(loudspeaker ? "Loudspeaker on" : "Handset", 120, 151, p);
@@ -3563,41 +3566,16 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
-    private void startCall(String who) {
-        if (demoMode) {
-            showNotice("DEMO: Real calls are disabled");
-            return;
-        }
-        if (who == null || who.trim().isEmpty()) {
-            showNotice("Enter number");
-            return;
-        }
-        boolean directCallPermission = backend.has(Manifest.permission.CALL_PHONE);
-        if (!backend.placeCall(who)) {
-            showNotice("Unable to open Android calling app");
-            return;
-        }
-        if (!directCallPermission) {
-            // ACTION_DIAL opens the dialling UI, not an actual connected call.
-            showNotice("Android dialler opened; call not placed");
-            return;
-        }
-        activeCall = who;
-        callStarted = SystemClock.elapsedRealtime();
-        loudspeaker = false;
-        go("call");
-        // An ACTION_CALL intent was accepted; Android still owns call status.
+    public void onTelecomCallUpdated() {
+        if (!C2InCallService.hasCall()) return;
+        String number = C2InCallService.number();
+        if (!number.isEmpty()) activeCall = number;
+        if (!"call".equals(page)) go("call");
+        invalidate();
     }
 
-    private void toggleSpeaker() {
-        loudspeaker = !loudspeaker;
-        backend.setSpeakerphone(loudspeaker);
-        showNotice(loudspeaker ? "Loudspeaker on" : "Loudspeaker off");
-    }
-
-    private void endCall() {
-        backend.endCall();
-        backend.setSpeakerphone(false);
+    public void onTelecomCallEnded() {
+        if (!"call".equals(page)) return;
         activeCall = "";
         callStarted = 0;
         loudspeaker = false;
@@ -3607,6 +3585,66 @@ public class C2PhoneView extends View {
         showNotice("Call ended");
         postDelayed(this::refreshCallsFromPhone, 700);
         invalidate();
+    }
+
+    public void onDialerRoleResult(boolean granted) {
+        showNotice(granted ? "Phone app enabled - dial again" :
+                "Set C2 as default Phone app to call");
+    }
+
+    public void onDialerRoleUnavailable() {
+        showNotice("Default phone role unavailable");
+    }
+
+    private void startCall(String who) {
+        if (demoMode) {
+            showNotice("DEMO: Real calls are disabled");
+            return;
+        }
+        if (who == null || who.trim().isEmpty()) {
+            showNotice("Enter number");
+            return;
+        }
+        MainActivity activity = getContext() instanceof MainActivity ?
+                (MainActivity) getContext() : null;
+        if (activity == null || !activity.hasDialerRole()) {
+            showNotice("C2 must be default Phone app");
+            if (activity != null) activity.requestDialerRole();
+            return;
+        }
+        if (!backend.has(Manifest.permission.CALL_PHONE)) {
+            showNotice("Allow Phone permission");
+            return;
+        }
+        activeCall = who;
+        callStarted = SystemClock.elapsedRealtime();
+        loudspeaker = false;
+        if (!backend.placeCall(who)) {
+            activeCall = "";
+            callStarted = 0;
+            showNotice("Call could not be placed");
+            return;
+        }
+        go("call");
+    }
+
+    private void toggleSpeaker() {
+        if (!C2InCallService.hasCall()) {
+            showNotice("Call not connected");
+            return;
+        }
+        loudspeaker = !loudspeaker;
+        C2InCallService.speaker(loudspeaker);
+        showNotice(loudspeaker ? "Loudspeaker on" : "Loudspeaker off");
+    }
+
+    private void endCall() {
+        if (!C2InCallService.hasCall() || !C2InCallService.hangup()) {
+            showNotice("No active call to end");
+            return;
+        }
+        // Wait for Telecom's onCallRemoved before exiting the C2 call page.
+        showNotice("Ending call");
     }
 
     private void sendMessage() {
