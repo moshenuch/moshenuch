@@ -1666,6 +1666,17 @@ public class C2PhoneView extends View {
         p.setTextSize(16);
         c.drawText(status, 120, 76, p);
         String displayName = contactNameFor(activeCall);
+        // Cached call-log names can resolve contacts whose provider number
+        // differs from Telecom's dial string (country code, separators, etc).
+        if (displayName.equals(activeCall)) {
+            for (AndroidBackend.DeviceCall record : deviceCalls) {
+                if (!record.name.isEmpty() &&
+                        android.telephony.PhoneNumberUtils.compare(record.number, activeCall)) {
+                    displayName = record.name;
+                    break;
+                }
+            }
+        }
         p.setTextSize(19);
         if (displayName.length() > 21) displayName = displayName.substring(0, 20) + "…";
         c.drawText(displayName, 120, 116, p);
