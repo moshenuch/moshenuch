@@ -29,6 +29,33 @@ public class MainActivity extends Activity {
     private Uri pendingCameraOutput;
     private boolean pendingCameraVideo;
     private C2PhoneView phoneView;
+    private static MainActivity foreground;
+    static void notifyCallUpdated() {
+        MainActivity a = foreground;
+        if (a != null) a.runOnUiThread(() -> { if (a.phoneView != null) a.phoneView.onTelecomCallUpdated(); });
+    }
+    static void notifyCallEnded() {
+        MainActivity a = foreground;
+        if (a != null) a.runOnUiThread(() -> { if (a.phoneView != null) a.phoneView.onTelecomCallEnded(); });
+    }
+    boolean hasDialerRole() {
+        if (Build.VERSION.SDK_INT < 29) return false;
+        android.app.role.RoleManager role =
+                (android.app.role.RoleManager) getSystemService(ROLE_SERVICE);
+        return role != null && role.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER);
+    }
+    void requestDialerRole() {
+        if (Build.VERSION.SDK_INT < 29) {
+            if (phoneView != null) phoneView.onDialerRoleUnavailable();
+            return;
+        }
+        android.app.role.RoleManager role =
+                (android.app.role.RoleManager) getSystemService(ROLE_SERVICE);
+        if (role != null && role.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER))
+            startActivityForResult(role.createRequestRoleIntent(
+                    android.app.role.RoleManager.ROLE_DIALER), 407);
+        else if (phoneView != null) phoneView.onDialerRoleUnavailable();
+    }
 
     // Observe the Android SMS provider only while this screen is visible.
     // Coalescing provider notifications avoids repeatedly querying the
@@ -86,6 +113,7 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideSystemUi();
+        foreground = this;
         phoneView = new C2PhoneView(this);
         setContentView(phoneView);
         if (savedInstanceState != null) {
@@ -223,6 +251,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 407) {
+            if (phoneView != null) phoneView.onDialerRoleResult(hasDialerRole());
+            return;
+        }
         if (requestCode == REQ_CAPTURE_IMAGE || requestCode == REQ_CAPTURE_VIDEO) {
             auditCapture("Android capture result " +
                     (requestCode == REQ_CAPTURE_VIDEO ? "VIDEO" : "PHOTO") +
@@ -286,15 +318,24 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
+        if (foreground == this) foreground = null;
         super.onDestroy();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        foreground = this;
         hideSystemUi();
+        if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
         if (phoneView != null) phoneView.onPermissionsChanged();
         observeSmsWhileVisible();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
     }
 
     private void hideSystemUi() {
