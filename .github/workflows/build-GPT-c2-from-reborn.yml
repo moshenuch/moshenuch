@@ -163,6 +163,36 @@ jobs:
           path: GPT-c2-from-reborn/build/home-shortcuts-smoke/audit.txt
           if-no-files-found: error
 
+      - name: Test Conversations sender/icon spacing
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/conversation-row-smoke
+          javac -d build/conversation-row-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeConversationRowLayout.java \
+            app/src/main/java/com/moshenuch/c2reborn/NativeAuditFixtures.java \
+            tools/NativeConversationRowLayoutSmokeTest.java
+          {
+            echo "Nokia 240px Conversations row spacing — v1.39.0"
+            java -cp build/conversation-row-smoke com.moshenuch.c2reborn.NativeConversationRowLayoutSmokeTest
+            python3 tools/audit_conversation_row_layout.py
+            echo "Build-side geometry and renderer checks passed; emulator screenshot remains pending."
+          } | tee build/conversation-row-smoke/audit.txt
+          {
+            echo "## Conversations SMS icon/name overlap — build-side audit"
+            echo '~~~text'
+            cat build/conversation-row-smoke/audit.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Conversations layout audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-Conversations-layout-audit-v1.39.0
+          path: GPT-c2-from-reborn/build/conversation-row-smoke/audit.txt
+          if-no-files-found: error
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
