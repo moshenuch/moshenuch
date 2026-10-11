@@ -1,37 +1,36 @@
-GPT c2 from reborn — APK v1.30.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.31.0 / HTML reference v6.343
 
-Native Android Java/Canvas application — NOT an HTML WebView.
+Native Android Java/Canvas; NOT a WebView wrapper.
 
-v1.30.0: Working SMS "Copy as template" and Saved items
-- Received messages, outgoing message detail screens and individual SMS
-  conversation rows can copy an actual message body as a text template.
-- The Messaging > Saved items folder now lists only templates explicitly
-  copied by the user. App-local templates persist over APK restarts.
-- Selecting a saved template opens the native SMS composer with the text
-  prefilled but the recipient empty. Sending requires explicit user action.
-- Saved items Options support Use template, Details, Delete template,
-  Delete all templates, New message and Memory status.
-- Delete template / Delete all templates require Nokia-style Yes/No
-  confirmation. These operations only change app-private saved text,
-  never delete, move or change system SMS records.
-- Saved items memory/folder details display the real number of templates.
-- Maximum 100 copies to avoid unbounded app-local storage.
-- Inbox opening and Inbox Options now reject missing SMS permissions or
-  absent selections instead of showing an obsolete previously-opened SMS.
+v1.31.0 — live unread-SMS icon and conversation refresh
+- Observe the Android SMS content provider while the C2 app is visible.
+  Changes made by a received SMS or another SMS app now trigger a debounced
+  refresh of Inbox, Conversations and the open conversation's message rows.
+- Nokia SMS open/closed-envelope icons, unread-conversation red dots and the
+  simulated Nokia status-bar envelope use that refreshed message snapshot.
+- Repeated SMS provider updates are coalesced into one refresh after 300 ms.
+  Observation stops when the app is backgrounded, and starts on Resume.
+- SMS observer is also registered after SMS permissions are granted.
+- If READ_SMS permission is revoked, discard cached system SMS, inbox entries,
+  conversation rows and marked SMS selection immediately. Saved app-owned
+  templates and drafts remain untouched. No system SMS data is changed.
+- If the Android provider refuses observation, app stays usable and refreshes
+  its SMS data when foregrounded, as it did before.
 
-Previous native features retained:
-- v1.29.0 working Contacts Search (Nokia multi-tap and number search).
-- v1.28.0 exact source Contact PNGs, v1.27.0 multi-number selection.
-- v1.24.x unread message and per-conversation app-local read states.
-- Native SMS, Groups, speed dial, Gallery/Camera, Organiser and audio.
+Retained previous functionality:
+- v1.30.0 Saved items and copied SMS templates, including Yes/No deletion.
+- v1.29.0 native searchable Contacts by multi-tap or phone number.
+- v1.28.0 exact Nokia contact icons, v1.27.0 multi-number contact actions.
+- v1.24.x local SMS read/unread overrides, envelope and red-dot rules.
 
 Limitations:
-- Saved items here is a collection of copied SMS text templates, not a
-  complete emulation of S40's system-message storage hierarchy.
-- The "Move" SMS action still does not move Android provider records.
-- The new folder's visual layout and full Options catalogue have not been
-  compared pixel-for-pixel against source HTML v6.343.
-- CI compiling and publishing an APK is not a physical-device test.
-- Signatures still depend on GitHub's ephemeral debug key until the
-  separate stable-signing PR #2 is activated; a fresh uninstall may be
-  necessary before installing the latest APK.
+- This is *in-app* live updating only. It is not a new Android system
+  notification or background SMS monitoring service.
+- A recent SMS must appear in the Android provider database before a
+  provider-change notification can update the Nokia display.
+- Existing app-local Mark as unread overrides intentionally take precedence
+  over Android's system read flag until changed inside this app.
+- CI compilation and APK publishing do not prove actual physical-device SMS
+  broadcasts, database observation or icon-level screenshot parity.
+- APK debug signing is still ephemeral until signing PR #2 is configured;
+  uninstall old APK first if Android reports a signing conflict.
