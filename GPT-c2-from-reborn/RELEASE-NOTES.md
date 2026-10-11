@@ -1,59 +1,68 @@
-GPT c2 from reborn — APK v1.39.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.40.0 / HTML reference v6.343
 
-Native Android Java/Canvas (NOT a WebView).
+Native Android Java/Canvas application — NOT an HTML WebView.
 
-v1.39.0 — correct SMS Conversations icon/name overlap
+v1.40.0 — repair clipped "Assigned: ..." notices and Phone detail overlap
 
-Reported in the Pixel 4 / Android 11 seeded-demo audit of native
-v1.37.0: the yellow SMS envelope icon visually hid the first character
-of every sender's display name (Leah Hart rendered "eah Hart", unknown
-+44 sender lost its leading "+", NOKIA sender lost "N").
+Reported in the user's Pixel 4 / Android 11 emulator screenshot/logcat audit
+of APK v1.38.0:
+1. A transient "Assigned: Messaging" notification rendered without its
+   first letter ("ssigned: Messaging"), and visually blended into the list
+   behind it.
+2. Settings > Phone, currently a placeholder detail page, displayed a
+   title and body that overlapped visually.
 
-Confirmed root cause in the native Java Canvas renderer:
-- Conversation-thread icon occupied x = 3..29 pixels, but its sender
-  label started at x = 20, overlapping the bitmap by 9 pixels.
-- The shared list renderer did not constrain long conversation labels
-  before drawing a right-side unread dot or Mark/Mark all checkbox.
+Source-verified root causes:
+- drawNotice set Paint.Align.CENTER but called drawWrappedText with x=48
+  as if x were the LEFT boundary. This caused text to extend left of its
+  intended position. Its background used translucent alpha=225, making
+  underlying list labels bleed through.
+- drawItemDetail used the first text baseline y=48, while drawStatus
+  placed the header/title text baseline at y=37 and the header ended
+  at y=41. The 13px body text ascenders overlapped the title region.
 
-Corrections:
-- The sender name and SMS preview now start at x = 37, leaving 8 pixels
-  of separation from the SMS icon's right edge.
-- End-ellipsize conversation sender names and preview text to a maximum
-  of x = 218 in normal mode, stopping 4 pixels before unread-dot edge.
-- With conversation Mark/Mark all selection active, names and previews
-  end by x = 192 to preserve the checkbox starting at x = 198.
-- The envelope icon, unread red dot and checkbox retain their previous
-  positions, sizes and unread/marked state behaviour.
-- Isolated all these dimensions in production-used
-  NativeConversationRowLayout, instead of repeating scattered numbers.
-- Added pure-Java CI geometry tests for the 240px Nokia screen, and
-  fixture coverage for Leah Hart, +447700900799 and NOKIA sender.
-- A production renderer source-wiring audit now fails CI if the icon/name
-  overlap or unbounded conversation title drawing is reintroduced.
-- CI publishes a plain-text report named
-  GPT-c2-from-reborn-Conversations-layout-audit-v1.39.0.
+Fixes:
+- Toast/notice now has a fully opaque background and left-aligned text,
+  with x=48 correctly treated as the left boundary of wrapped text.
+- The notice's two-line body is clipped inside its own dark background,
+  not drawn across or visually mixed with the underlying settings list.
+- All generic information detail screens (including Settings > Phone)
+  now use a dedicated text baseline at y=72, below a divider at y=53
+  and clear of the Nokia header title at y=37. Up to 11 text lines remain
+  within the 286px upper softkey boundary.
+- The Phone stub now explicitly says its phone settings have not yet
+  been implemented and that no Android system settings are changed,
+  instead of implying those settings were functional.
+- Pure-Java NativeOverlayLayout coordinates, a geometry regression suite
+  and a source-wiring audit run in CI before Android Gradle compilation.
+- CI publishes artifact GPT-c2-from-reborn-Overlay-layout-audit-v1.40.0.
+  The checks are build-side source/layout tests, not screenshots.
 
-Verified features from the user's v1.37.0 Pixel 4 audit remain unchanged:
-- Debug seed shows 12 Contacts and 12 fictional SMS records with DEMO tags.
-- Six Conversations and the correct three unread indicator dots.
-- Newest-first conversation items and secondary-number sender matching.
-- Use detail extraction: sender, e-mail, web URL, second number, excluding
-  six-digit verification codes and ISO dates.
-- Bulk Mark all/Mark as unread respects incoming/Sent icon state.
-- Back from Use detail returns to the conversation.
+All other functionality is retained:
+- v1.39.0 Conversations sender/SMS icon spacing corrected; the full first
+  letter of Leah Hart, leading + of unknown numbers and NOKIA now have an
+  8px margin after the SMS icon.
+- v1.38.0 functioning My shortcuts Home key assignments.
+- v1.37.0 SMS bulk Mark as read/unread semantics.
+- v1.36.0 Go to build-side tests and debug log.
+- v1.35.0 reversible debug seed with 12 contacts and 12 messages.
 
-Other features retained:
-- v1.38.0 actual Settings > My shortcuts home-key assignments.
-- v1.37.0 conversation bulk Mark as read/unread correction.
-- v1.36.0 Go to model and emulator audit self-tests.
-- v1.35.0 reversible demo Contacts/SMS seed.
+Manual Pixel 4 / Android 11 retest:
+1. Settings > My shortcuts > Left selection key > Messaging; the entire
+   "Assigned: Messaging" notice must display, including the first A.
+2. Observe an opaque notice box; list text should not show through it.
+3. Settings > Phone; title remains in the black status/title header and
+   informational body begins well beneath it with no letter collisions.
+4. Verify other item-detail pages remain readable and all Nokia softkeys
+   remain accessible.
+5. Confirm the earlier v1.39.0 conversation icon overlap fix persists.
+6. Continue auditing Centre-key Menu rule, Restore defaults, Templates/Saved
+   and Organise persistence.
 
-Audit and limitations:
-- Run Settings > Demo data (debug) > Seed/reset; Messaging >
-  Conversations. Check that "Leah Hart", "+447700900799" and "NOKIA"
-  show ALL their leading characters with and without Mark/Mark all.
-  Full Pixel 4 / Android 11 screenshot verification remains to be done.
-- This update addresses spacing only; it does not claim complete icon,
-  UI interaction or pixel-perfect HTML v6.343 fidelity.
-- Native debug APK signing remains ephemeral on GitHub Actions, so
-  uninstalling the previous C2 app may be necessary on package conflict.
+Limitations:
+- No Android emulator screenshots were produced by CI; visual fidelity
+  and touch-level verification still require a Pixel emulator or handset.
+- No Phone settings were implemented by this release; only inaccurate
+  stub wording and layout are corrected.
+- Ephemeral debug signing may require uninstalling a previous C2 APK
+  before installing v1.40.0 if Android reports a signature conflict.
