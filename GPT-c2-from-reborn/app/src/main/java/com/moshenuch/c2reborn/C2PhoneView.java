@@ -97,6 +97,8 @@ public class C2PhoneView extends View {
     private String groupConfirmNumber = "";
     private final ArrayList<AndroidBackend.DeviceSms> deviceSms = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceSms> smsInbox = new ArrayList<>();
+    // Fictional emulator data, strictly confined to debuggable builds.
+    private boolean demoMode = false;
     private final ArrayList<NativeSmsDetails.Entry> smsExtractedDetails = new ArrayList<>();
     private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceCall> deviceCalls = new ArrayList<>();
@@ -344,6 +346,21 @@ public class C2PhoneView extends View {
     }
 
     private void refreshContactsFromPhone() {
+        if (demoMode) {
+            // Isolated data: do not read or mix with actual provider contacts.
+            deviceContactsActive = true;
+            contacts.clear();
+            contactNumbersById.clear();
+            markedContactIndices.clear();
+            for (NativeAuditFixtures.ContactRow sample : NativeAuditFixtures.contacts()) {
+                contacts.add(new Contact(sample.name, sample.numbers[0],
+                        sample.id, sample.id, sample.id, true));
+                contactNumbersById.put(sample.id,
+                        new ArrayList<>(java.util.Arrays.asList(sample.numbers)));
+            }
+            contactIndex = Math.max(0, Math.min(contactIndex, contacts.size() - 1));
+            return;
+        }
         deviceContactsActive = backend.has(Manifest.permission.READ_CONTACTS);
         contactNumbersById.clear();
         if (!deviceContactsActive) {
@@ -365,7 +382,8 @@ public class C2PhoneView extends View {
     }
 
     private void refreshSmsFromPhone() {
-        deviceSmsActive = backend.has(Manifest.permission.READ_SMS);
+        // Provider-independent SMS screen testing, with no READ_SMS permission.
+        deviceSmsActive = demoMode || backend.has(Manifest.permission.READ_SMS);
         if (!deviceSmsActive) {
             // Remove cached phone SMS immediately after permission revocation.
             // App-owned drafts and copied templates remain untouched.
@@ -385,8 +403,17 @@ public class C2PhoneView extends View {
             return;
         }
         deviceSms.clear();
-        for (AndroidBackend.DeviceSms m : backend.loadSms(800)) {
-            if (!hiddenSmsIds.contains(m.id)) deviceSms.add(m);
+        if (demoMode) {
+            for (NativeAuditFixtures.MessageRow row :
+                    NativeAuditFixtures.messages(System.currentTimeMillis())) {
+                if (!hiddenSmsIds.contains(row.id))
+                    deviceSms.add(new AndroidBackend.DeviceSms(row.id, row.threadId,
+                            row.address, row.body, row.date, row.type, row.read));
+            }
+        } else {
+            for (AndroidBackend.DeviceSms m : backend.loadSms(800)) {
+                if (!hiddenSmsIds.contains(m.id)) deviceSms.add(m);
+            }
         }
         smsInbox.clear();
         smsThreads.clear();
@@ -417,6 +444,7 @@ public class C2PhoneView extends View {
     }
 
     private void loadState() {
+        demoMode = isDemoToolsAvailable() && prefs.getBoolean("audit_demo_mode_v1", false);
         menuView = NativeMenuLayout.validatedMode(
                 prefs.getString("native_menu_view_v1", NativeMenuLayout.GRID_WITH_LABELS));
         menuOrder.clear();
@@ -575,7 +603,7 @@ public class C2PhoneView extends View {
     }
 
     private void saveContacts() {
-        if (deviceContactsActive) return;
+        if (demoMode || deviceContactsActive) return;
         JSONArray a = new JSONArray();
         try {
             for (Contact c : contacts) {
@@ -3110,6 +3138,10 @@ public class C2PhoneView extends View {
     }
 
     private void saveEdit() {
+        if (demoMode && "contact".equals(editKind)) {
+            showNotice("DEMO: Contacts are read-only");
+            return;
+        }
         if ("alarmEdit".equals(page)) {
             if (editBuffer.length() == 4) {
                 try {
@@ -3231,6 +3263,10 @@ public class C2PhoneView extends View {
     }
 
     private void startCall(String who) {
+        if (demoMode) {
+            showNotice("DEMO: Real calls are disabled");
+            return;
+        }
         if (who == null || who.trim().isEmpty()) {
             showNotice("Enter number");
             return;
@@ -3273,6 +3309,10 @@ public class C2PhoneView extends View {
     }
 
     private void sendMessage() {
+        if (demoMode) {
+            showNotice("DEMO: Sending real SMS is disabled");
+            return;
+        }
         if (recipient.trim().isEmpty()) {
             composeFocus = 0;
             showNotice("Enter recipient");
@@ -5610,6 +5650,12 @@ public class C2PhoneView extends View {
             if ("messageRead".equals(page)) back();
             showNotice("SMS hidden in app");
         } else if ("deleteMarkedContacts".equals(action)) {
+            if (demoMode) {
+                markedContactIndices.clear();
+                showNotice("DEMO: Contacts are read-only");
+                invalidate();
+                return;
+            }
             ArrayList<Integer> selected = new ArrayList<>(markedContactIndices);
             java.util.Collections.sort(selected, java.util.Collections.reverseOrder());
             int success = 0;
@@ -6207,6 +6253,10 @@ public class C2PhoneView extends View {
     }
 
     private void deleteContactAt(int index) {
+        if (demoMode) {
+            showNotice("DEMO: Contacts are read-only");
+            return;
+        }
         if (index < 0 || index >= contacts.size()) return;
         Contact c = contacts.get(index);
         if (deviceContactsActive) {
