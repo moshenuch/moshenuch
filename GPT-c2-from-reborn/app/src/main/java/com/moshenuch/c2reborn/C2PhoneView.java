@@ -2,6 +2,7 @@ package com.moshenuch.c2reborn;
 
 import android.Manifest;
 import android.content.Context;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -50,6 +51,10 @@ public class C2PhoneView extends View {
     private final HashMap<String, Bitmap> listIcons = new HashMap<>();
     private final SharedPreferences prefs;
     private final AndroidBackend backend;
+    private final NativeGalleryStore galleryStore;
+    private Bitmap galleryPreviewBitmap;
+    private String galleryPreviewTitle = "";
+    private String galleryPreviewUri = "";
     private final Deque<PageState> history = new ArrayDeque<>();
 
     private float fitScale = 1f, offX = 0f, offY = 0f;
@@ -190,6 +195,7 @@ public class C2PhoneView extends View {
         setFocusableInTouchMode(true);
         backend = new AndroidBackend(context);
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
+        galleryStore = new NativeGalleryStore(context, prefs);
         loadState();
         refreshDeviceData();
     }
@@ -515,6 +521,7 @@ public class C2PhoneView extends View {
         else if ("edit".equals(page)) drawEditor(c);
         else if ("alarmEdit".equals(page)) drawAlarmEdit(c);
         else if ("itemDetail".equals(page)) drawItemDetail(c);
+        else if ("galleryPreview".equals(page)) drawGalleryPreview(c);
         else drawListPage(c);
 
         drawSoftBar(c);
@@ -1318,6 +1325,29 @@ public class C2PhoneView extends View {
         drawWrappedText(c, "Offline native browser simulation. No WebView is used.", 35, 182, 170, 16, 4);
     }
 
+    private void drawGalleryPreview(Canvas c) {
+        drawStatus(c, galleryPreviewTitle.isEmpty() ? "Images" : galleryPreviewTitle);
+        p.setColor(Color.BLACK);
+        c.drawRect(4, 32, 236, 280, p);
+        if (galleryPreviewBitmap != null && !galleryPreviewBitmap.isRecycled()) {
+            float iw = galleryPreviewBitmap.getWidth();
+            float ih = galleryPreviewBitmap.getHeight();
+            float scale = Math.min(220f / Math.max(1f, iw), 224f / Math.max(1f, ih));
+            float width = iw * scale, height = ih * scale;
+            float left = 120f - width / 2f, top = 156f - height / 2f;
+            p.setColor(Color.WHITE);
+            c.drawBitmap(galleryPreviewBitmap, null,
+                    new RectF(left, top, left + width, top + height), p);
+        } else {
+            p.setColor(Color.WHITE);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(12);
+            c.drawText("Image unavailable", 120, 146, p);
+            c.drawText("Select another image", 120, 165, p);
+            p.setTextAlign(Paint.Align.LEFT);
+        }
+    }
+
     private void drawItemDetail(Canvas c) {
         drawStatus(c, detailTitle.isEmpty() ? "Details" : detailTitle);
         p.setColor(themeText());
@@ -1366,6 +1396,9 @@ public class C2PhoneView extends View {
         if ("edit".equals(page) || "alarmEdit".equals(page)) return new String[]{"Save", "", editBuffer.isEmpty() ? "Back" : "Clear"};
         if ("browser".equals(page)) return new String[]{"Options", "Go", "Back"};
         if ("itemDetail".equals(page)) return new String[]{"Options", "", "Back"};
+        if ("galleryPreview".equals(page)) return new String[]{"Options", "", "Back"};
+        if ("galleryImages".equals(page) || "galleryVideos".equals(page))
+            return new String[]{"Options", "Open", "Back"};
         return new String[]{"Options", "Select", "Back"};
     }
 
@@ -1568,6 +1601,9 @@ public class C2PhoneView extends View {
             case "connectivity": return "Connectivity";
             case "bluetooth": return "Bluetooth";
             case "gallery": return "Gallery";
+            case "galleryImages": return "Images";
+            case "galleryVideos": return "Video clips";
+            case "galleryPreview": return "Image";
             case "media": return "Media";
             case "organiser": return "Organiser";
             case "maps": return "Maps";
@@ -1719,6 +1755,15 @@ public class C2PhoneView extends View {
                 return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
             case "gallery":
                 return new String[]{"Memory card","Images","Video clips","Music files","Themes","Graphics","Tones","Recordings","Received files"};
+            case "galleryImages":
+            case "galleryVideos": {
+                java.util.List<NativeGalleryStore.Entry> media =
+                        galleryStore.entries("galleryVideos".equals(pg));
+                if (media.isEmpty()) return new String[]{"(No selected files) — Add from phone"};
+                String[] names = new String[media.size()];
+                for (int i = 0; i < names.length; i++) names[i] = media.get(i).title;
+                return names;
+            }
             case "media":
                 return new String[]{"Camera","Video camera","Media player","Radio","Voice recorder","Equaliser"};
             case "organiser":
@@ -2005,19 +2050,35 @@ public class C2PhoneView extends View {
         }
 
         if ("gallery".equals(page)) {
-            detailTitle = itemsFor(page)[sel];
-            detailText = sel == 0 ? "Memory card\nFree memory: 1.8 GB\nUsed: 214 MB" : "Folder is empty.";
-            go("itemDetail");
+            if (sel == 1 || sel == 2) openGalleryFolder(sel == 2);
+            else {
+                detailTitle = itemsFor(page)[sel];
+                detailText = sel == 0
+                        ? "Memory card status cannot be determined here.\nNo storage amounts invented."
+                        : "Not yet implemented in this native Gallery.\nImages and Video clips can be selected from Android.";
+                go("itemDetail");
+            }
+            return;
+        }
+
+        if ("galleryImages".equals(page) || "galleryVideos".equals(page)) {
+            openSelectedGalleryEntry();
             return;
         }
 
         if ("media".equals(page)) {
             if (sel == 2) go("music");
-            else {
+            else if (sel == 0 || sel == 1) {
                 detailTitle = itemsFor(page)[sel];
-                detailText = sel == 0 ? "Native camera screen placeholder." :
-                        sel == 3 ? "Radio requires a wired headset on the original C2-01." :
-                                "Media function recreated as a native screen.";
+                detailText = "Camera capture is not yet supported in this native port.\nUse Gallery to select existing media.";
+                go("itemDetail");
+            } else if (sel == 3) {
+                detailTitle = "Radio";
+                detailText = "FM tuner access is unavailable on this Android device.\nOriginal C2-01 required a wired headset.";
+                go("itemDetail");
+            } else {
+                detailTitle = itemsFor(page)[sel];
+                detailText = "Not yet implemented in this native Media screen.";
                 go("itemDetail");
             }
             return;
@@ -2386,6 +2447,7 @@ public class C2PhoneView extends View {
     }
 
     private void back() {
+        if ("galleryPreview".equals(page)) clearGalleryPreview();
         resetTap();
         optionsOpen = false;
         if ("compose".equals(page) && (!messageBody.trim().isEmpty() || !recipient.trim().isEmpty())) {
@@ -2471,6 +2533,7 @@ public class C2PhoneView extends View {
         if ("END".equals(key)) {
             if ("call".equals(page)) endCall();
             else {
+                if ("galleryPreview".equals(page)) clearGalleryPreview();
                 if ("compose".equals(page)) saveCurrentDraft();
                 history.clear();
                 page = "home";
@@ -2646,7 +2709,7 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("browser".equals(page) || "itemDetail".equals(page)) {
+        if ("browser".equals(page) || "itemDetail".equals(page) || "galleryPreview".equals(page)) {
             if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             else if ("OK".equals(key) && "browser".equals(page)) showNotice("Offline simulation");
@@ -2998,6 +3061,61 @@ public class C2PhoneView extends View {
         musicTrack = (musicTrack + delta + tracks.length) % tracks.length;
     }
 
+    private void openGalleryFolder(boolean video) {
+        go(video ? "galleryVideos" : "galleryImages");
+        if (galleryStore.entries(video).isEmpty())
+            pickGalleryFiles(video);
+    }
+
+    private void pickGalleryFiles(boolean video) {
+        if (getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).requestGalleryFiles(video);
+        else showNotice("Android file picker not available");
+    }
+
+    /** Only called after explicit user selection in Android's document picker. */
+    public void onGalleryPickerError() {
+        showNotice("No Android file picker available");
+        invalidate();
+    }
+
+    public void onGalleryPicked(boolean video, java.util.List<Uri> uris) {
+        int added = galleryStore.add(video, uris);
+        sel = 0;
+        if (added > 0) showNotice(added + " file(s) added to Gallery");
+        else showNotice("No new files selected");
+        invalidate();
+    }
+
+    private void openSelectedGalleryEntry() {
+        boolean video = "galleryVideos".equals(page);
+        NativeGalleryStore.Entry item = galleryStore.at(video, sel);
+        if (item == null) {
+            pickGalleryFiles(video);
+            return;
+        }
+        if (video) {
+            if (!(getContext() instanceof MainActivity) ||
+                    !((MainActivity) getContext()).viewGalleryVideo(item.uri))
+                showNotice("No compatible video player");
+            return;
+        }
+        clearGalleryPreview();
+        galleryPreviewUri = item.uri;
+        galleryPreviewTitle = item.title;
+        galleryPreviewBitmap = galleryStore.decodePreview(item.uri, 240, 240);
+        go("galleryPreview");
+    }
+
+    private void clearGalleryPreview() {
+        if (galleryPreviewBitmap != null) {
+            galleryPreviewBitmap.recycle();
+            galleryPreviewBitmap = null;
+        }
+        galleryPreviewUri = "";
+        galleryPreviewTitle = "";
+    }
+
     private void openOptionsForPage() {
         if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
@@ -3051,7 +3169,13 @@ public class C2PhoneView extends View {
         else if ("profiles".equals(page))
             optionItems = new String[]{"Activate","Personalise","Timed"};
         else if ("gallery".equals(page))
-            optionItems = new String[]{"Downloads","Mem. card options","Details","Type of view","Sort","Add folder","Memory status"};
+            optionItems = new String[]{"Open","View photos","View videos","Details","Memory status",
+                    "Type of view","Sort","Add folder"};
+        else if ("galleryImages".equals(page) || "galleryVideos".equals(page))
+            optionItems = new String[]{"Open","Add from phone","Details","Remove from gallery",
+                    "Clear folder","Memory status"};
+        else if ("galleryPreview".equals(page))
+            optionItems = new String[]{"Details","Remove from gallery","Add from phone"};
         else if ("media".equals(page))
             optionItems = new String[]{"Open","View photos","View videos","Settings","Memory in use"};
         else if ("organiser".equals(page))
@@ -3366,10 +3490,49 @@ public class C2PhoneView extends View {
                     requestConfirm("hideCallList", "Hide all calls in this list? Android call log unchanged.");
                 else showNotice("No calls in list");
             } else showNotice("Not implemented: " + choice);
-        } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
+        } else if ("gallery".equals(page) || "galleryImages".equals(page)
+                || "galleryVideos".equals(page) || "galleryPreview".equals(page)) {
+            boolean video = "galleryVideos".equals(page);
+            if ("Open".equals(choice)) openSelected();
+            else if ("View photos".equals(choice)) openGalleryFolder(false);
+            else if ("View videos".equals(choice)) openGalleryFolder(true);
+            else if ("Add from phone".equals(choice)) {
+                pickGalleryFiles(video);
+            } else if ("Details".equals(choice) || "Memory status".equals(choice)) {
+                detailTitle = "Gallery details";
+                detailText = "User-selected images: " + galleryStore.images.size()
+                        + "\nUser-selected videos: " + galleryStore.videos.size()
+                        + "\nDevice storage usage: not queried"
+                        + "\nOriginal device files are never deleted.";
+                go("itemDetail");
+            } else if ("Remove from gallery".equals(choice)) {
+                if ("galleryPreview".equals(page)) {
+                    if (!galleryPreviewUri.isEmpty())
+                        requestConfirm("galleryRemovePreview", "Remove this image from the app list? Original unchanged.");
+                } else if (galleryStore.at(video, sel) != null)
+                    requestConfirm("galleryRemove", "Remove selected item from this app? Original unchanged.");
+                else showNotice("No media selected");
+            } else if ("Clear folder".equals(choice)) {
+                if (!galleryStore.entries(video).isEmpty())
+                    requestConfirm("galleryClear", "Clear this app's selection list? Device files unchanged.");
+                else showNotice("Folder already empty");
+            } else showNotice("Not implemented: " + choice);
+        } else if ("media".equals(page)) {
+            if ("Open".equals(choice)) openSelected();
+            else if ("View photos".equals(choice)) openGalleryFolder(false);
+            else if ("View videos".equals(choice)) openGalleryFolder(true);
+            else if ("Memory in use".equals(choice)) {
+                detailTitle = "Media selection";
+                detailText = "Images: " + galleryStore.images.size()
+                        + "\nVideos: " + galleryStore.videos.size()
+                        + "\nSystem storage figures unavailable";
+                go("itemDetail");
+            } else showNotice("Not implemented: " + choice);
+        } else if ("settings".equals(page) || "organiser".equals(page) ||
+                   "applications".equals(page) || "web".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("About APK".equals(choice) && "settings".equals(page)) go("aboutNative");
-            else showNotice(choice);
+            else showNotice("Not implemented: " + choice);
         } else if ("profiles".equals(page)) {
             if ("Activate".equals(choice)) {
                 profile = itemsFor(page)[sel];
@@ -3521,7 +3684,29 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("deleteNote".equals(action)) {
+        if ("galleryRemove".equals(action) || "galleryRemovePreview".equals(action)) {
+            boolean fromPreview = "galleryRemovePreview".equals(action);
+            boolean video = "galleryVideos".equals(page);
+            int idx = sel;
+            if (fromPreview) {
+                video = false;
+                idx = -1;
+                for (int i = 0; i < galleryStore.images.size(); i++) {
+                    if (galleryStore.images.get(i).uri.equals(galleryPreviewUri)) { idx = i; break; }
+                }
+            }
+            if (galleryStore.remove(video, idx)) {
+                if (fromPreview) {
+                    clearGalleryPreview();
+                    back();
+                } else sel = Math.max(0, Math.min(sel, galleryStore.entries(video).size()-1));
+                showNotice("Removed from app; original kept");
+            } else showNotice("File not found");
+        } else if ("galleryClear".equals(action)) {
+            galleryStore.clear("galleryVideos".equals(page));
+            sel = 0;
+            showNotice("App folder cleared; files unchanged");
+        } else if ("deleteNote".equals(action)) {
             if (sel >= 0 && sel < notes.size()) {
                 notes.remove(sel);
                 saveStringList("notes", notes);

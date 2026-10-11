@@ -2,6 +2,10 @@ package com.moshenuch.c2reborn;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.Intent;
+import android.net.Uri;
+import java.util.ArrayList;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -11,6 +15,8 @@ import android.view.WindowManager;
 
 public class MainActivity extends Activity {
     private static final int REQ_PHONE_DATA = 201;
+    private static final int REQ_PICK_IMAGES = 301;
+    private static final int REQ_PICK_VIDEOS = 302;
     private C2PhoneView phoneView;
 
     @Override
@@ -52,6 +58,58 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == REQ_PHONE_DATA && phoneView != null) phoneView.onPermissionsChanged();
+    }
+
+    /** Uses Android's scoped Storage Access Framework. No broad storage permission. */
+    public void requestGalleryFiles(boolean video) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(video ? "video/*" : "image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, video ? REQ_PICK_VIDEOS : REQ_PICK_IMAGES);
+        } catch (android.content.ActivityNotFoundException ex) {
+            if (phoneView != null) phoneView.onGalleryPickerError();
+        }
+    }
+
+    /** Delegate playback to an installed Android video player. No WebView used. */
+    public boolean viewGalleryVideo(String uriString) {
+        try {
+            Uri uri = Uri.parse(uriString);
+            if (!"content".equals(uri.getScheme())) return false;
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, "video/*");
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(view);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_PICK_IMAGES && requestCode != REQ_PICK_VIDEOS) return;
+        if (resultCode != RESULT_OK || data == null || phoneView == null) return;
+        ArrayList<Uri> chosen = new ArrayList<>();
+        ClipData clips = data.getClipData();
+        if (clips != null) {
+            for (int i = 0; i < clips.getItemCount() && i < 150; i++)
+                chosen.add(clips.getItemAt(i).getUri());
+        } else if (data.getData() != null) {
+            chosen.add(data.getData());
+        }
+        for (Uri uri : chosen) {
+            try {
+                getContentResolver().takePersistableUriPermission(uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException ignored) { }
+        }
+        phoneView.onGalleryPicked(requestCode == REQ_PICK_VIDEOS, chosen);
     }
 
     @Override
