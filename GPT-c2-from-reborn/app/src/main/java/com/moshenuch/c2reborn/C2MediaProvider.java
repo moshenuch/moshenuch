@@ -178,7 +178,13 @@ public final class C2MediaProvider extends ContentProvider {
     }
 
     @Override public int delete(Uri uri, String where, String[] args) {
-        throw new UnsupportedOperationException("No public deletes");
+        // Only files in the app-owned completed media library may be removed.
+        if (where != null || args != null || uri == null || uri.getPathSegments().size() != 2)
+            return 0;
+        String category = uri.getPathSegments().get(0);
+        if (!"image".equals(category) && !"video".equals(category)) return 0;
+        File file = resolve(getContext(), uri, false);
+        return file != null && file.isFile() && file.delete() ? 1 : 0;
     }
 
     @Override public int update(Uri uri, ContentValues values, String where, String[] args) {
