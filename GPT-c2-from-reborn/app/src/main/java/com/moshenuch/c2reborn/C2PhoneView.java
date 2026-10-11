@@ -1334,32 +1334,45 @@ public class C2PhoneView extends View {
             c.drawText("Contact unavailable", 120, 150, p);
             return;
         }
+
         Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size() - 1)));
-        p.setTextSize(40);
-        c.drawText("●", 120, 92, p);
+        ArrayList<String> numbers = currentContactNumbers();
+        p.setTextSize(38);
+        c.drawText("●", 120, 84, p);
         p.setTypeface(fontBold);
-        p.setTextSize(18);
-        c.drawText(ct.name, 120, 135, p);
+        p.setTextSize(17);
+        c.drawText(ct.name, 120, 123, p);
         p.setTypeface(fontRegular);
-        p.setTextSize(15);
-        c.drawText(ct.number, 120, 165, p);
-        ArrayList<String> numbers = contactNumbersById.get(ct.contactId);
-        int shown = 0;
-        if (numbers != null) {
-            p.setTextSize(12);
-            for (String number : numbers) {
-                if (number.equals(ct.number)) continue;
-                if (shown == 2) break;
-                c.drawText(number, 120, 185 + shown * 19, p);
-                shown++;
-            }
-            if (numbers.size() > shown + 1) {
-                p.setTextSize(10);
-                c.drawText("+" + (numbers.size() - shown - 1) + " more", 120, 229, p);
-            }
+
+        if (numbers.isEmpty()) {
+            p.setTextSize(13);
+            c.drawText("No phone numbers", 120, 183, p);
+            return;
         }
-        p.setTextSize(11);
-        c.drawText("Green key calls first number", 120, 251, p);
+        int selected = Math.max(0, Math.min(sel, numbers.size() - 1));
+        // Four rows fit between the Nokia status and 3-softkey bar.
+        int first = Math.min(Math.max(0, selected - 2), Math.max(0, numbers.size() - 4));
+        for (int i = first; i < Math.min(first + 4, numbers.size()); i++) {
+            int row = i - first;
+            float y = 146 + row * 28;
+            boolean active = i == selected;
+            if (active) {
+                p.setColor(Color.rgb(48, 104, 179));
+                c.drawRoundRect(new RectF(7, y - 4, 233, y + 23), 3, 3, p);
+            }
+            p.setColor(active ? Color.WHITE : themeText());
+            p.setTextSize(14);
+            p.setTextAlign(Paint.Align.LEFT);
+            String value = numbers.get(i);
+            String shortValue = android.text.TextUtils.ellipsize(value, new android.text.TextPaint(p),
+                    212f, android.text.TextUtils.TruncateAt.END).toString();
+            c.drawText(shortValue, 15, y + 15, p);
+            p.setTextAlign(Paint.Align.CENTER);
+        }
+        p.setColor(themeText());
+        p.setTextSize(10);
+        c.drawText("Number " + (selected + 1) + " of " + numbers.size()
+                + "  •  Up/Down to select", 120, 273, p);
     }
 
     private void drawEditor(Canvas c) {
@@ -1654,7 +1667,8 @@ public class C2PhoneView extends View {
             return new String[]{"Options", selected != null &&
                     selected.type != Telephony.Sms.MESSAGE_TYPE_INBOX ? "Forward" : "Reply", "Back"};
         }
-        if ("contactDetail".equals(page)) return new String[]{"Options", "Call", "Back"};
+        if ("contactDetail".equals(page)) return new String[]{"Options",
+                currentContactNumbers().isEmpty() ? "" : "Call", "Back"};
         if ("edit".equals(page) || "alarmEdit".equals(page)) return new String[]{"Save", "", editBuffer.isEmpty() ? "Back" : "Clear"};
         if ("browser".equals(page)) return new String[]{"Options", "Go", "Back"};
         if ("itemDetail".equals(page)) return new String[]{"Options", "", "Back"};
@@ -2358,7 +2372,7 @@ public class C2PhoneView extends View {
 
         if ("contactsNames".equals(page) && !contacts.isEmpty()) {
             contactIndex = sel;
-            go("contactDetail");
+            go("contactDetail"); // Starts on the contact's primary number.
             return;
         }
 
@@ -3088,10 +3102,7 @@ public class C2PhoneView extends View {
 
         if ("CALL".equals(key)) {
             if ("dial".equals(page)) startCall(dial);
-            else if ("contactDetail".equals(page)) {
-                if (contacts.isEmpty()) showNotice("Contact unavailable");
-                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
-            }
+            else if ("contactDetail".equals(page)) callSelectedContactNumber();
             else if ("speedDials".equals(page)) {
                 String number = speedDialNumbers.get(sel + 2);
                 if (number != null) startCall(number);
@@ -3256,10 +3267,13 @@ public class C2PhoneView extends View {
         }
 
         if ("contactDetail".equals(page)) {
-            if ("OK".equals(key)) {
-                if (contacts.isEmpty()) showNotice("Contact unavailable");
-                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
-            } else if ("RSK".equals(key)) back();
+            ArrayList<String> numbers = currentContactNumbers();
+            if ("UP".equals(key) && !numbers.isEmpty())
+                sel = (sel - 1 + numbers.size()) % numbers.size();
+            else if ("DOWN".equals(key) && !numbers.isEmpty())
+                sel = (sel + 1) % numbers.size();
+            else if ("OK".equals(key)) callSelectedContactNumber();
+            else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
             return;
@@ -4024,6 +4038,73 @@ public class C2PhoneView extends View {
         return -1;
     }
 
+    /**
+     * Keep the visible contact list deduplicated but make each phone-number row
+     * independently actionable. Order is stable: primary number first, then
+     * secondary Android data rows in the provider's result order.
+     */
+    private ArrayList<String> currentContactNumbers() {
+        ArrayList<String> out = new ArrayList<>();
+        if (contacts.isEmpty() || contactIndex < 0 || contactIndex >= contacts.size())
+            return out;
+        Contact contact = contacts.get(contactIndex);
+        HashSet<String> seen = new HashSet<>();
+        ArrayList<String> aliases = contactNumbersById.get(contact.contactId);
+        if (contact.number != null && !contact.number.trim().isEmpty()) {
+            out.add(contact.number);
+            String canonical = contactMatchKey(contact.number);
+            seen.add(canonical.isEmpty() ? contact.number.trim() : canonical);
+        }
+        if (aliases != null) {
+            for (String alias : aliases) {
+                if (alias == null || alias.trim().isEmpty()) continue;
+                String canonical = contactMatchKey(alias);
+                if (seen.add(canonical.isEmpty() ? alias.trim() : canonical))
+                    out.add(alias);
+            }
+        }
+        return out;
+    }
+
+    private String selectedContactNumber() {
+        ArrayList<String> numbers = currentContactNumbers();
+        if (numbers.isEmpty()) return null;
+        return numbers.get(Math.max(0, Math.min(sel, numbers.size() - 1)));
+    }
+
+    private void selectContactNumber(String preferred) {
+        ArrayList<String> numbers = currentContactNumbers();
+        String key = contactMatchKey(preferred);
+        sel = 0;
+        if (key.isEmpty()) return;
+        for (int i = 0; i < numbers.size(); i++) {
+            if (key.equals(contactMatchKey(numbers.get(i)))) {
+                sel = i;
+                break;
+            }
+        }
+        invalidate();
+    }
+
+    private void callSelectedContactNumber() {
+        String number = selectedContactNumber();
+        if (number == null || digitsOnly(number).isEmpty())
+            showNotice("No phone number selected");
+        else startCall(number);
+    }
+
+    private void composeForContactNumber(String number) {
+        if (number == null || digitsOnly(number).isEmpty()) {
+            showNotice("No phone number selected");
+            return;
+        }
+        recipient = number;
+        messageBody = "";
+        composeFocus = 1;
+        inputMode = "T9";
+        go("compose");
+    }
+
     /** Inject one Nokia number action only where it is not already present. */
     private void addContextNumberOptions() {
         String number = selectedNumberForOptions();
@@ -4056,6 +4137,9 @@ public class C2PhoneView extends View {
             }
             contactIndex = index;
             go("contactDetail");
+            // When entering from an SMS/call to a secondary number, highlight
+            // THAT number rather than silently defaulting to the primary.
+            selectContactNumber(number);
             return;
         }
         // Only prefill. No device or app contact is written without Save.
@@ -4412,32 +4496,33 @@ public class C2PhoneView extends View {
                 showNotice("Contact unavailable");
                 return;
             }
-            Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
-            if ("Call".equals(choice)) startCall(ct.number);
-            else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
-            else if ("Delete".equals(choice)) {
+            String number = selectedContactNumber();
+            if ("Call".equals(choice)) callSelectedContactNumber();
+            else if ("Edit".equals(choice)) {
+                // Existing editor changes the primary number only; it must
+                // never overwrite another selected Android number by accident.
+                beginContactEdit(contactIndex);
+            } else if ("Delete".equals(choice)) {
                 requestConfirm("deleteContact", "Delete this contact?");
             } else if ("Send message >".equals(choice)) {
-                recipient = ct.number;
-                messageBody = "";
-                composeFocus = 1;
-                go("compose");
+                composeForContactNumber(number);
             } else if ("View conversations".equals(choice)) go("conversations");
             else if ("Use number".equals(choice)) {
-                dial = ct.number;
-                go("dial");
-            } else if ("Copy number".equals(choice)) copyNumberToClipboard(ct.number);
+                if (number == null) showNotice("No phone number selected");
+                else { dial = number; go("dial"); }
+            } else if ("Copy number".equals(choice)) copyNumberToClipboard(number);
             else if ("Add to group".equals(choice)) {
-                if (contactGroups.groups.isEmpty()) showNotice("Create a group under Contacts first");
+                if (number == null) showNotice("No phone number selected");
+                else if (contactGroups.groups.isEmpty()) showNotice("Create a group under Contacts first");
                 else {
-                    pendingGroupMemberNumber = ct.number;
+                    pendingGroupMemberNumber = number;
                     go("groupContactAssign");
                 }
             } else if ("Speed dial".equals(choice)) {
-                speedDialAssignment = ct.number;
-                go("speedDialAssign");
+                if (number == null) showNotice("No phone number selected");
+                else { speedDialAssignment = number; go("speedDialAssign"); }
             } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
-                addNumberToFilter("Add to blacklist".equals(choice), ct.number);
+                addNumberToFilter("Add to blacklist".equals(choice), number);
             else showNotice(choice.replace(" >",""));
         } else if ("log".equals(page)) {
             if ("View".equals(choice)) openSelected();
