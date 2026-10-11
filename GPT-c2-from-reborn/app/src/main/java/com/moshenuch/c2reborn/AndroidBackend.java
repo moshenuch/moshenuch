@@ -28,10 +28,15 @@ public final class AndroidBackend {
         public final String number;
         /** All phone numbers belonging to this aggregated Android contact. */
         public final ArrayList<String> numbers = new ArrayList<>();
+        public final ArrayList<Long> numberRawIds = new ArrayList<>();
+        public final ArrayList<Long> numberDataIds = new ArrayList<>();
 
-        void addNumber(String value) {
-            if (value != null && !value.trim().isEmpty() && !numbers.contains(value))
+        void addNumber(String value, long rawId, long dataId) {
+            if (value != null && !value.trim().isEmpty() && !numbers.contains(value)) {
                 numbers.add(value);
+                numberRawIds.add(rawId);
+                numberDataIds.add(dataId);
+            }
         }
 
         DeviceContact(long contactId, long rawContactId, long phoneDataId, String name, String number) {
@@ -40,7 +45,7 @@ public final class AndroidBackend {
             this.phoneDataId = phoneDataId;
             this.name = name == null ? "" : name;
             this.number = number == null ? "" : number;
-            addNumber(this.number);
+            addNumber(this.number, rawContactId, phoneDataId);
         }
     }
 
@@ -120,7 +125,7 @@ public final class AndroidBackend {
                             c.getString(2), c.getString(3));
                     byId.put(id, contact);
                     out.add(contact);
-                } else contact.addNumber(c.getString(3));
+                } else contact.addNumber(c.getString(3), c.getLong(1), c.getLong(4));
             }
         } catch (Exception ignored) {
         } finally {
