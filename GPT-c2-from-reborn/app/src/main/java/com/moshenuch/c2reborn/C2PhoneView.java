@@ -190,6 +190,7 @@ public class C2PhoneView extends View {
 
     private boolean optionsOpen = false;
     private int optionSel = 0;
+    private String optionSubmenuTitle = "";
     private boolean confirmOpen = false;
     private String confirmText = "";
     private String confirmAction = "";
@@ -2131,6 +2132,7 @@ public class C2PhoneView extends View {
 
     private String[] softLabels() {
         if (confirmOpen) return new String[]{"Yes", "", "No"};
+        if (optionsOpen && !optionSubmenuTitle.isEmpty()) return new String[]{"", "Select", "Back"};
         if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{
                 homeShortcuts.label(NativeHomeShortcuts.LSK),
@@ -2197,7 +2199,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.LEFT);
         p.setTypeface(fontRegular);
         p.setTextSize(18);
-        c.drawText("Options", 6, 21, p);
+        c.drawText(optionSubmenuTitle.isEmpty() ? "Options" : optionSubmenuTitle, 6, 21, p);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(13);
         // Nokia reference popup header contains only "Options".
@@ -3767,6 +3769,7 @@ public class C2PhoneView extends View {
         }
         if (optionsOpen) {
             optionsOpen = false;
+            optionSubmenuTitle = "";
             invalidate();
             return true;
         }
@@ -3818,7 +3821,10 @@ public class C2PhoneView extends View {
             if ("UP".equals(key)) optionSel = (optionSel - 1 + optionItems.length) % optionItems.length;
             else if ("DOWN".equals(key)) optionSel = (optionSel + 1) % optionItems.length;
             else if ("OK".equals(key) || "LSK".equals(key)) chooseOption();
-            else if ("RSK".equals(key) || "END".equals(key)) optionsOpen = false;
+            else if ("RSK".equals(key) || "END".equals(key)) {
+                optionsOpen = false;
+                optionSubmenuTitle = "";
+            }
             invalidate();
             return;
         }
@@ -4840,6 +4846,7 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
+        optionSubmenuTitle = "";
         if ("shortcuts".equals(page) || "shortcutNavigation".equals(page))
             optionItems = new String[]{"Assign","Restore defaults","Help"};
         else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
@@ -5207,6 +5214,8 @@ public class C2PhoneView extends View {
     private void chooseOption() {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
+        String previousSubmenuTitle = optionSubmenuTitle;
+        optionSubmenuTitle = "";
 
         if (!"smsUseDetails".equals(page) &&
                 ("Contact".equals(choice) || "Save a contact".equals(choice))) {
@@ -5635,6 +5644,7 @@ public class C2PhoneView extends View {
                         ? new String[]{"New contact"} :
                         new String[]{"Edit selected"};
                 optionSel = 0;
+                optionSubmenuTitle = choice.substring(0, choice.length() - 2);
                 optionsOpen = true;
                 return;
             }
@@ -5658,6 +5668,7 @@ public class C2PhoneView extends View {
             } else if ("Selecting options >".equals(choice)) {
                 // Selection operations remain available under Nokia's nested menu.
                 optionItems = new String[]{"Mark >","Mark all","Unmark all","Delete selected"};
+                optionSubmenuTitle = "Selecting options";
                 optionSel = 0;
                 optionsOpen = true;
                 return;
