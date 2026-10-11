@@ -129,31 +129,40 @@ public final class AndroidBackend {
         return out;
     }
 
+    /** Create the raw contact, name and phone atomically so a failed number
+     *  insert cannot leave an orphaned/half-created contact in the device. */
     public boolean addContact(String name, String number) {
-        if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
+        if (!has(Manifest.permission.WRITE_CONTACTS) ||
+                name == null || name.trim().isEmpty() ||
+                number == null || number.trim().isEmpty()) return false;
         try {
-            ContentValues raw = new ContentValues();
-            Uri rawUri = resolver.insert(ContactsContract.RawContacts.CONTENT_URI, raw);
-            if (rawUri == null) return false;
-            long rawId = ContentUris.parseId(rawUri);
-
-            ContentValues n = new ContentValues();
-            n.put(ContactsContract.Data.RAW_CONTACT_ID, rawId);
-            n.put(ContactsContract.Data.MIMETYPE,
-                    ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
-            n.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name);
-            resolver.insert(ContactsContract.Data.CONTENT_URI, n);
-
-            ContentValues p = new ContentValues();
-            p.put(ContactsContract.Data.RAW_CONTACT_ID, rawId);
-            p.put(ContactsContract.Data.MIMETYPE,
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
-            p.put(ContactsContract.CommonDataKinds.Phone.NUMBER, number);
-            p.put(ContactsContract.CommonDataKinds.Phone.TYPE,
-                    ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE);
-            resolver.insert(ContactsContract.Data.CONTENT_URI, p);
-            return true;
-        } catch (Exception e) {
+            ArrayList<android.content.ContentProviderOperation> changes = new ArrayList<>();
+            changes.add(android.content.ContentProviderOperation
+                    .newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                    .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                    .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                    .build());
+            changes.add(android.content.ContentProviderOperation
+                    .newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                    .withValue(ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name.trim())
+                    .build());
+            changes.add(android.content.ContentProviderOperation
+                    .newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                    .withValue(ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, number.trim())
+                    .withValue(ContactsContract.CommonDataKinds.Phone.TYPE,
+                            ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                    .build());
+            android.content.ContentProviderResult[] result =
+                    resolver.applyBatch(ContactsContract.AUTHORITY, changes);
+            return result != null && result.length == 3 && result[0] != null &&
+                    result[0].uri != null && result[1] != null && result[2] != null;
+        } catch (Exception ignored) {
             return false;
         }
     }
