@@ -542,17 +542,10 @@ public class C2PhoneView extends View {
             storedMenu.clear();
         }
         menuOrder.addAll(NativeMenuLayout.validatedOrder(storedMenu));
-        try {
-            ArrayList<Integer> order = new ArrayList<>();
-            ArrayList<Integer> visible = new ArrayList<>();
-            JSONArray storedOrder = new JSONArray(prefs.getString("goto_order_v1", "[]"));
-            JSONArray storedVisible = new JSONArray(prefs.getString("goto_visible_v1", "[]"));
-            for (int i = 0; i < storedOrder.length(); i++) order.add(storedOrder.getInt(i));
-            for (int i = 0; i < storedVisible.length(); i++) visible.add(storedVisible.getInt(i));
-            goToShortcuts.restore(order, visible);
-        } catch (Exception ignored) {
-            goToShortcuts.restoreDefaults();
-        }
+        boolean goToRestored = goToShortcuts.restoreSerialized(
+                prefs.getString("goto_order_v1", "[]"),
+                prefs.getString("goto_visible_v1", "[]"));
+        auditGoTo("load restored=" + goToRestored);
         profile = prefs.getString("profile", "General");
         theme = prefs.getString("theme", "Dark");
         if ("Nokia".equals(theme)) theme = "Dark";
@@ -790,13 +783,24 @@ public class C2PhoneView extends View {
         showNotice(black ? "Added to blacklist" : "Added to whitelist");
     }
 
+    /**
+     * Log only fixed numeric shortcut IDs (never contact names, phone numbers,
+     * messages, or other private data). Disable in non-debuggable builds.
+     * On emulator: adb logcat -s C2GoToAudit:I '*:S'
+     */
+    private void auditGoTo(String event) {
+        if (!isDemoToolsAvailable()) return;
+        android.util.Log.i("C2GoToAudit",
+                event + " order=" + goToShortcuts.serializedOrder()
+                        + " shown=" + goToShortcuts.serializedEnabled());
+    }
+
     private void saveGoToShortcuts() {
-        JSONArray order = new JSONArray();
-        JSONArray visible = new JSONArray();
-        for (Integer id : goToShortcuts.order()) order.put(id);
-        for (Integer id : goToShortcuts.enabledIds()) visible.put(id);
-        prefs.edit().putString("goto_order_v1", order.toString())
-                .putString("goto_visible_v1", visible.toString()).apply();
+        prefs.edit()
+                .putString("goto_order_v1", goToShortcuts.serializedOrder())
+                .putString("goto_visible_v1", goToShortcuts.serializedEnabled())
+                .apply();
+        auditGoTo("save");
     }
 
     private void saveMenuPreferences() {
