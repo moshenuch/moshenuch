@@ -1,3 +1,13 @@
+## v1.41.0 multi-number Contacts and SMS audit follow-up
+
+- **Multi-number edit:** user observed editor always targeted number 1. Native provider now carries raw-contact and phone-data IDs alongside each phone number. Editing from Contact details uses the selected number, labels the field Selected number and targets that specific Android Data row. Requires emulator validation with contacts linked across different raw-contact accounts; existing demo data remains read-only.
+- **Edit title:** the earlier y=48 header-clearance fix applies to New/Edit contact alike; retest on v1.42.0.
+- **Save:** code now returns to contactDetail for edits, selects the edited number and displays Contact saved. Failures still stay in the editor and display an error; verify using real writable Android contacts.
+- **SMS Use detail:** removed explanatory/developer placeholder text; detail page displays extracted value.
+- **SMS counter:** replaced total/160 with remaining/segment count, e.g. six over 160 -> -6/2 needs verification against implementation: current calculation for 166 characters is 140/2 under the concatenated-segment rule, not -6/2. Exact Nokia reference convention is still an open parity detail.
+- **Demo label:** status DEMO glyph now gated by debuggable flag, as are demo tools. Home debug footer previously removed. Ensure release APK build/type and actual demo fixture exposure do not leak into production.
+- **Verified:** current Names list styling (bold selected name, subordinate number and scrollbar), and empty-number contact-save validation.
+
 # C2 Reborn native APK continuation after v1.41.0
 
 **Baseline:** APK v1.41.0; HTML reference v6.343 (read-only).  
