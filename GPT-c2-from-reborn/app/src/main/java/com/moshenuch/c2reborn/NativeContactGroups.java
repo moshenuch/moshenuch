@@ -51,6 +51,13 @@ final class NativeContactGroups {
                 groups.add(group);
             }
         } catch (Exception ignored) { }
+        // Nokia phonebook defaults are created only on first installation;
+        // a user who deliberately deletes every group must keep that choice.
+        if (!prefs.contains("contact_groups_v1") && groups.isEmpty()) {
+            create("Business");
+            create("Family");
+            create("Friends");
+        }
     }
 
     Group byId(String id) {
