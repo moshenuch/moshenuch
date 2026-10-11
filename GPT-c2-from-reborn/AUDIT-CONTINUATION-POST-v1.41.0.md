@@ -4,6 +4,12 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## Reconfirmed v1.41.0 Menu/Names/Log audit; follow-up native changes
+
+User reiterated the 3×3 menu icon artwork pass, Nokia condensed label/font mismatch, grey swirl vs black vignette, and dark rounded selection tile; Names must show name-only and Details softkey with Business/Family/Friends group rows; Names Options must omit '1-12'; deletion must show result and refresh; All calls '(empty)' is accepted. Previously committed fixes for name-only, Details, count suppression and delete refresh/notice remain in source.
+
+**New source changes:** Names now appends actual app-local contact groups to its list and opens group members for a selected group rather than treating its row as a contact. New installations seed Business, Family and Friends; preferences with an existing group list (even intentionally empty) are respected. Existing group membership implementation remains app-local, not Android Contacts provider group membership. Group icon artwork, Home/Voicemail entries and precise screenshot row order remain open. Requires emulator verification before declaring fixed.
+
 ## v1.41.0 side-by-side graphics audit (HTML v6.343)
 
 User-verified gaps: Home should show grey swirl wallpaper, Demo network, date like Sun 11-10-2026, small clock top-right, My style 1, light Nokia-font Go to/Menu/Names softkey bar. APK had near-black wallpaper, large centred time, abbreviated date, General, white text on black and intrusive build/debug footer. Status and list/menu fonts and signal/battery art do not match condensed Nokia font/reference. Go to uses large white selection rather than dark glossy highlight. Call reference displays Calling. on blue panel with contact NAME and progress bar, softkeys Options / Menu / Loudsp. (the separate report asking for centre End conflicts with this visual reference and should be reconciled explicitly). Names requires Business/Family/Friends plus Home/Voicemail rows, contact detail silhouette and blue handset glossy bar. Lock keypad Unlock -> Now press * is user-verified.
