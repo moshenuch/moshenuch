@@ -196,6 +196,7 @@ public class C2PhoneView extends View {
         galleryStore = new NativeGalleryStore(context, prefs);
         voiceRecorder = new NativeVoiceRecorder(context);
         musicEngine = new NativeMusicPlayer(context, prefs);
+        musicEngine.setOnChanged(this::postInvalidate);
         loadState();
         refreshDeviceData();
     }
@@ -1394,9 +1395,12 @@ public class C2PhoneView extends View {
         p.setColor(themeText());
         p.setTextSize(12);
         c.drawText("◀    " + (musicEngine.isPlaying() ? "Pause" : "Play") + "    ▶", 120, 240, p);
+        p.setTextSize(10);
+        c.drawText("Shuffle " + (musicEngine.shuffleEnabled() ? "On" : "Off")
+                + "   Repeat " + musicEngine.repeatLabel(), 120, 261, p);
         if (musicEngine.tracks.isEmpty()) {
-            p.setTextSize(11);
-            c.drawText("Options > Add audio files", 120, 265, p);
+            p.setTextSize(10);
+            c.drawText("Options > Add audio files", 120, 275, p);
         }
         if (musicEngine.isPlaying()) postInvalidateDelayed(500);
     }
@@ -2195,6 +2199,7 @@ public class C2PhoneView extends View {
 
         if ("gallery".equals(page)) {
             if (sel == 1 || sel == 2) openGalleryFolder(sel == 2);
+            else if (sel == 3) go("musicLibrary");
             else if (sel == 7) go("voiceRecordings");
             else {
                 detailTitle = itemsFor(page)[sel];
@@ -2620,6 +2625,7 @@ public class C2PhoneView extends View {
     }
 
     private void back() {
+        if ("music".equals(page)) musicEngine.pause();
         if (voiceRecorder.isRecording() && "voiceRecorder".equals(page))
             finishVoiceRecording();
         if ("voiceRecordings".equals(page)) voiceRecorder.stopPlayback();
@@ -2712,6 +2718,7 @@ public class C2PhoneView extends View {
         if ("END".equals(key)) {
             if ("call".equals(page)) endCall();
             else {
+                musicEngine.pause();
                 if (voiceRecorder.isRecording()) finishVoiceRecording();
                 voiceRecorder.stopPlayback();
                 if ("galleryPreview".equals(page)) clearGalleryPreview();
@@ -3519,7 +3526,7 @@ public class C2PhoneView extends View {
         else if ("call".equals(page))
             optionItems = new String[]{"Loudspeaker","Mute","Hold","Contacts","Main menu","End call"};
         else if ("music".equals(page))
-            optionItems = new String[]{"Music library","Add audio files","Equaliser","Track details"};
+            optionItems = new String[]{"Music library","Add audio files","Shuffle","Repeat","Equaliser","Track details"};
         else if ("musicLibrary".equals(page))
             optionItems = new String[]{"Play","Add audio files","Remove from library","Track details"};
         else if ("musicEqualiser".equals(page))
@@ -3998,6 +4005,10 @@ public class C2PhoneView extends View {
                    "musicEqualiser".equals(page)) {
             if ("Music library".equals(choice)) go("musicLibrary");
             else if ("Add audio files".equals(choice)) pickAudioFiles();
+            else if ("Shuffle".equals(choice))
+                showNotice("Shuffle " + (musicEngine.toggleShuffle() ? "On" : "Off"));
+            else if ("Repeat".equals(choice))
+                showNotice("Repeat " + musicEngine.nextRepeatMode());
             else if ("Equaliser".equals(choice)) openMusicEqualiser();
             else if ("Play".equals(choice) || "Select".equals(choice)) openSelected();
             else if ("Remove from library".equals(choice)) {

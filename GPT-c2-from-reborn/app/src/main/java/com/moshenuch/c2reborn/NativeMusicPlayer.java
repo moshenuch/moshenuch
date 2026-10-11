@@ -3,6 +3,10 @@ package com.moshenuch.c2reborn;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
+import android.media.AudioManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.os.Build;
 import android.media.audiofx.Equalizer;
 import android.net.Uri;
 import android.provider.OpenableColumns;
@@ -12,6 +16,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /** Plays explicitly user-selected audio through Android's MediaPlayer audio session. */
 final class NativeMusicPlayer {
@@ -23,6 +28,22 @@ final class NativeMusicPlayer {
 
     private final Context context;
     private final SharedPreferences prefs;
+    private final AudioManager audioManager;
+    private AudioFocusRequest focusRequest;
+    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
+        if (change == AudioManager.AUDIOFOCUS_LOSS ||
+                change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
+                change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+            // Do not automatically resume after another app starts audio.
+            pause();
+            notifyChanged();
+        }
+    };
+    private boolean focusHeld;
+    private boolean shuffle;
+    private int repeatMode; // 0 = Off, 1 = One, 2 = All
+    private final Random random = new Random();
+    private Runnable onChanged;
     final ArrayList<Track> tracks = new ArrayList<>();
     private MediaPlayer player;
     private Equalizer equalizer;
@@ -34,6 +55,9 @@ final class NativeMusicPlayer {
     NativeMusicPlayer(Context context, SharedPreferences prefs) {
         this.context = context;
         this.prefs = prefs;
+        audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        shuffle = prefs.getBoolean("music_shuffle_v1", false);
+        repeatMode = Math.min(2, Math.max(0, prefs.getInt("music_repeat_v1", 0)));
         eqPreset = prefs.getInt("music_eq_preset_v1", -1);
         try {
             JSONArray a = new JSONArray(prefs.getString("music_library_v1", "[]"));
@@ -43,6 +67,28 @@ final class NativeMusicPlayer {
                     tracks.add(new Track(j.optString("uri"), j.optString("name", "Audio file")));
             }
         } catch (Exception ignored) { }
+    }
+
+    void setOnChanged(Runnable listener) { onChanged = listener; }
+    private void notifyChanged() {
+        if (onChanged != null) onChanged.run();
+    }
+
+    boolean shuffleEnabled() { return shuffle; }
+    String repeatLabel() {
+        return repeatMode == 1 ? "One" : repeatMode == 2 ? "All" : "Off";
+    }
+    boolean toggleShuffle() {
+        shuffle = !shuffle;
+        prefs.edit().putBoolean("music_shuffle_v1", shuffle).apply();
+        notifyChanged();
+        return shuffle;
+    }
+    String nextRepeatMode() {
+        repeatMode = (repeatMode + 1) % 3;
+        prefs.edit().putInt("music_repeat_v1", repeatMode).apply();
+        notifyChanged();
+        return repeatLabel();
     }
 
     int index() { return activeIndex; }
@@ -102,6 +148,78 @@ final class NativeMusicPlayer {
         return count;
     }
 
+    private boolean requestPlaybackFocus() {
+        if (focusHeld) return true;
+        if (audioManager == null) return true;
+        try {
+            int result;
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (focusRequest == null) {
+                    AudioAttributes attrs = new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build();
+                    focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                            .setAudioAttributes(attrs)
+                            .setOnAudioFocusChangeListener(focusListener)
+                            .setWillPauseWhenDucked(true)
+                            .build();
+                }
+                result = audioManager.requestAudioFocus(focusRequest);
+            } else {
+                result = audioManager.requestAudioFocus(focusListener,
+                        AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            }
+            focusHeld = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            return focusHeld;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private void abandonPlaybackFocus() {
+        if (!focusHeld || audioManager == null) return;
+        focusHeld = false;
+        try {
+            if (Build.VERSION.SDK_INT >= 26 && focusRequest != null)
+                audioManager.abandonAudioFocusRequest(focusRequest);
+            else audioManager.abandonAudioFocus(focusListener);
+        } catch (RuntimeException ignored) { }
+    }
+
+    private void afterCompletion(MediaPlayer done) {
+        if (player != done) return;
+        try {
+            if (repeatMode == 1) {
+                done.seekTo(0);
+                done.start();
+            } else if (repeatMode == 2 && !tracks.isEmpty()) {
+                int index = chooseNextIndex(1);
+                if (!open(index, true)) {
+                    pause();
+                }
+            } else {
+                done.seekTo(0);
+                abandonPlaybackFocus();
+            }
+        } catch (RuntimeException failure) {
+            error = "Playback completion failed";
+            pause();
+        }
+        notifyChanged();
+    }
+
+    private int chooseNextIndex(int offset) {
+        if (tracks.isEmpty()) return -1;
+        if (shuffle && offset > 0 && tracks.size() > 1) {
+            int old = activeIndex < 0 ? 0 : activeIndex;
+            int randomOffset = 1 + random.nextInt(tracks.size() - 1);
+            return (old + randomOffset) % tracks.size();
+        }
+        return activeIndex < 0 ? 0 :
+                ((activeIndex + offset) % tracks.size() + tracks.size()) % tracks.size();
+    }
+
     boolean open(int index, boolean autoplay) {
         Track selected = at(index);
         if (selected == null) { error = "No audio selected"; return false; }
@@ -109,20 +227,31 @@ final class NativeMusicPlayer {
         MediaPlayer next = new MediaPlayer();
         try {
             next.setDataSource(context, Uri.parse(selected.uri));
-            next.setOnCompletionListener(done -> {
-                // Keep the completed track loaded, but do not claim continuous play.
-                try { done.seekTo(0); } catch (Exception ignored) { }
-            });
+            next.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
+            next.setOnCompletionListener(this::afterCompletion);
             next.prepare();
             player = next;
             activeIndex = index;
             error = "";
             setupEqualizer();
-            if (autoplay) next.start();
+            if (autoplay) {
+                if (!requestPlaybackFocus()) {
+                    releasePlayback();
+                    activeIndex = -1;
+                    error = "Audio focus unavailable";
+                    return false;
+                }
+                next.start();
+            }
+            notifyChanged();
             return true;
         } catch (Exception ex) {
+            if (player == next) releaseEqualizer();
             try { next.release(); } catch (Exception ignored) { }
             player = null;
+            abandonPlaybackFocus();
             activeIndex = -1;
             error = "Unable to open audio (access may be revoked)";
             return false;
@@ -135,8 +264,17 @@ final class NativeMusicPlayer {
             return open(activeIndex >= 0 ? activeIndex : 0, true);
         }
         try {
-            if (player.isPlaying()) player.pause();
-            else player.start();
+            if (player.isPlaying()) {
+                player.pause();
+                abandonPlaybackFocus();
+            } else {
+                if (!requestPlaybackFocus()) {
+                    error = "Audio focus unavailable";
+                    return false;
+                }
+                player.start();
+            }
+            notifyChanged();
             return true;
         } catch (Exception ignored) {
             error = "Playback failed";
@@ -146,17 +284,18 @@ final class NativeMusicPlayer {
 
     boolean skip(int offset) {
         if (tracks.isEmpty()) { error = "No audio files selected"; return false; }
-        int index = activeIndex < 0 ? 0 :
-                ((activeIndex + offset) % tracks.size() + tracks.size()) % tracks.size();
-        return open(index, true);
+        return open(chooseNextIndex(offset), true);
     }
 
     boolean remove(int index) {
         if (at(index) == null) return false;
-        if (index == activeIndex) releasePlayback();
-        else if (index < activeIndex) activeIndex--;
+        if (index == activeIndex) {
+            releasePlayback();
+            activeIndex = -1;
+        } else if (index < activeIndex) activeIndex--;
         tracks.remove(index);
         save();
+        notifyChanged();
         return true;
     }
 
@@ -219,6 +358,7 @@ final class NativeMusicPlayer {
     }
 
     private void releasePlayback() {
+        abandonPlaybackFocus();
         releaseEqualizer();
         if (player != null) {
             try { player.stop(); } catch (Exception ignored) { }
@@ -228,8 +368,14 @@ final class NativeMusicPlayer {
     }
 
     void pause() {
-        try { if (player != null && player.isPlaying()) player.pause(); }
-        catch (Exception ignored) { }
+        try {
+            if (player != null && player.isPlaying()) player.pause();
+        } catch (Exception ignored) { }
+        abandonPlaybackFocus();
+        notifyChanged();
     }
-    void release() { releasePlayback(); }
+    void release() {
+        releasePlayback();
+        onChanged = null;
+    }
 }
