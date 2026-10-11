@@ -4474,28 +4474,33 @@ public class C2PhoneView extends View {
     }
 
     private void openGoToShortcut(int shortcutId) {
-        switch (shortcutId) {
-            case 0:
-                locked = true;
-                unlockStep = 0;
-                history.clear();
-                page = "home";
-                sel = 0;
-                showNotice("Keypad locked");
-                break;
-            case 1: go("profiles"); break;
-            case 2: go("alarm"); break;
-            case 3: startCameraCapture(false); break;
-            case 4: startCameraCapture(true); break;
-            case 5: go("calculator"); break;
-            case 6:
-                browserUrl = "https://www.nokia.com/";
-                go("browser");
-                break;
-            case 7: go("music"); break;
-            case 8: go("conversations"); break;
-            default: showNotice("No shortcut selected");
-        }
+        // Dispatch through the EXACT same router exercised by CI tests.
+        // This prevents a rearranged/hidden visual row from changing its
+        // stable destination or converting Video into photo capture.
+        auditGoTo("launch destination=" + shortcutId);
+        boolean recognized = NativeGoToRouter.launch(shortcutId,
+                new NativeGoToRouter.Handler() {
+                    @Override public void lockKeypad() {
+                        locked = true;
+                        unlockStep = 0;
+                        history.clear();
+                        page = "home";
+                        sel = 0;
+                        showNotice("Keypad locked");
+                    }
+                    @Override public void openPage(String target) {
+                        go(target);
+                    }
+                    @Override public void capture(boolean video) {
+                        auditGoTo(video ? "capture VIDEO" : "capture PHOTO");
+                        startCameraCapture(video);
+                    }
+                    @Override public void browser() {
+                        browserUrl = "https://www.nokia.com/";
+                        go("browser");
+                    }
+                });
+        if (!recognized) showNotice("No shortcut selected");
     }
 
     private void toggleGoToOrganiseSelection() {
