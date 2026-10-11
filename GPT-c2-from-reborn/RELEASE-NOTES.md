@@ -1,17 +1,12 @@
-GPT c2 from reborn — APK v1.7.1 / HTML reference v6.342
+GPT c2 from reborn — APK v1.8.0 / HTML reference v6.342
 
-Native Android Java, not a WebView. Reference HTML v6.342 is a version provenance label, not a full parity guarantee.
+Native Java/Canvas. This HTML version is a reference; the APK remains a partial native implementation.
 
-Corrections after the deep code audit:
-- Inbox Options now binds the highlighted message before Reply/Delete/Call; Sent Options includes a functional Open action.
-- SMS Reply now addresses the actual sender number rather than the sender's contact display name.
-- Sent items are linked to their real Android SMS IDs and can be opened.
-- Contact edits target the exact selected Phone Data._ID and raw contact (atomic provider batch) rather than overwriting all numbers.
-- Contact Names Options can Mark/Unmark, Mark all, Unmark all, and delete explicitly selected contacts behind a confirmation.
-- App-local SMS/conversation hide operations clearly say Android's SMS provider remains unchanged.
-- Call-log Clear options no longer falsely claim that Android records were deleted.
-- SMS submission no longer claims successful delivery before Android confirms it.
-- About and home version labels are obtained from the installed Android package metadata.
-- Existing Nokia bitmap icon and conversation rendering fixes are retained.
+- Drafts are now structured records retaining recipient, body text, input mode and creation time.
+- Existing body-only drafts from older APK releases migrate automatically; their original text is preserved.
+- Opening a saved draft restores its recipient and editing mode. Saving again updates that draft rather than creating duplicate copies.
+- Editing a draft and then sending the SMS removes only that specific draft, not every draft with the same text.
+- Drafts > Options now has Open, Delete draft and Delete all drafts. Destructive actions require confirmation.
+- Other v1.7.1 fixes remain, including real SMS reply addressing, per-number contact editing, Contacts marking, honest local SMS deletion semantics and dynamic APK version labels.
 
-Limitations: no full screenshot-by-screenshot/device parity certification. Sent/received status callbacks, structured drafts, true Android SMS deletion/default-SMS role, full icons/options on nested screens, contact groups, and media/gallery features remain on the outstanding audit list. Real-device testing must use demo numbers and avoid destructive testing on personal data.
+UNVERIFIED: visual parity for most nested icons/fonts and detailed SMS states, cellular send/delivery confirmation, remaining Options, native Gallery/Media features, handset UI testing and full HTML behavior parity. No WebView.

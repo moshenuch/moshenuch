@@ -87,7 +87,8 @@ public class C2PhoneView extends View {
     private final ArrayList<String> notes = new ArrayList<>();
     private final ArrayList<String> todos = new ArrayList<>();
     private final ArrayList<String> calendar = new ArrayList<>();
-    private final ArrayList<String> drafts = new ArrayList<>();
+    private final ArrayList<DraftMessage> drafts = new ArrayList<>();
+    private int editingDraftIndex = -1;
 
     private String dial = "";
     private String activeCall = "";
@@ -258,7 +259,7 @@ public class C2PhoneView extends View {
         loadStringList("notes", notes);
         loadStringList("todos", todos);
         loadStringList("calendar", calendar);
-        loadStringList("drafts", drafts);
+        loadDrafts();
         loadLongSet("sms_local_read", localReadSmsIds);
         loadLongSet("sms_hidden", hiddenSmsIds);
 
@@ -287,6 +288,63 @@ public class C2PhoneView extends View {
             JSONArray a = new JSONArray(prefs.getString(key, "[]"));
             for (int i = 0; i < a.length(); i++) out.add(a.optString(i));
         } catch (Exception ignored) {}
+    }
+
+    private void loadDrafts() {
+        String stored = prefs.getString("drafts_v2", null);
+        try {
+            if (stored != null) {
+                JSONArray entries = new JSONArray(stored);
+                for (int i = 0; i < entries.length(); i++) {
+                    JSONObject obj = entries.optJSONObject(i);
+                    if (obj == null) continue;
+                    drafts.add(new DraftMessage(obj.optString("recipient", ""),
+                            obj.optString("body", ""), obj.optString("inputMode", "T9"),
+                            obj.optLong("createdAt", 0L)));
+                }
+                return;
+            }
+            // Upgrade legacy body-only drafts once without discarding saved text.
+            JSONArray legacy = new JSONArray(prefs.getString("drafts", "[]"));
+            for (int i = 0; i < legacy.length(); i++) {
+                String body = legacy.optString(i, "");
+                if (!body.isEmpty())
+                    drafts.add(new DraftMessage("", body, "T9", System.currentTimeMillis()));
+            }
+            saveDrafts();
+        } catch (Exception ignored) {
+            // Retain the original stored values; do not overwrite on parse error.
+        }
+    }
+
+    private void saveDrafts() {
+        JSONArray array = new JSONArray();
+        try {
+            for (DraftMessage draft : drafts) {
+                JSONObject obj = new JSONObject();
+                obj.put("recipient", draft.recipient);
+                obj.put("body", draft.body);
+                obj.put("inputMode", draft.inputMode);
+                obj.put("createdAt", draft.createdAt);
+                array.put(obj);
+            }
+            prefs.edit().putString("drafts_v2", array.toString()).apply();
+        } catch (Exception ignored) {
+            showNotice("Unable to save draft");
+        }
+    }
+
+    private void saveCurrentDraft() {
+        if (recipient.trim().isEmpty() && messageBody.trim().isEmpty()) return;
+        DraftMessage newDraft = new DraftMessage(recipient, messageBody, inputMode,
+                System.currentTimeMillis());
+        if (editingDraftIndex >= 0 && editingDraftIndex < drafts.size())
+            drafts.set(editingDraftIndex, newDraft);
+        else {
+            drafts.add(0, newDraft);
+            editingDraftIndex = 0;
+        }
+        saveDrafts();
     }
 
     private void saveStringList(String key, List<String> values) {
@@ -948,7 +1006,10 @@ public class C2PhoneView extends View {
             if (idx == 2) return drafts.size() + " messages";
         }
         if ("settings".equals(pg) && idx == 1) return "Dark.nth";
-        if ("drafts".equals(pg) && idx < drafts.size()) return "Draft";
+        if ("drafts".equals(pg) && idx < drafts.size()) {
+            String target = drafts.get(idx).recipient;
+            return target.isEmpty() ? "Draft" : "To: " + target;
+        }
         return "";
     }
 
@@ -1539,8 +1600,16 @@ public class C2PhoneView extends View {
             }
             case "sent":
                 return sentSmsItems();
-            case "drafts":
-                return drafts.isEmpty() ? new String[]{"(empty)"} : drafts.toArray(new String[0]);
+            case "drafts": {
+                if (drafts.isEmpty()) return new String[]{"(empty)"};
+                String[] labels = new String[drafts.size()];
+                for (int i = 0; i < labels.length; i++) {
+                    String body = drafts.get(i).body.replace("\n", " ").trim();
+                    if (body.isEmpty()) body = "(recipient only)";
+                    labels[i] = body.length() > 28 ? body.substring(0, 28) + "…" : body;
+                }
+                return labels;
+            }
             case "outbox":
                 return new String[]{"(empty)"};
             case "savedmessages":
@@ -1756,11 +1825,15 @@ public class C2PhoneView extends View {
         }
 
         if ("drafts".equals(page)) {
-            if (!drafts.isEmpty()) {
-                messageBody = drafts.get(sel);
-                recipient = "";
-                composeFocus = 1;
+            if (!drafts.isEmpty() && sel >= 0 && sel < drafts.size()) {
+                int selectedIndex = sel;
+                DraftMessage draft = drafts.get(selectedIndex);
+                messageBody = draft.body;
+                recipient = draft.recipient;
+                inputMode = draft.inputMode;
+                composeFocus = recipient.isEmpty() ? 0 : 1;
                 go("compose");
+                editingDraftIndex = selectedIndex;
             }
             return;
         }
@@ -2233,8 +2306,11 @@ public class C2PhoneView extends View {
             showNotice("SMS permission required");
             return;
         }
-        drafts.remove(messageBody);
-        saveStringList("drafts", drafts);
+        if (editingDraftIndex >= 0 && editingDraftIndex < drafts.size()) {
+            drafts.remove(editingDraftIndex);
+            saveDrafts();
+        }
+        editingDraftIndex = -1;
         history.clear();
         page = "home";
         sel = 0;
@@ -2246,14 +2322,12 @@ public class C2PhoneView extends View {
     }
 
     private void saveDraftAndBack() {
-        if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
-            drafts.add(0, messageBody);
-            saveStringList("drafts", drafts);
-        }
+        saveCurrentDraft();
         back();
     }
 
     private void go(String target) {
+        if ("compose".equals(target)) editingDraftIndex = -1;
         history.push(new PageState(page, sel));
         page = target;
         sel = 0;
@@ -2281,10 +2355,7 @@ public class C2PhoneView extends View {
     }
 
     private void saveDraftAndBackPlain() {
-        if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
-            drafts.add(0, messageBody);
-            saveStringList("drafts", drafts);
-        }
+        saveCurrentDraft();
         if (!history.isEmpty()) {
             PageState ps = history.pop();
             page = ps.page;
@@ -2351,12 +2422,7 @@ public class C2PhoneView extends View {
         if ("END".equals(key)) {
             if ("call".equals(page)) endCall();
             else {
-                if ("compose".equals(page)) {
-                    if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
-                        drafts.add(0, messageBody);
-                        saveStringList("drafts", drafts);
-                    }
-                }
+                if ("compose".equals(page)) saveCurrentDraft();
                 history.clear();
                 page = "home";
                 sel = 0;
@@ -2889,7 +2955,9 @@ public class C2PhoneView extends View {
         }
         else if ("sent".equals(page))
             optionItems = new String[]{"Open","New message","Inbox view","Folder details","Message log","Memory status"};
-        else if ("drafts".equals(page) || "outbox".equals(page) || "savedmessages".equals(page))
+        else if ("drafts".equals(page))
+            optionItems = new String[]{"Open","New message","Delete draft","Delete all drafts","Inbox view","Folder details","Memory status"};
+        else if ("outbox".equals(page) || "savedmessages".equals(page))
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
         else if ("inbox".equals(page) || "messageRead".equals(page))
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
@@ -2988,7 +3056,16 @@ public class C2PhoneView extends View {
             else if ("Organise".equals(choice)) showNotice("Organise shortcuts");
             else showNotice("Help");
         } else if ("messaging".equals(page) || "drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page)) {
-            if ("sent".equals(page) && "Open".equals(choice)) openSelected();
+            if (("sent".equals(page) || "drafts".equals(page)) && "Open".equals(choice)) openSelected();
+            else if ("drafts".equals(page) && "Delete draft".equals(choice)) {
+                if (sel >= 0 && sel < drafts.size())
+                    requestConfirm("deleteDraft", "Delete the selected saved draft?");
+                else showNotice("No saved draft");
+            } else if ("drafts".equals(page) && "Delete all drafts".equals(choice)) {
+                if (!drafts.isEmpty())
+                    requestConfirm("deleteAllDrafts", "Delete all " + drafts.size() + " saved drafts?");
+                else showNotice("No saved drafts");
+            }
             else if ("New message".equals(choice)) {
                 recipient = "";
                 messageBody = "";
@@ -3086,11 +3163,8 @@ public class C2PhoneView extends View {
             else if ("Insert symbol".equals(choice) || "Insert".equals(choice)) go("symbolPicker");
             else if ("Clear field".equals(choice)) messageBody = "";
             else if ("Save message >".equals(choice)) {
-                if (!messageBody.trim().isEmpty() && !drafts.contains(messageBody)) {
-                    drafts.add(0, messageBody);
-                    saveStringList("drafts", drafts);
-                }
-                showNotice("Message saved");
+                saveCurrentDraft();
+                showNotice("Draft saved");
             } else if ("Prediction options >".equals(choice)) {
                 inputMode = "T9".equals(inputMode) ? "abc" : "T9";
                 showNotice("Prediction " + ("T9".equals(inputMode) ? "on" : "off"));
@@ -3299,7 +3373,21 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("removeFromFilter".equals(action)) {
+        if ("deleteDraft".equals(action)) {
+            if (sel >= 0 && sel < drafts.size()) {
+                drafts.remove(sel);
+                editingDraftIndex = -1;
+                saveDrafts();
+                sel = Math.min(sel, Math.max(0, drafts.size() - 1));
+                showNotice("Draft deleted");
+            }
+        } else if ("deleteAllDrafts".equals(action)) {
+            drafts.clear();
+            editingDraftIndex = -1;
+            saveDrafts();
+            sel = 0;
+            showNotice("Drafts deleted");
+        } else if ("removeFromFilter".equals(action)) {
             ArrayList<String> pool = "blackpool".equals(page) ? blacklistNumbers : whitelistNumbers;
             if (sel >= 0 && sel < pool.size()) {
                 pool.remove(sel);
@@ -3641,6 +3729,19 @@ public class C2PhoneView extends View {
             this.address = address == null ? "" : address;
             this.body = body == null ? "" : body;
             this.date = date;
+        }
+    }
+
+    private static class DraftMessage {
+        final String recipient;
+        final String body;
+        final String inputMode;
+        final long createdAt;
+        DraftMessage(String recipient, String body, String inputMode, long createdAt) {
+            this.recipient = recipient == null ? "" : recipient;
+            this.body = body == null ? "" : body;
+            this.inputMode = inputMode == null || inputMode.isEmpty() ? "T9" : inputMode;
+            this.createdAt = createdAt;
         }
     }
 
