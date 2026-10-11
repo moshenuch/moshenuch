@@ -3550,6 +3550,8 @@ public class C2PhoneView extends View {
         if (confirmOpen) {
             if ("LSK".equals(key) || "OK".equals(key)) executeConfirmed();
             else if ("RSK".equals(key) || "END".equals(key)) {
+                if ("restoreGoTo".equals(confirmAction))
+                    auditGoTo("restore canceled NO; unchanged");
                 confirmOpen = false;
                 confirmAction = "";
                 confirmText = "";
