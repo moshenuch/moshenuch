@@ -4829,9 +4829,10 @@ public class C2PhoneView extends View {
         else if ("contacts".equals(page))
             optionItems = new String[]{"Open","Search","Add new","Memory status"};
         else if ("contactsNames".equals(page))
-            optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
-              "Delete contact","Mark >","Mark all","Unmark all","Delete selected",
-              "Add to blacklist","Add to whitelist"};
+            optionItems = new String[]{"Search","Call >","Send message >","View conversations",
+              "Add new >","Edit >","Delete contact","Add to group","Selecting options >",
+              "Details","Add to contact","Edit contact","Copy contact","Move contact",
+              "Merge contact","Add to blacklist","Add to whitelist"};
         else if ("contactSearch".equals(page))
             optionItems = new String[]{"Open","Call","Send message","Clear search","Back"};
         else if ("contactGroups".equals(page))
@@ -5255,6 +5256,10 @@ public class C2PhoneView extends View {
                 messageBody = "";
                 composeFocus = 0;
                 go("compose");
+            } else if ("Add to contact".equals(choice) ||
+                    "Copy contact".equals(choice) || "Move contact".equals(choice) ||
+                    "Merge contact".equals(choice)) {
+                showNotice(choice + " not yet implemented");
             } else if ("Mark >".equals(choice)) {
                 if (sel < smsThreads.size()) {
                     long id = smsThreads.get(sel).threadId;
@@ -5534,7 +5539,22 @@ public class C2PhoneView extends View {
             }
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
             Contact ct = contacts.get(contactIndex);
-            if ("Call >".equals(choice)) startCall(ct.number);
+            if ("Details".equals(choice)) openSelected();
+            else if ("View conversations".equals(choice)) go("conversations");
+            else if ("Edit contact".equals(choice)) beginContactEdit(contactIndex);
+            else if ("Add to group".equals(choice)) {
+                if (contactGroups.groups.isEmpty()) showNotice("Create a group first");
+                else {
+                    pendingGroupMemberNumber = ct.number;
+                    go("groupContactAssign");
+                }
+            } else if ("Selecting options >".equals(choice)) {
+                // Selection operations remain available under Nokia's nested menu.
+                optionItems = new String[]{"Mark >","Mark all","Unmark all","Delete selected"};
+                optionSel = 0;
+                optionsOpen = true;
+                return;
+            } else if ("Call >".equals(choice)) startCall(ct.number);
             else if ("Send message >".equals(choice)) {
                 recipient = ct.number;
                 messageBody = "";
