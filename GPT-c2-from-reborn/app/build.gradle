@@ -2,6 +2,19 @@ plugins {
     id 'com.android.application'
 }
 
+// A permanent certificate is needed for Android in-place updates. GitHub
+// Actions must provide these from encrypted repository secrets. Never commit
+// the keystore or its passwords to the source repository.
+def c2KeystorePath = System.getenv('C2_SIGNING_KEYSTORE_PATH')
+def c2StorePassword = System.getenv('C2_SIGNING_STORE_PASSWORD')
+def c2KeyAlias = System.getenv('C2_SIGNING_KEY_ALIAS')
+def c2KeyPassword = System.getenv('C2_SIGNING_KEY_PASSWORD')
+def hasC2SigningKey = c2KeystorePath != null && !c2KeystorePath.trim().isEmpty()
+
+if (hasC2SigningKey && (!c2StorePassword || !c2KeyAlias || !c2KeyPassword)) {
+    throw new GradleException('C2 persistent signing is incomplete; configure all four signing secrets.')
+}
+
 android {
     namespace 'com.moshenuch.c2reborn'
     compileSdk 34
@@ -10,16 +23,29 @@ android {
         applicationId "com.moshenuch.c2reborn"
         minSdk 23
         targetSdk 34
-        versionCode 12600
-        versionName "1.26.0"
+        versionCode 12601
+        versionName "1.26.1"
+    }
+
+    signingConfigs {
+        persistent {
+            if (hasC2SigningKey) {
+                storeFile file(c2KeystorePath)
+                storePassword c2StorePassword
+                keyAlias c2KeyAlias
+                keyPassword c2KeyPassword
+            }
+        }
     }
 
     buildTypes {
         debug {
             minifyEnabled false
+            if (hasC2SigningKey) signingConfig signingConfigs.persistent
         }
         release {
             minifyEnabled false
+            if (hasC2SigningKey) signingConfig signingConfigs.persistent
         }
     }
 

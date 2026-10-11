@@ -1,3 +1,23 @@
+GPT c2 from reborn — APK v1.26.1 / HTML reference v6.343
+
+Build-system update: support a permanently signed Android release APK.
+The GitHub owner must first configure the four C2_SIGNING_* encrypted
+Actions secrets described in SIGNING-SETUP.md. Merging this change alone
+does NOT establish a persistent signing identity.
+
+When properly configured:
+- Uses the same private keystore for future builds rather than the GitHub
+  runner's disposable Android debug signing certificate.
+- Produces a signed, non-debuggable release APK, verifies its APK signature,
+  and annotates public release metadata with the signing mode.
+- Requires one fresh installation (uninstall of old differently signed C2
+  APK) before future v1.26.2+ updates can install in place.
+
+Without the signing secrets this workflow still emits a clear warning and
+falls back to temporary debug-signing; this cannot support in-place updates.
+No new private key is stored in this public repository.
+
+--- Previous features retained ---
 GPT c2 from reborn — APK v1.26.0 / HTML reference v6.343
 
 Native Android Java/Canvas application. NOT a WebView.
