@@ -29,6 +29,9 @@ public class MainActivity extends Activity {
     private Uri pendingCameraOutput;
     private boolean pendingCameraVideo;
     private C2PhoneView phoneView;
+    private android.widget.FrameLayout phoneFrame;
+    private C2CameraPreview cameraPreview;
+    private static final int REQ_CAMERA_PREVIEW = 408;
     private static MainActivity foreground;
     static void notifyCallUpdated() {
         MainActivity a = foreground;
@@ -130,13 +133,54 @@ public class MainActivity extends Activity {
         hideSystemUi();
         foreground = this;
         phoneView = new C2PhoneView(this);
-        setContentView(phoneView);
+        phoneFrame = new android.widget.FrameLayout(this);
+        phoneFrame.addView(phoneView, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        cameraPreview = new C2CameraPreview(this);
+        cameraPreview.setVisibility(View.GONE);
+        phoneFrame.addView(cameraPreview, new android.widget.FrameLayout.LayoutParams(1, 1));
+        setContentView(phoneFrame);
+        phoneFrame.addOnLayoutChangeListener((v,l,t,rr,b,ol,ot,orr,ob) -> layoutCameraPreview());
         if (savedInstanceState != null) {
             String captured = savedInstanceState.getString("pendingCameraOutput");
             if (captured != null) pendingCameraOutput = Uri.parse(captured);
             pendingCameraVideo = savedInstanceState.getBoolean("pendingCameraVideo", false);
         }
         requestPhonePermissions();
+    }
+
+    void showNativeCameraPreview(boolean show) {
+        if (cameraPreview == null) return;
+        if (!show) {
+            cameraPreview.stop();
+            cameraPreview.setVisibility(View.GONE);
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 23 &&
+                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PREVIEW);
+            return;
+        }
+        layoutCameraPreview();
+        cameraPreview.setVisibility(View.VISIBLE);
+        cameraPreview.start();
+    }
+
+    private void layoutCameraPreview() {
+        if (phoneView == null || cameraPreview == null) return;
+        float scale = Math.min(phoneView.getWidth() / 360f, phoneView.getHeight() / 780f);
+        if (scale <= 0f) return;
+        float ox = (phoneView.getWidth() - 360f * scale) / 2f;
+        float oy = (phoneView.getHeight() - 780f * scale) / 2f;
+        float lcd = 214f / 240f;
+        int x = Math.round(ox + (73f + 6f * lcd) * scale);
+        int y = Math.round(oy + (96f + 45f * lcd) * scale);
+        int w = Math.max(1, Math.round(228f * lcd * scale));
+        int h = Math.max(1, Math.round(208f * lcd * scale));
+        android.widget.FrameLayout.LayoutParams lp =
+                new android.widget.FrameLayout.LayoutParams(w, h);
+        lp.leftMargin = x;
+        lp.topMargin = y;
+        cameraPreview.setLayoutParams(lp);
     }
 
     private void requestPhonePermissions() {
