@@ -4,6 +4,13 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## Further v1.41.0 Contacts editor audit
+
+- **Confirmed defect:** OK after entering the contact Name failed to advance to Number; subsequent number-key presses were interpreted as alphabetic multi-tap. Production key handler called saveEdit() on OK for any field. Corrected source so first OK on Name resets multi-tap state, focuses Number and selects 123 mode; OK on Number and Save softkey invoke validation/save. Up/Down field changes also switch alphabetic/numeric modes.
+- **Punctuation report:** typing `bob q.` produced saved display name `bob q`. The Contacts save path uses Java `String.trim()` which removes surrounding whitespace, **not periods**. Thus the source currently has no explicit punctuation stripping at save; test whether the dot was truly committed before Save, and inspect Android Contacts provider after round-trip. Preserve user-entered punctuation in names; do not claim resolved without emulator confirmation.
+- **Verified:** Empty number is rejected with `Enter name and number`; retain this validation.
+- **Still requires emulator retest:** OK focus change, number digits, punctuation persistence in detail view/provider and Name display.
+
 ## User v1.41.0 Contacts editor and search audit (on emulator)
 
 **Verified:** contact Save workflow and success notice; case-insensitive alphabetical sort; 12-item Names Options menu. Do not regress these.
