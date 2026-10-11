@@ -193,6 +193,35 @@ jobs:
           path: GPT-c2-from-reborn/build/conversation-row-smoke/audit.txt
           if-no-files-found: error
 
+      - name: Test Nokia notice and detail-page layout
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/overlay-layout-smoke
+          javac -d build/overlay-layout-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeOverlayLayout.java \
+            tools/NativeOverlayLayoutSmokeTest.java
+          {
+            echo "Nokia notice/Phone detail layout audit — v1.40.0"
+            java -cp build/overlay-layout-smoke com.moshenuch.c2reborn.NativeOverlayLayoutSmokeTest
+            python3 tools/audit_overlay_layout.py
+            echo "Build-side renderer geometry validated; emulator screenshot still needed."
+          } | tee build/overlay-layout-smoke/audit.txt
+          {
+            echo "## Nokia notification and Phone detail layout audit"
+            echo '~~~text'
+            cat build/overlay-layout-smoke/audit.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Nokia overlay layout audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-Overlay-layout-audit-v1.40.0
+          path: GPT-c2-from-reborn/build/overlay-layout-smoke/audit.txt
+          if-no-files-found: error
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
