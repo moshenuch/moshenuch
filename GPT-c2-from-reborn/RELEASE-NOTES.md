@@ -1,38 +1,38 @@
-GPT c2 from reborn — APK v1.17.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.18.0 / HTML reference v6.342
 
-Native Android Java/Canvas app, NOT a WebView. Partial source recreation.
+Native Android Java/Canvas application. NOT a WebView or fully verified HTML clone.
 
-Native Voice Recorder audit and implementation:
-- Media > Voice recorder now opens a real native Nokia-like recording LCD,
-  rather than a placeholder. The centre key toggles Record / Stop and save.
-- Android RECORD_AUDIO permission is requested only upon explicit Record
-  activation; granting access does not silently start recording.
-- Audio capture uses Android MediaRecorder, MPEG-4/AAC mono in private app
-  storage. Maximum foreground recording session is five minutes.
-- Recordings are saved under the app's private voice_notes directory, without
-  access to external storage or the system recording library.
-- Options > Recordings opens saved recordings. Gallery > Recordings also links
-  to this same list instead of reporting a fake empty folder.
-- Center Play/Stop, Options > Play/Stop, Details, New recording and a live
-  Memory status are executable from the saved-recordings list.
-- Recorded files can be deleted permanently only after explicit Yes/No
-  confirmation. The deletion does not touch unrelated device audio.
-- Exiting the recording screen via Back/End, moving to another screen,
-  or switching apps automatically stops/saves the current recording.
-  Playback stops when the app leaves the foreground.
-- Aborted or too-short microphone captures report failure and remove the
-  invalid partial file. Microphone-denied and no-device conditions are shown
-  explicitly. The LCD displays a recording indicator and elapsed time.
+Camera / Video Camera audit remediation:
+- Media > Camera opens an installed Android camera using the standard native
+  ACTION_IMAGE_CAPTURE intent. Media > Video camera uses ACTION_VIDEO_CAPTURE.
+- The APK grants each camera app access to only a temporary capture content URI;
+  it does NOT request CAMERA permission or broad device storage permissions.
+- A non-exported ContentProvider enforces path allowlisting and read-only
+  access to permanent app-private media, with per-URI grants for capture.
+- After an explicit successful capture, photo/video bytes are copied into
+  the app's private media library and indexed automatically in Gallery >
+  Images or Gallery > Video clips. The captured entry is highlighted.
+- Image capture prefers a full-size EXTRA_OUTPUT photo. Camera apps that
+  return only a small bitmap instead may produce thumbnail-resolution
+  photos; the result depends on the installed external camera app.
+- Video capture requests a 2-minute duration limit, but support depends
+  on the external camera. Video files are capped at 150 MiB on import.
+- A cancelled capture discards the temporary output and does not add it to
+  Gallery. Invalid/oversized files are not retained. Camera failures are
+  displayed as explicit notices rather than fake success.
+- Private gallery files can be previewed or opened from existing v1.16
+  Gallery routes, with app-only removal. They are not uploaded or copied
+  into public Photos/MediaStore by the APK.
+- Pending capture URI is preserved across Activity state restoration.
 
-Source and safety limitations:
-- This is app-private native Android voice recording, not a verified exact
-  Nokia C2-01 6.342 firmware Voice Recorder UI/Options recreation.
-- Background recording, pause/resume during a clip, renaming, exporting
-  and direct file sharing are not yet implemented.
-- Android MediaRecorder behaviour and microphone permission flows must be
-  device tested; GitHub compilation does not verify sound capture quality.
-- Remaining Media placeholders: camera, FM radio, equaliser; nested Options,
-  Gallery categories and whole-screen pixel comparison remain outstanding.
+Previously released features remain, including native Voice Recorder v1.17.0,
+Nokia Sans fonts and bitmap icons, SMS and call log actions.
 
-Earlier v1.16.0 Gallery sort, v1.14.1 original Nokia fonts, source icon
-assets and messaging/call-log/organiser features remain included.
+KNOWN LIMITATIONS:
+- Camera capture is handled by an external Android camera activity, not a
+  pixel-exact Nokia C2-01 viewfinder or embedded native Camera2 renderer.
+- There is no continuous internal video preview or Nokia shutter animation.
+- Some Android camera apps may ignore EXTRA_OUTPUT or fail to support the
+  private content URI. The APK reports these cases without claiming success.
+- Source HTML v6.342 visual parity, camera device testing, manual privacy/
+  URI-grant validation, other Media controls and nested menu accuracy remain.

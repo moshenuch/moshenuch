@@ -2207,9 +2207,7 @@ public class C2PhoneView extends View {
             if (sel == 2) go("music");
             else if (sel == 4) go("voiceRecorder");
             else if (sel == 0 || sel == 1) {
-                detailTitle = itemsFor(page)[sel];
-                detailText = "Camera capture is not yet supported in this native port.\nUse Gallery to select existing media.";
-                go("itemDetail");
+                startCameraCapture(sel == 1);
             } else if (sel == 3) {
                 detailTitle = "Radio";
                 detailText = "FM tuner access is unavailable on this Android device.\nOriginal C2-01 required a wired headset.";
@@ -3263,6 +3261,36 @@ public class C2PhoneView extends View {
         for (NativeGalleryStore.Entry e : galleryStore.images)
             if (e.uri.equals(galleryPreviewUri)) return e;
         return null;
+    }
+
+    private void startCameraCapture(boolean video) {
+        if (getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).launchCameraCapture(video);
+        else showNotice("Android camera is unavailable");
+    }
+
+    public void onCameraCaptureFailed(String reason) {
+        showNotice(reason);
+        invalidate();
+    }
+
+    /** Called only when the Android camera saved a validated private file. */
+    public void onCameraCaptureCompleted(boolean video, Uri uri) {
+        int added = galleryStore.add(video, java.util.Collections.singletonList(uri));
+        if (added == 0) {
+            showNotice("Capture saved, but could not be added to Gallery");
+            return;
+        }
+        go(video ? "galleryVideos" : "galleryImages");
+        java.util.List<NativeGalleryStore.Entry> entries = galleryStore.entries(video);
+        for (int i = 0; i < entries.size(); i++) {
+            if (entries.get(i).uri.equals(uri.toString())) {
+                sel = i;
+                break;
+            }
+        }
+        showNotice(video ? "Video saved in private Gallery" : "Photo saved in private Gallery");
+        invalidate();
     }
 
     private void openGalleryFolder(boolean video) {

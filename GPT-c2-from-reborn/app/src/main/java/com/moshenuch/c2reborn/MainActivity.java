@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
+import android.provider.MediaStore;
 import java.util.ArrayList;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -18,6 +19,10 @@ public class MainActivity extends Activity {
     private static final int REQ_PICK_IMAGES = 301;
     private static final int REQ_PICK_VIDEOS = 302;
     private static final int REQ_MICROPHONE = 303;
+    private static final int REQ_CAPTURE_IMAGE = 304;
+    private static final int REQ_CAPTURE_VIDEO = 305;
+    private Uri pendingCameraOutput;
+    private boolean pendingCameraVideo;
     private C2PhoneView phoneView;
 
     @Override
@@ -30,6 +35,11 @@ public class MainActivity extends Activity {
         hideSystemUi();
         phoneView = new C2PhoneView(this);
         setContentView(phoneView);
+        if (savedInstanceState != null) {
+            String captured = savedInstanceState.getString("pendingCameraOutput");
+            if (captured != null) pendingCameraOutput = Uri.parse(captured);
+            pendingCameraVideo = savedInstanceState.getBoolean("pendingCameraVideo", false);
+        }
         requestPhonePermissions();
     }
 
@@ -88,6 +98,32 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Deliberately delegates acquisition to an installed Android camera app.
+     * Uses a read/write URI grant for a temporary private file, not CAMERA
+     * permission, global storage permission or a WebView.
+     */
+    public void launchCameraCapture(boolean video) {
+        Uri output = C2MediaProvider.pendingUri(this, video);
+        Intent intent = new Intent(video
+                ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, output);
+        if (video) intent.putExtra(MediaStore.EXTRA_DURATION_LIMIT, 120);
+        intent.setClipData(ClipData.newRawUri("C2 camera output", output));
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        try {
+            pendingCameraOutput = output;
+            pendingCameraVideo = video;
+            startActivityForResult(intent, video ? REQ_CAPTURE_VIDEO : REQ_CAPTURE_IMAGE);
+        } catch (Exception ex) {
+            C2MediaProvider.discard(this, output);
+            pendingCameraOutput = null;
+            if (phoneView != null)
+                phoneView.onCameraCaptureFailed("No compatible camera available");
+        }
+    }
+
     /** Delegate playback to an installed Android video player. No WebView used. */
     public boolean viewGalleryVideo(String uriString) {
         try {
@@ -106,6 +142,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_CAPTURE_IMAGE || requestCode == REQ_CAPTURE_VIDEO) {
+            Uri pending = pendingCameraOutput;
+            pendingCameraOutput = null;
+            boolean video = requestCode == REQ_CAPTURE_VIDEO;
+            if (pending == null) {
+                if (phoneView != null) phoneView.onCameraCaptureFailed("Camera output unavailable");
+                return;
+            }
+            if (resultCode != RESULT_OK) {
+                C2MediaProvider.discard(this, pending);
+                if (phoneView != null) phoneView.onCameraCaptureFailed("Capture cancelled");
+                return;
+            }
+            Uri saved = C2MediaProvider.complete(this, pending, video, data);
+            if (phoneView != null) {
+                if (saved != null) phoneView.onCameraCaptureCompleted(video, saved);
+                else phoneView.onCameraCaptureFailed("Camera did not save a usable file");
+            }
+            return;
+        }
         if (requestCode != REQ_PICK_IMAGES && requestCode != REQ_PICK_VIDEOS) return;
         if (resultCode != RESULT_OK || data == null || phoneView == null) return;
         ArrayList<Uri> chosen = new ArrayList<>();
@@ -123,6 +179,14 @@ public class MainActivity extends Activity {
             } catch (SecurityException ignored) { }
         }
         phoneView.onGalleryPicked(requestCode == REQ_PICK_VIDEOS, chosen);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (pendingCameraOutput != null)
+            outState.putString("pendingCameraOutput", pendingCameraOutput.toString());
+        outState.putBoolean("pendingCameraVideo", pendingCameraVideo);
     }
 
     @Override
