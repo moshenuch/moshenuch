@@ -1,3 +1,11 @@
+## APK v1.43.0 default-dialer integration — source committed, real-device test REQUIRED
+
+New native `C2InCallService` with Telecom Call callbacks; manifest registers BIND_INCALL_SERVICE and ACTION_DIAL default-dialer eligibility. `MainActivity` requests Android ROLE_DIALER upon first outgoing call if role not granted. The user must accept; after approval they must dial again. The role restriction prevents claiming stock-free calling without OS approval, and emergency calls may still be handled by the system.
+
+C2 view now takes Telecom onCallAdded/onCallRemoved updates, displays in-house call panel, resolves contact name, times connected calls using Telecom connectTime, uses Telecom Call.disconnect() for End, sets speaker routing through InCallService, and returns to Home only on Telecom removal. Calls no longer fall back to ACTION_DIAL when role/permission unavailable. C2's UI remains unverified in emulator, including backgrounding, multi-call, answering, disconnections, role revocation, incoming calls and platform call screens. **Do not advertise complete native calling until on-device verified.**
+
+This architecture replaces the top-priority ACTION_CALL handoff, while the existing `AndroidBackend.placeCall` still dispatches ACTION_CALL once C2 is default Phone app. Android Telecom routes its in-call UI through C2 InCallService; placing calls is OS-mediated, not direct telephony.
+
 ## Critical correction — real Android contact Edit Save (v1.42.0)
 
 The failed Edit Save test was on a **real Android contact "Ab" created manually through the C2 app, with demo data OFF**, not a seeded fixture. The previous demo-only explanation was incorrect. This is a genuine provider/edit failure and top Contacts priority. Code now handles name-only changes with a direct StructuredName row update rather than the two-operation phone+name batch when the selected phone number is unchanged; failures display Contact save failed instead of incorrectly asserting a permission failure. The existing save-success path refreshes and returns to details. **Requires emulator retest**; this code-level hypothesis is not yet verified, and editing name-plus-number still follows the batch update path.
