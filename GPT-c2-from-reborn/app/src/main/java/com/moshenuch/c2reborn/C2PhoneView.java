@@ -129,6 +129,8 @@ public class C2PhoneView extends View {
     private final ArrayList<String> todos = new ArrayList<>();
     private final ArrayList<String> calendar = new ArrayList<>();
     private final ArrayList<DraftMessage> drafts = new ArrayList<>();
+    // Copied SMS templates are app-local text, never cloned provider SMS.
+    private final ArrayList<String> savedSmsTemplates = new ArrayList<>();
     private int editingDraftIndex = -1;
 
     private String dial = "";
@@ -400,6 +402,7 @@ public class C2PhoneView extends View {
         loadStringList("notes", notes);
         loadStringList("todos", todos);
         loadStringList("calendar", calendar);
+        loadStringList("sms_templates_v1", savedSmsTemplates);
         loadDrafts();
         loadLongSet("sms_local_read", localReadSmsIds);
         loadLongSet("sms_local_unread", localUnreadSmsIds);
@@ -2059,8 +2062,14 @@ public class C2PhoneView extends View {
             }
             case "outbox":
                 return new String[]{"(empty)"};
-            case "savedmessages":
-                return new String[0]; // No fabricated saved messages.
+            case "savedmessages": {
+                String[] labels = new String[savedSmsTemplates.size()];
+                for (int i = 0; i < labels.length; i++) {
+                    String raw = savedSmsTemplates.get(i).replace('\n', ' ').trim();
+                    labels[i] = raw.length() > 34 ? raw.substring(0, 34) + "…" : raw;
+                }
+                return labels;
+            }
             case "reports":
                 return new String[]{"No verified delivery receipts"};
             case "email":
@@ -2314,7 +2323,11 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if (Arrays.asList("outbox","savedmessages","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
+        if ("savedmessages".equals(page)) {
+            useSelectedSmsTemplate();
+            return;
+        }
+        if (Arrays.asList("outbox","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
             detailTitle = itemsFor(page)[sel];
             if ("outbox".equals(page)) detailText = "Outbox records loaded: "
                     + countSmsType(Telephony.Sms.MESSAGE_TYPE_OUTBOX)
@@ -4049,8 +4062,10 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","New message","Inbox view","Folder details","Message log","Memory status"};
         else if ("drafts".equals(page))
             optionItems = new String[]{"Open","New message","Delete draft","Delete all drafts","Inbox view","Folder details","Memory status"};
-        else if ("outbox".equals(page) || "savedmessages".equals(page))
+        else if ("outbox".equals(page))
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
+        else if ("savedmessages".equals(page))
+            optionItems = new String[]{"Use template","Details","Delete template","Delete all templates","New message","Memory status"};
         else if ("inbox".equals(page)) {
             AndroidBackend.DeviceSms target = sel >= 0 && sel < smsInbox.size() ? smsInbox.get(sel) : null;
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
@@ -4070,10 +4085,10 @@ public class C2PhoneView extends View {
         else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms target = conversationMessageAt(sel);
             if (target != null && target.type == Telephony.Sms.MESSAGE_TYPE_INBOX)
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
                         isSmsUnread(target) ? "Mark as read" : "Mark as unread"};
             else
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
         }
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
@@ -4402,6 +4417,20 @@ public class C2PhoneView extends View {
             else showNotice("Help");
         } else if ("messaging".equals(page) || "drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page)) {
             if (("sent".equals(page) || "drafts".equals(page)) && "Open".equals(choice)) openSelected();
+            else if ("savedmessages".equals(page) && "Use template".equals(choice))
+                useSelectedSmsTemplate();
+            else if ("savedmessages".equals(page) && "Details".equals(choice))
+                showSelectedSmsTemplateDetails();
+            else if ("savedmessages".equals(page) && "Delete template".equals(choice)) {
+                if (sel >= 0 && sel < savedSmsTemplates.size())
+                    requestConfirm("deleteSmsTemplate", "Delete this app-saved text template?");
+                else showNotice("No saved template selected");
+            } else if ("savedmessages".equals(page) && "Delete all templates".equals(choice)) {
+                if (!savedSmsTemplates.isEmpty())
+                    requestConfirm("deleteAllSmsTemplates",
+                            "Delete all " + savedSmsTemplates.size() + " locally saved templates?");
+                else showNotice("No saved templates");
+            }
             else if ("drafts".equals(page) && "Delete draft".equals(choice)) {
                 if (sel >= 0 && sel < drafts.size())
                     requestConfirm("deleteDraft", "Delete the selected saved draft?");
@@ -4489,6 +4518,8 @@ public class C2PhoneView extends View {
                 go("compose");
             } else if ("Forward".equals(choice)) {
                 forwardSmsCopy(m);
+            } else if ("Copy as template".equals(choice)) {
+                saveSmsAsTemplate(m);
             } else if ("Message details".equals(choice)) {
                 showMessageDetails(m);
             } else if ("Delete".equals(choice)) {
@@ -4537,6 +4568,7 @@ public class C2PhoneView extends View {
                     go("compose");
                 }
             } else if ("Call".equals(choice)) startCall(selected.address);
+            else if ("Copy as template".equals(choice)) saveSmsAsTemplate(selected);
             else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Hide this message in the app? Phone SMS unchanged.");
             else if ("Forward".equals(choice)) forwardSmsCopy(selected);
             else if ("Edit".equals(choice)) {
@@ -5166,6 +5198,19 @@ public class C2PhoneView extends View {
             refreshCallsFromPhone();
             sel = 0;
             showNotice(n + " calls hidden in app");
+        } else if ("deleteSmsTemplate".equals(action)) {
+            if (sel >= 0 && sel < savedSmsTemplates.size()) {
+                savedSmsTemplates.remove(sel);
+                saveStringList("sms_templates_v1", savedSmsTemplates);
+                sel = Math.min(sel, Math.max(0, savedSmsTemplates.size() - 1));
+                showNotice("App template deleted");
+            } else showNotice("Saved template no longer available");
+        } else if ("deleteAllSmsTemplates".equals(action)) {
+            int count = savedSmsTemplates.size();
+            savedSmsTemplates.clear();
+            saveStringList("sms_templates_v1", savedSmsTemplates);
+            sel = 0;
+            showNotice(count + " app template(s) deleted");
         } else if ("deleteDraft".equals(action)) {
             if (sel >= 0 && sel < drafts.size()) {
                 drafts.remove(sel);
@@ -5482,9 +5527,54 @@ public class C2PhoneView extends View {
         go("itemDetail");
     }
 
+    /**
+     * Copy only the text from a received/sent provider SMS. Never mutate
+     * Android's SMS database, and do not imply message delivery or relocation.
+     */
+    private void saveSmsAsTemplate(AndroidBackend.DeviceSms sms) {
+        if (sms == null || sms.body == null || sms.body.trim().isEmpty()) {
+            showNotice("No SMS text to copy");
+            return;
+        }
+        if (savedSmsTemplates.size() >= 100) {
+            showNotice("100-template limit reached");
+            return;
+        }
+        savedSmsTemplates.add(0, sms.body);
+        saveStringList("sms_templates_v1", savedSmsTemplates);
+        showNotice("Copied to app Saved items");
+    }
+
+    private void useSelectedSmsTemplate() {
+        if (sel < 0 || sel >= savedSmsTemplates.size()) {
+            showNotice("No saved template selected");
+            return;
+        }
+        messageBody = savedSmsTemplates.get(sel);
+        recipient = "";
+        composeFocus = 0;
+        inputMode = "T9";
+        // Nothing is sent until Send is explicitly chosen.
+        go("compose");
+    }
+
+    private void showSelectedSmsTemplateDetails() {
+        if (sel < 0 || sel >= savedSmsTemplates.size()) {
+            showNotice("No saved template selected");
+            return;
+        }
+        String body = savedSmsTemplates.get(sel);
+        detailTitle = "Saved template";
+        detailText = "App-local text copy\n"
+                + "Characters: " + body.length()
+                + "\nNo linked system SMS record\n\n" + body;
+        go("itemDetail");
+    }
+
     private void showSmsMemoryStatus() {
         detailTitle = "SMS memory status";
         detailText = "App drafts: " + drafts.size()
+                + "\nSaved templates: " + savedSmsTemplates.size()
                 + "\nLocally hidden: " + hiddenSmsIds.size()
                 + (deviceSmsActive ? "\nSMS loaded: " + deviceSms.size()
                        + "\nQuery limit: 800" : "\nSMS permission missing")
@@ -5514,8 +5604,8 @@ public class C2PhoneView extends View {
                 note = "Provider outbox snapshot";
                 break;
             case "Saved items":
-                count = 0;
-                note = "Saved-message folder not implemented";
+                count = savedSmsTemplates.size();
+                note = "App-local copied text templates; no phone SMS moved";
                 break;
             case "Conversations":
                 count = smsThreads.size();
