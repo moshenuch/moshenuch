@@ -1896,17 +1896,22 @@ public class C2PhoneView extends View {
 
     private void drawCalculator(Canvas c) {
         drawStatus(c, "Calculator");
+        // Preserve the complete Nokia title: its baseline is y=37 and
+        // the earlier display rectangle began at y=30, painting over it.
         p.setColor("Dark".equals(theme) ? Color.rgb(25,31,33) : Color.WHITE);
-        c.drawRect(8, 30, 232, 95, p);
+        c.drawRect(8, NativeOverlayLayout.CALC_PANEL_TOP,
+                232, NativeOverlayLayout.CALC_PANEL_BOTTOM, p);
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(28);
-        c.drawText(calc, 223, 73, p);
+        c.drawText(calc, 223, NativeOverlayLayout.CALC_VALUE_BASELINE, p);
 
         String[] ops = {"▲ ×","◀ −","OK =","▶ +","▼ ÷","* .   # ±"};
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(13);
-        for (int i = 0; i < ops.length; i++) c.drawText(ops[i], 120, 125 + i * 24, p);
+        for (int i = 0; i < ops.length; i++)
+            c.drawText(ops[i], 120, NativeOverlayLayout.CALC_FIRST_OPERATION_BASELINE
+                    + i * NativeOverlayLayout.CALC_OPERATION_LINE_SPACING, p);
     }
 
     private void drawLoan(Canvas c) {
@@ -1914,7 +1919,8 @@ public class C2PhoneView extends View {
         String[] labels = {"Loan amount", "Interest %", "Months"};
         String[] values = {loanPrincipal, loanRate, loanMonths};
         for (int i = 0; i < 3; i++) {
-            float y = 35 + i * 62;
+            // Like Calculator, the first panel must not cover the title.
+            float y = NativeOverlayLayout.LOAN_FIRST_FIELD_TOP + i * 62;
             p.setColor(i == loanField ? accent() : ("Dark".equals(theme) ? Color.rgb(49,55,58) : Color.WHITE));
             c.drawRoundRect(new RectF(8, y, 232, y + 48), 4, 4, p);
             p.setColor(i == loanField ? Color.WHITE : themeText());
@@ -2226,11 +2232,17 @@ public class C2PhoneView extends View {
                 NativeOverlayLayout.NOTICE_TOP + 4,
                 NativeOverlayLayout.NOTICE_TEXT_X + NativeOverlayLayout.NOTICE_TEXT_WIDTH,
                 NativeOverlayLayout.NOTICE_BOTTOM - 4);
-        drawWrappedText(c, notice, NativeOverlayLayout.NOTICE_TEXT_X,
-                NativeOverlayLayout.NOTICE_TEXT_BASELINE,
+        // Measure actual glyph widths before drawing either line. Long
+        // rejection text wraps fully; exceptional overlong words and
+        // messages exceeding two lines end-ellipsize instead of clipping.
+        java.util.ArrayList<String> lines = NativeNoticeText.wrap(notice,
                 NativeOverlayLayout.NOTICE_TEXT_WIDTH,
-                NativeOverlayLayout.NOTICE_LINE_HEIGHT,
-                NativeOverlayLayout.NOTICE_MAX_LINES);
+                NativeOverlayLayout.NOTICE_MAX_LINES, p::measureText);
+        for (int i = 0; i < lines.size(); i++) {
+            c.drawText(lines.get(i), NativeOverlayLayout.NOTICE_TEXT_X,
+                    NativeOverlayLayout.NOTICE_TEXT_BASELINE +
+                            i * NativeOverlayLayout.NOTICE_LINE_HEIGHT, p);
+        }
         c.restore();
     }
 
