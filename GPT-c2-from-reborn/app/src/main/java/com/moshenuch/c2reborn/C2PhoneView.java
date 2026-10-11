@@ -2507,8 +2507,10 @@ public class C2PhoneView extends View {
             case "messagesettings":
                 return new String[]{"General settings","Text messages","Multimedia messages","E-mail messages","Service messages"};
             case "recipientPicker": {
-                String[] a = new String[contacts.size()];
+                String[] a = new String[contacts.size() + contactGroups.groups.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
+                for (int i = 0; i < contactGroups.groups.size(); i++)
+                    a[contacts.size() + i] = contactGroups.groups.get(i).name;
                 return a;
             }
             case "symbolPicker":
@@ -2943,9 +2945,17 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("contactsNames".equals(page) && !contacts.isEmpty()) {
-            contactIndex = sel;
-            go("contactDetail"); // Starts on the contact's primary number.
+        if ("contactsNames".equals(page)) {
+            if (sel >= contacts.size()) {
+                NativeContactGroups.Group group = contactGroups.at(sel - contacts.size());
+                if (group != null) {
+                    activeContactGroupId = group.id;
+                    go("groupMembers");
+                } else showNotice("Group unavailable");
+            } else if (sel >= 0 && sel < contacts.size()) {
+                contactIndex = sel;
+                go("contactDetail"); // Starts on the contact's primary number.
+            } else showNotice("No contact selected");
             return;
         }
         if ("contactSearch".equals(page)) {
@@ -5463,7 +5473,19 @@ public class C2PhoneView extends View {
                 beginContactSearch();
                 return;
             }
-            if (contacts.isEmpty()) return;
+            if (sel >= contacts.size()) {
+                NativeContactGroups.Group group = contactGroups.at(sel - contacts.size());
+                if (group != null) {
+                    activeContactGroupId = group.id;
+                    go("groupMembers");
+                } else showNotice("Group unavailable");
+                return;
+            }
+            if (contacts.isEmpty()) {
+                if ("Add new >".equals(choice)) beginContactEdit(-1);
+                else showNotice("No contact selected");
+                return;
+            }
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
             Contact ct = contacts.get(contactIndex);
             if ("Call >".equals(choice)) startCall(ct.number);
