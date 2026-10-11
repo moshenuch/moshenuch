@@ -1,35 +1,40 @@
-GPT c2 from reborn — APK v1.22.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.23.0 / HTML reference v6.342
 
-Native Android Java/Canvas application. NOT a WebView; partial Nokia C2-01 port.
+Native Android Java/Canvas app. NOT a WebView or pixel-exact HTML port.
 
-Contacts > Groups native actions:
-- Replaced the static "No groups defined" placeholder with an app-local
-  groups screen. Users can create up to 30 named groups and rename groups.
-- Open a group to browse its members, with names dynamically resolved from
-  the currently visible Android or app-local Contacts list.
-- From group Options > Add member choose a contact. The same membership
-  action is available from Contact details > Options > Add to group.
-- Selected group members have executable Details, Call and Send message.
-  Send message opens the native SMS composer prefilled with that member's
-  number; it does NOT automatically send a text to the whole group.
-- Remove member and Delete group use the Nokia-style Yes/No confirmation.
-  Both operations affect ONLY the APK's local group membership data and
-  never delete or alter system Android contacts or actual Contacts groups.
-- Group details show actual saved name and member count; memory status
-  shows real app-local group and membership counts.
-- Group IDs are stable UUIDs and memberships are stored as phone numbers,
-  not mutable Contacts list indexes. Persisted JSON survives APK relaunch
-  and Android Contacts name/reordering changes.
-- Duplicate membership and duplicate group names are rejected.
-- Unsupported SIM/cloud group synchronisation is NOT claimed.
+Keypad long-press / speed-dial reliability pass:
+- The on-screen 360x780 Nokia keypad now handles ACTION_DOWN / MOVE / UP,
+  CANCEL and secondary pointers, not just raw ACTION_UP.
+- Holding a home-screen digit 2–9 for 700 ms triggers a speed-dial lookup.
+  Ordinary short taps remain unchanged: a tap enters the selected digit.
+- Long holds are disabled when locked, displaying Options, showing a
+  confirmation dialog or leaving the home screen.
+- Dragging off the key or cancelling a gesture cancels the pending hold.
+  Releasing after a completed hold does not also enter the pressed digit.
+- When an assigned speed dial is enabled, holding its digit fills the
+  native dial screen with the assigned number. A separate Call key
+  press is required to initiate an Android call.
+- Call settings > Speed dialling now opens a real Off/On selector with
+  source Nokia radio artwork, stores the preference in app settings,
+  and shows the current value in the Call settings list.
+- Matches the companion upstream ground-up screen's distinction between
+  enabled/disabled speed dialling and opening an offline dial screen.
+  Default remains Off, as in that reference. The full 3.7 MB upstream
+  main index HTML was not compared byte-for-byte in this update.
+- Calling code no longer navigates to a false active-call screen when
+  Android rejects the call intent. If CALL_PHONE is unavailable, the
+  external Android dialler is opened and the app explicitly states
+  that a call has not yet been placed.
 
-Retains v1.21.0 Contacts speed dials, call-log/options, real media and
-Gallery functions, source Nokia fonts/icons and SMS features.
+Earlier v1.22 app-local Groups, v1.21 speed-dial assignments, messaging,
+Gallery, music, recorder and other native functionality remain included.
 
-KNOWN LIMITS:
-- Groups are app-local; Android's system Contacts group provider is NOT
-  modified. Deleting a real contact leaves that number in app-local groups
-  until the member is explicitly removed (shown as a number).
-- No group-wide SMS/mass calling, custom ringtones, group icons,
-  SIM contact-group sync or deep original HTML screenshot parity.
-- Real-device Contacts/phone permission testing remains outstanding.
+KNOWN LIMITATIONS AND SAFETY:
+- This long-press behaviour applies to the APK's on-screen numeric keys;
+  Android physical hardware key long-press mapping is not yet implemented.
+- Holding a speed-dial digit DOES NOT place a phone call automatically.
+  The user must explicitly press Call from the filled native dial screen.
+- Android's call status remains owned by the telephony app; the Nokia call
+  screen does not yet observe authoritative connected/disconnected events.
+- Visual and behavioural comparison against the giant main HTML and
+  physical-device touchscreen tests remain outstanding.

@@ -100,6 +100,14 @@ public class C2PhoneView extends View {
     private final HashMap<Integer,String> speedDialNumbers = new HashMap<>();
     private int speedDialSlot = 2;
     private String speedDialAssignment = "";
+    private boolean speedDiallingEnabled = false;
+    private static final long SPEED_DIAL_HOLD_MS = 700L;
+    private static final float KEYPAD_DRAG_TOLERANCE = 12f;
+    private int touchPointerId = -1;
+    private float touchStartX, touchStartY;
+    private String touchPressedKey;
+    private boolean touchLongConsumed = false;
+    private Runnable pendingSpeedDialHold;
     // Call records are hidden within this app; the Android call log stays untouched.
     private final HashSet<String> hiddenCallKeys = new HashSet<>();
     private long activeThreadId = -1L;
@@ -219,6 +227,7 @@ public class C2PhoneView extends View {
     }
 
     public void onAppPaused() {
+        cancelKeypadTouch();
         if (voiceRecorder.isRecording()) finishVoiceRecording();
         voiceRecorder.stopPlayback();
         musicEngine.pause();
@@ -226,6 +235,7 @@ public class C2PhoneView extends View {
     }
 
     public void onAppDestroyed() {
+        cancelKeypadTouch();
         voiceRecorder.release();
         musicEngine.release();
     }
@@ -356,6 +366,7 @@ public class C2PhoneView extends View {
         alarmTime = prefs.getString("alarmTime", "07:00");
         alarmOn = prefs.getBoolean("alarmOn", false);
         alarmRepeat = prefs.getBoolean("alarmRepeat", false);
+        speedDiallingEnabled = prefs.getBoolean("speed_dialling_enabled_v1", false);
         blacklistEnabled = prefs.getBoolean("rebornBlacklistOn", false);
         whitelistEnabled = prefs.getBoolean("rebornWhitelistOn", false);
         loadStringList("rebornBlacklist", blacklistNumbers);
@@ -846,6 +857,11 @@ public class C2PhoneView extends View {
             if ("conversation".equals(page)) textX = 36;
             if ("gallerySort".equals(page)) {
                 drawFirmwareChoice(c, idx == galleryStore.sortMode(gallerySortVideos)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
+            if ("speedDialMode".equals(page)) {
+                drawFirmwareChoice(c, idx == (speedDiallingEnabled ? 1 : 0)
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
@@ -1812,6 +1828,7 @@ public class C2PhoneView extends View {
             case "log": return "Log";
             case "settings": return "Settings";
             case "callsettings": return "Call settings";
+            case "speedDialMode": return "Speed dialling";
             case "callfilter": return "Call filtering";
             case "blackmode": return "Reject blacklist";
             case "whitemode": return "Whitelist mode";
@@ -1994,8 +2011,10 @@ public class C2PhoneView extends View {
                 return new String[]{"APK version: " + installedApkVersion(),"HTML reference: v6.342","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
-                "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
+                "Video-voice redial","Voice clarity","Speed dialling: " + (speedDiallingEnabled ? "On" : "Off"),
+                "Call waiting","Call duration display",
                 "Summary after call","Send my caller ID","Send net caller ID","Slide call handling","Call filtering"};
+            case "speedDialMode": return new String[]{"Off","On"};
             case "callfilter":
                 return new String[]{"Reject unknown callers (pending)",
                   "Reject blacklist: " + (blacklistEnabled ? "On" : "Off"),
@@ -2347,7 +2366,17 @@ public class C2PhoneView extends View {
 
         if ("callsettings".equals(page)) {
             if (sel == 13) go("callfilter");
-            else showNotice("Not implemented in native APK");
+            else if (sel == 6) {
+                go("speedDialMode");
+                sel = speedDiallingEnabled ? 1 : 0;
+            } else showNotice("Not implemented in native APK");
+            return;
+        }
+        if ("speedDialMode".equals(page)) {
+            speedDiallingEnabled = sel == 1;
+            prefs.edit().putBoolean("speed_dialling_enabled_v1", speedDiallingEnabled).apply();
+            back();
+            showNotice("Speed dialling " + (speedDiallingEnabled ? "On" : "Off"));
             return;
         }
         if ("callfilter".equals(page)) {
@@ -2833,11 +2862,21 @@ public class C2PhoneView extends View {
             showNotice("Enter number");
             return;
         }
+        boolean directCallPermission = backend.has(Manifest.permission.CALL_PHONE);
+        if (!backend.placeCall(who)) {
+            showNotice("Unable to open Android calling app");
+            return;
+        }
+        if (!directCallPermission) {
+            // ACTION_DIAL opens the dialling UI, not an actual connected call.
+            showNotice("Android dialler opened; call not placed");
+            return;
+        }
         activeCall = who;
         callStarted = SystemClock.elapsedRealtime();
         loudspeaker = false;
         go("call");
-        if (!backend.placeCall(who)) showNotice("Unable to start call");
+        // An ACTION_CALL intent was accepted; Android still owns call status.
     }
 
     private void toggleSpeaker() {
@@ -3788,6 +3827,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Remove"};
         else if ("callsettings".equals(page) || "callfilter".equals(page))
             optionItems = new String[]{"Open","Help"};
+        else if ("speedDialMode".equals(page))
+            optionItems = new String[]{"Select"};
         else if ("profiles".equals(page))
             optionItems = new String[]{"Activate","Personalise","Timed"};
         else if ("gallery".equals(page))
@@ -4123,7 +4164,9 @@ public class C2PhoneView extends View {
             if ("Remove".equals(choice)) openSelected();
         } else if ("callsettings".equals(page) || "callfilter".equals(page)) {
             if ("Open".equals(choice)) openSelected();
-            else showNotice("Demo controls only");
+            else showNotice("Not implemented: " + choice);
+        } else if ("speedDialMode".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
         } else if ("contactsNames".equals(page)) {
             if (contacts.isEmpty()) return;
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
@@ -5120,12 +5163,94 @@ public class C2PhoneView extends View {
     }
 
     @Override
+    private void cancelPendingSpeedDialHold() {
+        if (pendingSpeedDialHold != null) {
+            removeCallbacks(pendingSpeedDialHold);
+            pendingSpeedDialHold = null;
+        }
+    }
+
+    private void cancelKeypadTouch() {
+        cancelPendingSpeedDialHold();
+        touchPointerId = -1;
+        touchPressedKey = null;
+        touchLongConsumed = false;
+    }
+
+    private void scheduleSpeedDialHold(String key) {
+        if (!"home".equals(page) || locked || confirmOpen || optionsOpen ||
+                key == null || key.length() != 1 ||
+                key.charAt(0) < '2' || key.charAt(0) > '9')
+            return;
+        final int slot = key.charAt(0) - '0';
+        final String originalKey = key;
+        final Runnable hold = new Runnable() {
+            @Override public void run() {
+                if (pendingSpeedDialHold != this || touchPointerId < 0 ||
+                        touchLongConsumed || !originalKey.equals(touchPressedKey) ||
+                        !"home".equals(page) || locked || confirmOpen || optionsOpen)
+                    return;
+                pendingSpeedDialHold = null;
+                touchLongConsumed = true; // release must NOT also enter the digit.
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                String number = speedDialNumbers.get(slot);
+                if (!speedDiallingEnabled) {
+                    showNotice("Speed dialling Off; enable under Call settings");
+                } else if (number == null || number.trim().isEmpty()) {
+                    showNotice("Speed dial " + slot + " not assigned");
+                } else {
+                    // Match the HTML's offline dial screen; a real call needs
+                    // a second explicit Call key press.
+                    dial = number;
+                    go("dial");
+                    showNotice("Speed dial " + slot + " ready; press Call");
+                }
+            }
+        };
+        pendingSpeedDialHold = hold;
+        postDelayed(hold, SPEED_DIAL_HOLD_MS);
+    }
+
+    @Override
     public boolean onTouchEvent(MotionEvent e) {
-        if (e.getAction() != MotionEvent.ACTION_UP) return true;
-        float x = (e.getX() - offX) / fitScale;
-        float y = (e.getY() - offY) / fitScale;
-        String key = hitKey(x, y);
-        if (key != null) press(key);
+        int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            cancelKeypadTouch();
+            touchPointerId = e.getPointerId(0);
+            touchStartX = (e.getX(0) - offX) / fitScale;
+            touchStartY = (e.getY(0) - offY) / fitScale;
+            touchPressedKey = hitKey(touchStartX, touchStartY);
+            scheduleSpeedDialHold(touchPressedKey);
+            return true;
+        }
+        if (action == MotionEvent.ACTION_POINTER_DOWN ||
+                action == MotionEvent.ACTION_CANCEL) {
+            cancelKeypadTouch();
+            return true;
+        }
+        if (touchPointerId < 0) return true;
+        int pointer = e.findPointerIndex(touchPointerId);
+        if (pointer < 0) {
+            cancelKeypadTouch();
+            return true;
+        }
+        float x = (e.getX(pointer) - offX) / fitScale;
+        float y = (e.getY(pointer) - offY) / fitScale;
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (Math.abs(x - touchStartX) > KEYPAD_DRAG_TOLERANCE ||
+                    Math.abs(y - touchStartY) > KEYPAD_DRAG_TOLERANCE ||
+                    !java.util.Objects.equals(hitKey(x, y), touchPressedKey))
+                cancelKeypadTouch();
+            return true;
+        }
+        if (action == MotionEvent.ACTION_UP) {
+            String key = touchPressedKey;
+            boolean consumed = touchLongConsumed;
+            boolean sameKey = java.util.Objects.equals(key, hitKey(x, y));
+            cancelKeypadTouch();
+            if (!consumed && sameKey && key != null) press(key);
+            return true;
+        }
         return true;
     }
 
