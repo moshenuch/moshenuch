@@ -1060,6 +1060,12 @@ public class C2PhoneView extends View {
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
+            if ("gotoOrganise".equals(page)) {
+                int shortcutId = goToShortcuts.visualId(idx);
+                drawFirmwareChoice(c, goToShortcuts.isEnabled(shortcutId)
+                        ? "CHECK_ON" : "CHECK_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
             if ("musicEqualiser".equals(page)) {
                 drawFirmwareChoice(c, idx == musicEngine.selectedPresetRow()
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
@@ -1918,6 +1924,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
+        if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
         if ("voiceRecorder".equals(page))
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
         if ("voiceRecordings".equals(page))
@@ -2191,6 +2198,7 @@ public class C2PhoneView extends View {
             case "dialled": return "Dialled numbers";
             case "shortcuts": return "My shortcuts";
             case "goto": return "Go to";
+            case "gotoOrganise": return "Organise shortcuts";
             case "web": return "STORE";
             default: return "GPT c2 from reborn";
         }
@@ -2376,8 +2384,19 @@ public class C2PhoneView extends View {
                 return new String[]{"Bluetooth","Connect audio acc.","Paired devices","Active devices","My phone's visibility","My phone's name"};
             case "shortcuts":
                 return new String[]{"Left selection key","Right selection key","Navigation key","Home screen key"};
-            case "goto":
-                return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
+            case "goto": {
+                ArrayList<Integer> visible = goToShortcuts.enabledIds();
+                String[] result = new String[visible.size()];
+                for (int i = 0; i < visible.size(); i++)
+                    result[i] = NativeGoToShortcuts.NAMES[visible.get(i)];
+                return result;
+            }
+            case "gotoOrganise": {
+                String[] result = new String[NativeGoToShortcuts.COUNT];
+                for (int i = 0; i < result.length; i++)
+                    result[i] = NativeGoToShortcuts.NAMES[goToShortcuts.visualId(i)];
+                return result;
+            }
             case "gallery":
                 return new String[]{"Memory card","Images","Video clips","Music files","Themes","Graphics","Tones","Recordings","Received files"};
             case "voiceRecordings": {
@@ -2996,35 +3015,14 @@ public class C2PhoneView extends View {
         }
 
         if ("goto".equals(page)) {
-            switch (sel) {
-                case 0:
-                    locked = true;
-                    unlockStep = 0;
-                    history.clear();
-                    page = "home";
-                    sel = 0;
-                    showNotice("Keypad locked");
-                    break;
-                case 1: go("profiles"); break;
-                case 2: go("alarm"); break;
-                case 3:
-                    detailTitle = "Camera";
-                    detailText = "Camera";
-                    go("itemDetail");
-                    break;
-                case 4:
-                    detailTitle = "Video recorder";
-                    detailText = "Video recorder";
-                    go("itemDetail");
-                    break;
-                case 5: go("calculator"); break;
-                case 6:
-                    browserUrl = "https://www.nokia.com/";
-                    go("browser");
-                    break;
-                case 7: go("music"); break;
-                case 8: go("conversations"); break;
-            }
+            // Selection is a VISIBLE position. Resolve to the stable shortcut
+            // ID before performing an action, so reordered items cannot
+            // accidentally launch the wrong feature.
+            openGoToShortcut(goToShortcuts.visibleId(sel));
+            return;
+        }
+        if ("gotoOrganise".equals(page)) {
+            toggleGoToOrganiseSelection();
             return;
         }
 
@@ -4306,6 +4304,51 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    private void openGoToShortcut(int shortcutId) {
+        switch (shortcutId) {
+            case 0:
+                locked = true;
+                unlockStep = 0;
+                history.clear();
+                page = "home";
+                sel = 0;
+                showNotice("Keypad locked");
+                break;
+            case 1: go("profiles"); break;
+            case 2: go("alarm"); break;
+            case 3: startCameraCapture(false); break;
+            case 4: startCameraCapture(true); break;
+            case 5: go("calculator"); break;
+            case 6:
+                browserUrl = "https://www.nokia.com/";
+                go("browser");
+                break;
+            case 7: go("music"); break;
+            case 8: go("conversations"); break;
+            default: showNotice("No shortcut selected");
+        }
+    }
+
+    private void toggleGoToOrganiseSelection() {
+        int id = goToShortcuts.visualId(sel);
+        boolean wasVisible = goToShortcuts.isEnabled(id);
+        if (goToShortcuts.toggleAt(sel)) {
+            saveGoToShortcuts();
+            showNotice(wasVisible ? "Shortcut hidden" : "Shortcut shown");
+        } else if (wasVisible && goToShortcuts.enabledCount() == 1) {
+            showNotice("Keep at least one shortcut");
+        } else showNotice("Shortcut unavailable");
+    }
+
+    private void moveGoToShortcut(int direction) {
+        int from = sel;
+        if (goToShortcuts.move(from, direction)) {
+            sel = from + direction;
+            saveGoToShortcuts();
+            showNotice("Shortcut moved");
+        } else showNotice("Already at end of list");
+    }
+
     private void openOptionsForPage() {
         if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
@@ -4429,6 +4472,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","Home","Bookmarks","Go to address","Downloads","Settings"};
         else if ("goto".equals(page))
             optionItems = new String[]{"Select","Organise","Help"};
+        else if ("gotoOrganise".equals(page))
+            optionItems = new String[]{"Toggle","Move up","Move down","Restore defaults","Done"};
         else if ("dial".equals(page))
             optionItems = new String[]{"Call","Save","Send message","Add to contact"};
         else if ("call".equals(page))
@@ -4688,8 +4733,19 @@ public class C2PhoneView extends View {
             if ("Select".equals(choice)) openSelected();
         } else if ("goto".equals(page)) {
             if ("Select".equals(choice)) openSelected();
-            else if ("Organise".equals(choice)) showNotice("Organise shortcuts");
-            else showNotice("Help");
+            else if ("Organise".equals(choice)) go("gotoOrganise");
+            else showNotice("Select Organise to show, hide and move shortcuts");
+        } else if ("gotoOrganise".equals(page)) {
+            if ("Toggle".equals(choice)) toggleGoToOrganiseSelection();
+            else if ("Move up".equals(choice)) moveGoToShortcut(-1);
+            else if ("Move down".equals(choice)) moveGoToShortcut(1);
+            else if ("Restore defaults".equals(choice))
+                requestConfirm("restoreGoTo", "Restore the original Go to shortcuts and their order?");
+            else if ("Done".equals(choice)) {
+                back();
+                if ("goto".equals(page))
+                    sel = Math.min(sel, goToShortcuts.enabledCount() - 1);
+            }
         } else if ("messaging".equals(page) || "drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page)) {
             if (("sent".equals(page) || "drafts".equals(page)) && "Open".equals(choice)) openSelected();
             else if ("savedmessages".equals(page) && "Use template".equals(choice))
@@ -5358,7 +5414,12 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("deleteContactGroup".equals(action)) {
+        if ("restoreGoTo".equals(action)) {
+            goToShortcuts.restoreDefaults();
+            saveGoToShortcuts();
+            sel = 0;
+            showNotice("Go to shortcuts restored");
+        } else if ("deleteContactGroup".equals(action)) {
             String id = groupConfirmId;
             groupConfirmId = "";
             if (contactGroups.delete(id)) {
