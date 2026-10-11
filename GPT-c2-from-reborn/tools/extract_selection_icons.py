@@ -7,8 +7,9 @@ from urllib.request import urlopen
 
 COMMIT = "a8d1dab8273ff4dbdcb63cbc1ec1cac3354e10b8"
 URL = "https://raw.githubusercontent.com/mbaiforinsticnt-dev/c2-reborn/" + COMMIT + "/icon-pool/1-pool.json"
-TARGETS = {"p0456": "CHECK_OFF", "p0457": "CHECK_ON",
-           "p0460": "RADIO_OFF", "p0461": "RADIO_ON"}
+# Firmware catalogue calls these p0456 etc.; icon-pool keys omit the p prefix.
+TARGETS = {"0456": "CHECK_OFF", "0457": "CHECK_ON",
+           "0460": "RADIO_OFF", "0461": "RADIO_ON"}
 OUT = Path(__file__).resolve().parents[1] / "app/src/main/assets/nokia_fw"
 OUT.mkdir(parents=True, exist_ok=True)
 with urlopen(URL, timeout=35) as response:
