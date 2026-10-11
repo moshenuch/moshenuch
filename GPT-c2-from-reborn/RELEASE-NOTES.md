@@ -1,4 +1,12 @@
-GPT c2 from reborn — APK v1.41.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.42.0 / HTML reference v6.343
+
+v1.42.0 — Contacts-first reliability
+
+- Device Contacts creation now uses one Android ContactsProvider applyBatch transaction for raw contact, structured name and mobile number. The name and number refer to the newly inserted raw contact via back-reference, rather than three independent inserts.
+- Reject empty or whitespace-only contact names and phone numbers before touching Android contacts.
+- An exception during the batch returns failure instead of leaving a successfully inserted raw contact without the remaining rows (provider transactional semantics).
+- Contacts, SMS and Phone are now the priority for subsequent functional parity and edge-case checks. Non-core UI polish is deferred.
+- Android/emulator acceptance testing remains necessary; versioning and source changes do not themselves establish on-device correctness.
 
 Native Android Java/Canvas application — NOT a WebView.
 
