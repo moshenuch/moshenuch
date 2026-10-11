@@ -4,6 +4,16 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## User v1.41.0 Contacts editor and search audit (on emulator)
+
+**Verified:** contact Save workflow and success notice; case-insensitive alphabetical sort; 12-item Names Options menu. Do not regress these.
+
+**Observed defects:** New contact title clipped by form panel overlapping Nokia status/title area; name entry starts lowercase rather than Abc; search characters show inconsistent capitalisation; consecutive search space presses do not visibly advance.
+
+**Source correction committed in 1.42.0 development:** contact editor panels moved from y=28/92 to y=48/112 to clear status/title baseline y=37; new/edit contact begins in Abc, with initial letter after empty field or space capitalised but later letters lowercase (ABC, abc, 123 still selectable); repeated 0 in alphabetic contact search now inserts independent spaces instead of replacing the previous space in a multi-tap cycle. **Needs emulator verification**, especially capitalisation across repeated key presses, spacing display and search matching.
+
+**Further Contacts, SMS and Phone audit findings pending.**
+
 ## User v1.41.0 screen audit — Contacts and visual parity
 
 - Menu 3×3 icons: existing icon set matches reference reasonably well (user verified). Gaps: plain sans labels rather than Nokia condensed type; black vignette rather than grey swirl wallpaper; light selection outline rather than dark rounded tile.
