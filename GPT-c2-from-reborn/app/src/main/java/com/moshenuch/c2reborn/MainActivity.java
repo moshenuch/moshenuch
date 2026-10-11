@@ -212,6 +212,9 @@ public class MainActivity extends Activity {
             phoneView.onPermissionsChanged();
             observeSmsWhileVisible();
         }
+        if (requestCode == REQ_CAMERA_PREVIEW && results.length > 0 &&
+                results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
+                phoneView.isInCameraViewfinder()) showNativeCameraPreview(true);
         if (requestCode == REQ_MICROPHONE && phoneView != null)
             phoneView.onMicrophonePermissionResult(results.length > 0 &&
                     results[0] == PackageManager.PERMISSION_GRANTED);
@@ -368,6 +371,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (cameraPreview != null) cameraPreview.stop();
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
         super.onPause();
@@ -389,6 +393,8 @@ public class MainActivity extends Activity {
         if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
         if (phoneView != null) phoneView.onPermissionsChanged();
         observeSmsWhileVisible();
+        if (phoneView != null && phoneView.isInCameraViewfinder())
+            showNativeCameraPreview(true);
     }
 
     @Override protected void onNewIntent(Intent intent) {
