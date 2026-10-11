@@ -2887,7 +2887,9 @@ public class C2PhoneView extends View {
             else if (sel == 7) optionItems = new String[]{"New message","New e-mail","Add mailbox","Message log","IM messages","Memory status"};
             else optionItems = new String[]{"New message","Message log","Add mailbox","IM messages","Memory status"};
         }
-        else if ("drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page))
+        else if ("sent".equals(page))
+            optionItems = new String[]{"Open","New message","Inbox view","Folder details","Message log","Memory status"};
+        else if ("drafts".equals(page) || "outbox".equals(page) || "savedmessages".equals(page))
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
         else if ("inbox".equals(page) || "messageRead".equals(page))
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
@@ -2986,7 +2988,8 @@ public class C2PhoneView extends View {
             else if ("Organise".equals(choice)) showNotice("Organise shortcuts");
             else showNotice("Help");
         } else if ("messaging".equals(page) || "drafts".equals(page) || "outbox".equals(page) || "sent".equals(page) || "savedmessages".equals(page)) {
-            if ("New message".equals(choice)) {
+            if ("sent".equals(page) && "Open".equals(choice)) openSelected();
+            else if ("New message".equals(choice)) {
                 recipient = "";
                 messageBody = "";
                 composeFocus = 0;
@@ -3053,6 +3056,12 @@ public class C2PhoneView extends View {
                 showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
             } else showNotice(choice);
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
+            // An Inbox Options action must refer to the highlighted row, not a
+            // message previously opened in another conversation or folder.
+            if ("inbox".equals(page) && sel >= 0 && sel < smsInbox.size()) {
+                inboxIndex = sel;
+                activeMessageId = smsInbox.get(sel).id;
+            }
             if ("Reply".equals(choice) || "Reply as".equals(choice)) {
                 recipient = activeMessageAddress();
                 messageBody = "";

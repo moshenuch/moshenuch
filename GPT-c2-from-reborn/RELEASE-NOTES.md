@@ -1,8 +1,9 @@
-GPT c2 from reborn — APK v1.7.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.7.1 / HTML reference v6.342
 
 Native Android Java, not a WebView. Reference HTML v6.342 is a version provenance label, not a full parity guarantee.
 
 Corrections after the deep code audit:
+- Inbox Options now binds the highlighted message before Reply/Delete/Call; Sent Options includes a functional Open action.
 - SMS Reply now addresses the actual sender number rather than the sender's contact display name.
 - Sent items are linked to their real Android SMS IDs and can be opened.
 - Contact edits target the exact selected Phone Data._ID and raw contact (atomic provider batch) rather than overwriting all numbers.
