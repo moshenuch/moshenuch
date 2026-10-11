@@ -4,6 +4,19 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## Current mandatory scope: Contacts, SMS and Phone — function AND graphics
+
+Prioritize Contacts, Messaging/SMS and Phone over all unrelated features. **Visual parity is an acceptance criterion, not deferred polish.** Match the read-only HTML v6.343 and Nokia C2-01 reference in both behavior and rendering.
+
+For **each** of the three core feature areas, verify:
+- Real Android provider integration and safe create/read/update/delete operations (where supported), permissions and failures, realistic data and persistence.
+- Correct screen transitions, softkeys, Options actions, selection/mark state, prompts and edge cases.
+- Exact/closest-possible Nokia icon artwork and every state variation (especially SMS unread/closed envelope, read/open envelope, sent and status bar icons, and contact/phone call-type icons).
+- Fonts, text weight, glyphs, truncation, baselines, line height, colours, backgrounds, header/footer/softkey positioning, margins and list row dimensions.
+- 240x320 Nokia composition with screenshot-side comparisons to the HTML rendered at matching viewport, including selected/empty/long-name/multinumber/unread/mark/error states.
+
+Do not treat passing Java smoke tests or successful APK compilation as evidence of graphic parity. Require screenshot-based emulator comparisons and documented deviations. Avoid unrelated app/Settings/Calculator polish until the core three are dependable and visually faithful.
+
 ## Confirmed implementation baseline
 - Native Java/Canvas, not WebView.
 - v1.41.0: measured, two-line bounded Nokia notices; Calculator and Loan title-safe panel start.
