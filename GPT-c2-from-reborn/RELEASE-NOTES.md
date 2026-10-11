@@ -1,38 +1,40 @@
-GPT c2 from reborn — APK v1.18.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.19.0 / HTML reference v6.342
 
-Native Android Java/Canvas application. NOT a WebView or fully verified HTML clone.
+Native Java/Canvas Android recreation, NOT a WebView. Still not a complete HTML port.
 
-Camera / Video Camera audit remediation:
-- Media > Camera opens an installed Android camera using the standard native
-  ACTION_IMAGE_CAPTURE intent. Media > Video camera uses ACTION_VIDEO_CAPTURE.
-- The APK grants each camera app access to only a temporary capture content URI;
-  it does NOT request CAMERA permission or broad device storage permissions.
-- A non-exported ContentProvider enforces path allowlisting and read-only
-  access to permanent app-private media, with per-URI grants for capture.
-- After an explicit successful capture, photo/video bytes are copied into
-  the app's private media library and indexed automatically in Gallery >
-  Images or Gallery > Video clips. The captured entry is highlighted.
-- Image capture prefers a full-size EXTRA_OUTPUT photo. Camera apps that
-  return only a small bitmap instead may produce thumbnail-resolution
-  photos; the result depends on the installed external camera app.
-- Video capture requests a 2-minute duration limit, but support depends
-  on the external camera. Video files are capped at 150 MiB on import.
-- A cancelled capture discards the temporary output and does not add it to
-  Gallery. Invalid/oversized files are not retained. Camera failures are
-  displayed as explicit notices rather than fake success.
-- Private gallery files can be previewed or opened from existing v1.16
-  Gallery routes, with app-only removal. They are not uploaded or copied
-  into public Photos/MediaStore by the APK.
-- Pending capture URI is preserved across Activity state restoration.
+Media Player and Equaliser audit and implementation:
+- Removed synthetic Nokia Tune / Demo track / Acoustic sample / Voice recording
+  audio entries and the fake four-minute progress bar that advanced without sound.
+- Media > Media player now operates on actual Android audio files explicitly
+  selected using the Storage Access Framework (ACTION_OPEN_DOCUMENT, audio/*).
+  No broad READ_MEDIA_AUDIO or storage permission is requested.
+- The audio library persists selected titles and content URIs across launches,
+  using Android's per-document persistent read grants when available.
+- Actual audio is played via native Android MediaPlayer. Nokia center Play/Pause
+  and Left/Right previous/next switch real tracks and show actual playback
+  position/duration. Pauses automatically if the app goes to the background.
+- Music Options > Add audio files and Music library are executable; choosing
+  a library item plays it. Removing one requires confirmation and only
+  removes the app-local library reference, never the original audio file.
+- Equaliser controls now use Android's real audiofx.Equalizer attached to the
+  selected MediaPlayer audio session. Presets are queried dynamically from the
+  device's audio engine, not invented. Nokia source radio icons indicate
+  preset selections, and Off disables the equaliser effect.
+- If no audio is loaded, the Equaliser shows "Open an audio file first"; if
+  audio effects are unsupported, it states "Equaliser unavailable".
+- Current track details show the actual user-selected file name and player
+  state, not a fictional installed media library.
+- Playback/audio resources are released when the Activity is destroyed.
 
-Previously released features remain, including native Voice Recorder v1.17.0,
-Nokia Sans fonts and bitmap icons, SMS and call log actions.
+Earlier v1.18 Camera/Video Camera capture, v1.17 Voice Recorder, v1.16
+Gallery functions and original Nokia bitmap/font assets remain included.
 
-KNOWN LIMITATIONS:
-- Camera capture is handled by an external Android camera activity, not a
-  pixel-exact Nokia C2-01 viewfinder or embedded native Camera2 renderer.
-- There is no continuous internal video preview or Nokia shutter animation.
-- Some Android camera apps may ignore EXTRA_OUTPUT or fail to support the
-  private content URI. The APK reports these cases without claiming success.
-- Source HTML v6.342 visual parity, camera device testing, manual privacy/
-  URI-grant validation, other Media controls and nested menu accuracy remain.
+REMAINING LIMITATIONS:
+- Equaliser options and Music Player UI are genuine Android implementations,
+  not pixel-exact equivalents of the original Nokia C2-01 HTML simulation.
+- Some Android devices/players refuse audio sessions or equaliser effects;
+  actions display errors rather than promising unsupported processing.
+- No background service/media notification, streaming catalog, true shuffle,
+  repeat, or native S40A audio visualiser.
+- Live Android playback and equaliser behaviour have not been verified on a
+  physical test device; GitHub compilation is a syntax and build check only.

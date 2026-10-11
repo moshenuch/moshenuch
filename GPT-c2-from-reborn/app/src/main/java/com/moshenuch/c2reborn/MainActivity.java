@@ -21,6 +21,7 @@ public class MainActivity extends Activity {
     private static final int REQ_MICROPHONE = 303;
     private static final int REQ_CAPTURE_IMAGE = 304;
     private static final int REQ_CAPTURE_VIDEO = 305;
+    private static final int REQ_PICK_AUDIO = 306;
     private Uri pendingCameraOutput;
     private boolean pendingCameraVideo;
     private C2PhoneView phoneView;
@@ -124,6 +125,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Scoped explicit selection. No READ_MEDIA_AUDIO or broad storage permission. */
+    public void requestAudioFiles() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("audio/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_PICK_AUDIO);
+        } catch (Exception ex) {
+            if (phoneView != null) phoneView.onAudioPickerUnavailable();
+        }
+    }
+
     /** Delegate playback to an installed Android video player. No WebView used. */
     public boolean viewGalleryVideo(String uriString) {
         try {
@@ -162,7 +178,8 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        if (requestCode != REQ_PICK_IMAGES && requestCode != REQ_PICK_VIDEOS) return;
+        if (requestCode != REQ_PICK_IMAGES && requestCode != REQ_PICK_VIDEOS &&
+                requestCode != REQ_PICK_AUDIO) return;
         if (resultCode != RESULT_OK || data == null || phoneView == null) return;
         ArrayList<Uri> chosen = new ArrayList<>();
         ClipData clips = data.getClipData();
@@ -178,7 +195,8 @@ public class MainActivity extends Activity {
                         Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (SecurityException ignored) { }
         }
-        phoneView.onGalleryPicked(requestCode == REQ_PICK_VIDEOS, chosen);
+        if (requestCode == REQ_PICK_AUDIO) phoneView.onAudioPicked(chosen);
+        else phoneView.onGalleryPicked(requestCode == REQ_PICK_VIDEOS, chosen);
     }
 
     @Override

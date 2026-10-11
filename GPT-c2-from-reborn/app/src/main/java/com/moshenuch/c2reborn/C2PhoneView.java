@@ -53,6 +53,7 @@ public class C2PhoneView extends View {
     private final AndroidBackend backend;
     private final NativeGalleryStore galleryStore;
     private final NativeVoiceRecorder voiceRecorder;
+    private final NativeMusicPlayer musicEngine;
     private Bitmap galleryPreviewBitmap;
     private String galleryPreviewTitle = "";
     private String galleryPreviewUri = "";
@@ -140,10 +141,8 @@ public class C2PhoneView extends View {
     private String loanMonths = "36";
     private int loanField = 0;
 
-    private boolean musicPlaying = false;
-    private int musicTrack = 0;
-    private long musicStarted = 0L;
-    private long musicElapsed = 0L;
+    // Audio timing and state are read from the actual native MediaPlayer.
+    // Former synthetic music-track and timer state has been removed.
 
     private String browserUrl = "http://www.nokia.com/";
     private String detailTitle = "";
@@ -166,10 +165,6 @@ public class C2PhoneView extends View {
             "Log", "Settings", "STORE"
     };
     private final int[] mainMenuIconIndex = {1,6,5,4,0,7,2,3,8};
-
-    private final String[] tracks = {
-            "Nokia Tune", "Demo track", "Acoustic sample", "Voice recording"
-    };
 
     private final String[] t9Words = {
             "a","am","an","and","are","as","at","be","call","can","come","day","do","for",
@@ -200,6 +195,7 @@ public class C2PhoneView extends View {
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
         galleryStore = new NativeGalleryStore(context, prefs);
         voiceRecorder = new NativeVoiceRecorder(context);
+        musicEngine = new NativeMusicPlayer(context, prefs);
         loadState();
         refreshDeviceData();
     }
@@ -212,11 +208,13 @@ public class C2PhoneView extends View {
     public void onAppPaused() {
         if (voiceRecorder.isRecording()) finishVoiceRecording();
         voiceRecorder.stopPlayback();
+        musicEngine.pause();
         invalidate();
     }
 
     public void onAppDestroyed() {
         voiceRecorder.release();
+        musicEngine.release();
     }
 
     private void beginVoiceRecording() {
@@ -764,6 +762,11 @@ public class C2PhoneView extends View {
             if ("conversation".equals(page)) textX = 36;
             if ("gallerySort".equals(page)) {
                 drawFirmwareChoice(c, idx == galleryStore.sortMode(gallerySortVideos)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
+            if ("musicEqualiser".equals(page)) {
+                drawFirmwareChoice(c, idx == musicEngine.selectedPresetRow()
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
@@ -1369,28 +1372,33 @@ public class C2PhoneView extends View {
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(42);
-        c.drawText("♪", 120, 92, p);
+        c.drawText("♪", 120, 90, p);
         p.setTypeface(fontBold);
-        p.setTextSize(16);
-        c.drawText(tracks[musicTrack], 120, 128, p);
+        p.setTextSize(15);
+        String name = musicEngine.title();
+        if (name.length() > 25) name = name.substring(0, 24) + "…";
+        c.drawText(name, 120, 128, p);
         p.setTypeface(fontRegular);
         p.setTextSize(11);
-        c.drawText((musicTrack + 1) + "/" + tracks.length, 120, 148, p);
-
-        long elapsed = musicElapsed;
-        if (musicPlaying) elapsed += SystemClock.elapsedRealtime() - musicStarted;
-        long sec = (elapsed / 1000) % 240;
+        c.drawText(musicEngine.index() < 0 ? musicEngine.tracks.size() + " available"
+                : (musicEngine.index() + 1) + "/" + musicEngine.tracks.size(), 120, 148, p);
+        int elapsed = musicEngine.positionMs() / 1000;
+        int duration = musicEngine.durationMs() / 1000;
         p.setTextSize(13);
-        c.drawText(formatSeconds(sec) + " / 04:00", 120, 184, p);
-
+        c.drawText(formatSeconds(elapsed) + " / " + formatSeconds(duration), 120, 184, p);
         p.setColor(Color.rgb(185,190,190));
         c.drawRect(30, 200, 210, 205, p);
         p.setColor(accent());
-        c.drawRect(30, 200, 30 + 180 * sec / 240f, 205, p);
-
+        c.drawRect(30, 200, 30 + (duration <= 0 ? 0 : 180 * Math.min(1f,
+                (float) elapsed / duration)), 205, p);
         p.setColor(themeText());
         p.setTextSize(12);
-        c.drawText("◀     " + (musicPlaying ? "Pause" : "Play") + "     ▶", 120, 240, p);
+        c.drawText("◀    " + (musicEngine.isPlaying() ? "Pause" : "Play") + "    ▶", 120, 240, p);
+        if (musicEngine.tracks.isEmpty()) {
+            p.setTextSize(11);
+            c.drawText("Options > Add audio files", 120, 265, p);
+        }
+        if (musicEngine.isPlaying()) postInvalidateDelayed(500);
     }
 
     private void drawBrowser(Canvas c) {
@@ -1499,7 +1507,9 @@ public class C2PhoneView extends View {
         if ("loan".equals(page)) return new String[]{"Calculate", "", "Back"};
         if ("stopwatch".equals(page)) return new String[]{"Split", stopwatchRunning ? "Stop" : "Start", "Back"};
         if ("countdown".equals(page)) return new String[]{"Options", "Start", "Back"};
-        if ("music".equals(page)) return new String[]{"Options", musicPlaying ? "Pause" : "Play", "Back"};
+        if ("music".equals(page)) return new String[]{"Options", musicEngine.isPlaying() ? "Pause" : "Play", "Back"};
+        if ("musicLibrary".equals(page)) return new String[]{"Options", "Play", "Back"};
+        if ("musicEqualiser".equals(page)) return new String[]{"Options", "Select", "Back"};
         if ("messageRead".equals(page)) {
             AndroidBackend.DeviceSms selected = smsById(activeMessageId);
             return new String[]{"Options", selected != null &&
@@ -1714,6 +1724,8 @@ public class C2PhoneView extends View {
             case "connectivity": return "Connectivity";
             case "bluetooth": return "Bluetooth";
             case "gallery": return "Gallery";
+            case "musicLibrary": return "Music library";
+            case "musicEqualiser": return "Equaliser";
             case "voiceRecorder": return "Voice recorder";
             case "voiceRecordings": return "Recordings";
             case "galleryImages": return "Images";
@@ -1890,6 +1902,14 @@ public class C2PhoneView extends View {
             }
             case "media":
                 return new String[]{"Camera","Video camera","Media player","Radio","Voice recorder","Equaliser"};
+            case "musicLibrary": {
+                if (musicEngine.tracks.isEmpty()) return new String[]{"(Add audio files)"};
+                String[] names = new String[musicEngine.tracks.size()];
+                for (int i = 0; i < names.length; i++) names[i] = musicEngine.tracks.get(i).name;
+                return names;
+            }
+            case "musicEqualiser":
+                return musicEngine.presets();
             case "organiser":
                 return new String[]{"Alarm clock","Calendar","Maps","To-do list","Notes","Calculator","Countd. timer","Stopwatch","Dictionary"};
             case "maps":
@@ -2191,6 +2211,22 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("musicLibrary".equals(page)) {
+            if (musicEngine.tracks.isEmpty()) pickAudioFiles();
+            else {
+                if (musicEngine.open(sel, true)) go("music");
+                else showNotice(musicEngine.error());
+            }
+            return;
+        }
+        if ("musicEqualiser".equals(page)) {
+            if (musicEngine.choosePreset(sel)) {
+                showNotice("Equaliser setting applied");
+                back();
+            } else showNotice(musicEngine.error());
+            return;
+        }
+
         if ("gallerySort".equals(page)) {
             galleryStore.sort(gallerySortVideos, sel);
             back();
@@ -2205,6 +2241,7 @@ public class C2PhoneView extends View {
 
         if ("media".equals(page)) {
             if (sel == 2) go("music");
+            else if (sel == 5) openMusicEqualiser();
             else if (sel == 4) go("voiceRecorder");
             else if (sel == 0 || sel == 1) {
                 startCameraCapture(sel == 1);
@@ -3201,21 +3238,42 @@ public class C2PhoneView extends View {
     }
 
     private void toggleMusic() {
-        if (musicPlaying) {
-            musicElapsed += SystemClock.elapsedRealtime() - musicStarted;
-            musicPlaying = false;
-        } else {
-            musicStarted = SystemClock.elapsedRealtime();
-            musicPlaying = true;
-        }
+        if (!musicEngine.toggle()) showNotice(musicEngine.error());
+        invalidate();
     }
 
     private void changeTrack(int delta) {
-        if (musicPlaying) {
-            musicElapsed = 0;
-            musicStarted = SystemClock.elapsedRealtime();
-        } else musicElapsed = 0;
-        musicTrack = (musicTrack + delta + tracks.length) % tracks.length;
+        if (!musicEngine.skip(delta)) showNotice(musicEngine.error());
+        invalidate();
+    }
+
+    private void pickAudioFiles() {
+        if (getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).requestAudioFiles();
+        else showNotice("Android audio file picker unavailable");
+    }
+
+    public void onAudioPickerUnavailable() {
+        showNotice("No Android audio file picker available");
+    }
+
+    public void onAudioPicked(java.util.List<Uri> chosen) {
+        int added = musicEngine.add(chosen);
+        if (!"musicLibrary".equals(page)) go("musicLibrary");
+        sel = Math.max(0, musicEngine.tracks.size() - added);
+        showNotice(added > 0 ? added + " audio file(s) added" : "No new audio selected");
+        invalidate();
+    }
+
+    private void openMusicEqualiser() {
+        if (musicEngine.index() < 0) {
+            showNotice("Open an audio file first");
+        } else if (!musicEngine.hasEqualizer()) {
+            showNotice("Equaliser unavailable on this device");
+        } else {
+            go("musicEqualiser");
+            sel = musicEngine.selectedPresetRow();
+        }
     }
 
     private void showGalleryDetails(boolean selectedOnly, boolean video) {
@@ -3461,7 +3519,11 @@ public class C2PhoneView extends View {
         else if ("call".equals(page))
             optionItems = new String[]{"Loudspeaker","Mute","Hold","Contacts","Main menu","End call"};
         else if ("music".equals(page))
-            optionItems = new String[]{"Music library","Now playing","Shuffle","Repeat","Equaliser","Settings"};
+            optionItems = new String[]{"Music library","Add audio files","Equaliser","Track details"};
+        else if ("musicLibrary".equals(page))
+            optionItems = new String[]{"Play","Add audio files","Remove from library","Track details"};
+        else if ("musicEqualiser".equals(page))
+            optionItems = new String[]{"Select"};
         else if ("themes".equals(page))
             optionItems = new String[]{"Open","Theme downloads","Type of view","Sort","Search","Memory status"};
         else if ("connectivity".equals(page))
@@ -3932,12 +3994,29 @@ public class C2PhoneView extends View {
                 page = "home";
                 sel = 0;
             } else showNotice(choice);
-        } else if ("music".equals(page)) {
-            if ("Now playing".equals(choice)) showNotice(tracks[musicTrack]);
-            else if ("Equaliser".equals(choice)) showNotice("Normal");
-            else if ("Shuffle".equals(choice) || "Repeat".equals(choice)) showNotice(choice);
-            else if ("Music library".equals(choice)) showNotice("Music library");
-            else showNotice(choice);
+        } else if ("music".equals(page) || "musicLibrary".equals(page) ||
+                   "musicEqualiser".equals(page)) {
+            if ("Music library".equals(choice)) go("musicLibrary");
+            else if ("Add audio files".equals(choice)) pickAudioFiles();
+            else if ("Equaliser".equals(choice)) openMusicEqualiser();
+            else if ("Play".equals(choice) || "Select".equals(choice)) openSelected();
+            else if ("Remove from library".equals(choice)) {
+                if (musicEngine.at(sel) != null)
+                    requestConfirm("removeMusic", "Remove this track from the app? Original audio unchanged.");
+                else showNotice("No track selected");
+            } else if ("Track details".equals(choice)) {
+                NativeMusicPlayer.Track item = "musicLibrary".equals(page)
+                        ? musicEngine.at(sel) : musicEngine.at(musicEngine.index());
+                if (item == null) showNotice("No audio loaded");
+                else {
+                    detailTitle = "Audio file details";
+                    detailText = "Name: " + item.name +
+                            "\nSource: user-selected Android document" +
+                            "\nPlayback: " + (musicEngine.isPlaying() ? "Playing" : "Stopped") +
+                            "\nOriginal file unchanged";
+                    go("itemDetail");
+                }
+            } else showNotice("Not implemented: " + choice);
         } else if ("bluetooth".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("New search".equals(choice)) showNotice(bluetooth ? "No devices found" : "Switch Bluetooth on first");
@@ -3975,7 +4054,12 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("deleteVoiceNote".equals(action)) {
+        if ("removeMusic".equals(action)) {
+            if (musicEngine.remove(sel)) {
+                sel = Math.min(sel, Math.max(0, musicEngine.tracks.size() - 1));
+                showNotice("Removed from library; original kept");
+            } else showNotice("Track not found");
+        } else if ("deleteVoiceNote".equals(action)) {
             if (voiceRecorder.delete(sel)) {
                 sel = Math.max(0, Math.min(sel, voiceRecorder.entries().size() - 1));
                 showNotice("Recording deleted");
