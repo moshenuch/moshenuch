@@ -4,6 +4,15 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## User v1.41.0 screen audit — Contacts and visual parity
+
+- Menu 3×3 icons: existing icon set matches reference reasonably well (user verified). Gaps: plain sans labels rather than Nokia condensed type; black vignette rather than grey swirl wallpaper; light selection outline rather than dark rounded tile.
+- Names: reference shows name-only contact rows plus Business, Family, Friends group rows with group icons and center softkey **Details**; APK had name+number and **Select**. Source corrected name-only rows and Details center softkey; **group rows in Names are still pending** (existing Groups screen is separate).
+- Names Options overlay: source corrected to hide the right-hand '1-12' item count on that page.
+- Contact deletion: user observed confirmed deletion left contact visible with no toast. Source now refreshes after either provider result, checks that deleted contact ID is absent, clamps selection, and displays explicit success/failure notice. **Requires device retest**; external sync/restoration can make a contact reappear, and current backend uses provider raw-contact deletion.
+- Log > All calls '(empty)' accepted by user.
+- Unrelated pending tests: Mark subset, templates/Saved, Organise.
+
 ## User emulator audit: APK v1.40.0 (historical, not v1.41.0 confirmation)
 
 **Verified on screen:** shortcut assignment/rejection notices readable; Settings > Phone stub has no overlap; My shortcuts Restore defaults confirmation offers Yes and resets Left to Go to.
