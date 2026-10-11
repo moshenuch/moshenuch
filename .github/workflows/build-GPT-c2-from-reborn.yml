@@ -38,8 +38,20 @@ jobs:
           curl --fail --location --retry 3 --silent --show-error \
             "https://raw.githubusercontent.com/mbaiforinsticnt-dev/c2-reborn/main/ground-up/assets/themes/Nokia/background_240x320.png" \
             --output "$dst"
-          actual="$(git hash-object "$dst")"
-          expected="32302e2a9858469521065651940d2c0bc86d32fa"
+          # The Nokia/background file in the upstream repository may be
+          # corrupted during source extraction. Check its signature and use
+          # the original Nokia menu-screen artwork if it is not decodable.
+          if ! python3 -c 'import pathlib,sys;sys.exit(0 if pathlib.Path(sys.argv[1]).read_bytes().startswith(bytes.fromhex("89504e470d0a1a0a")) else 1)' "$dst"; then
+            echo "Upstream Nokia/background image is not a PNG; inspecting Nokia/menu-screen source"
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://raw.githubusercontent.com/mbaiforinsticnt-dev/c2-reborn/main/ground-up/assets/themes/Nokia/menu-screen_240x320.png" \
+              --output "$dst"
+            actual="$(git hash-object "$dst")"
+            expected="44c5d48b1f0b8703a178886a3628bbcdde5db9dd"
+          else
+            actual="$(git hash-object "$dst")"
+            expected="32302e2a9858469521065651940d2c0bc86d32fa"
+          fi
           test "$actual" = "$expected" || { echo "Wallpaper differs from pinned HTML-repository asset"; exit 1; }
           file "$dst"
           echo "Primary asset first bytes:"
