@@ -2131,7 +2131,10 @@ public class C2PhoneView extends View {
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
         if ("voiceRecordings".equals(page))
             return new String[]{"Options", voiceRecorder.isPlaying() ? "Stop" : "Play", "Back"};
-        if ("contactsNames".equals(page)) return new String[]{"Options", "Details", "Back"};
+        if ("contactsNames".equals(page) ||
+                "calllog".equals(page) || "missed".equals(page) ||
+                "received".equals(page) || "dialled".equals(page))
+            return new String[]{"Options", "Details", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
@@ -2176,8 +2179,8 @@ public class C2PhoneView extends View {
         c.drawText("Options", 6, 21, p);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(13);
-        if (!"contactsNames".equals(page))
-            c.drawText((optionSel + 1) + "-" + optionItems.length, 233, 20, p);
+        // Nokia reference popup header contains only "Options".
+        // Item position/count is not displayed in this overlay.
 
         int visible = 6;
         int start = Math.max(0, Math.min(optionSel - (visible - 1), Math.max(0, optionItems.length - visible)));
