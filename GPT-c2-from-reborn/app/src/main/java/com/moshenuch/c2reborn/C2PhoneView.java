@@ -82,6 +82,8 @@ public class C2PhoneView extends View {
     private final ArrayList<String> whitelistNumbers = new ArrayList<>();
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    // Android contact IDs map to all their numbers; one phonebook row per ID.
+    private final HashMap<Long, ArrayList<String>> contactNumbersById = new HashMap<>();
     private final NativeContactGroups contactGroups;
     private String activeContactGroupId = "";
     private String pendingGroupMemberNumber = "";
@@ -315,14 +317,23 @@ public class C2PhoneView extends View {
 
     private void refreshContactsFromPhone() {
         deviceContactsActive = backend.has(Manifest.permission.READ_CONTACTS);
-        if (!deviceContactsActive) return;
+        contactNumbersById.clear();
+        if (!deviceContactsActive) {
+            // Clear formerly visible provider contacts if permission was revoked.
+            for (int i = contacts.size() - 1; i >= 0; i--)
+                if (contacts.get(i).device) contacts.remove(i);
+            markedContactIndices.clear();
+            contactIndex = Math.min(contactIndex, Math.max(0, contacts.size() - 1));
+            return;
+        }
         ArrayList<AndroidBackend.DeviceContact> real = backend.loadContacts();
         contacts.clear();
         markedContactIndices.clear();
         for (AndroidBackend.DeviceContact c : real) {
             contacts.add(new Contact(c.name, c.number, c.contactId, c.rawContactId, c.phoneDataId, true));
+            contactNumbersById.put(c.contactId, new ArrayList<>(c.numbers));
         }
-        if (contactIndex >= contacts.size()) contactIndex = Math.max(0, contacts.size() - 1);
+        contactIndex = Math.min(contactIndex, Math.max(0, contacts.size() - 1));
     }
 
     private void refreshSmsFromPhone() {
@@ -1315,10 +1326,15 @@ public class C2PhoneView extends View {
     }
 
     private void drawContactDetail(Canvas c) {
-        Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size() - 1)));
         drawStatus(c, "Contact details");
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.CENTER);
+        if (contacts.isEmpty()) {
+            p.setTextSize(13);
+            c.drawText("Contact unavailable", 120, 150, p);
+            return;
+        }
+        Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size() - 1)));
         p.setTextSize(40);
         c.drawText("●", 120, 92, p);
         p.setTypeface(fontBold);
@@ -1327,8 +1343,23 @@ public class C2PhoneView extends View {
         p.setTypeface(fontRegular);
         p.setTextSize(15);
         c.drawText(ct.number, 120, 165, p);
+        ArrayList<String> numbers = contactNumbersById.get(ct.contactId);
+        int shown = 0;
+        if (numbers != null) {
+            p.setTextSize(12);
+            for (String number : numbers) {
+                if (number.equals(ct.number)) continue;
+                if (shown == 2) break;
+                c.drawText(number, 120, 185 + shown * 19, p);
+                shown++;
+            }
+            if (numbers.size() > shown + 1) {
+                p.setTextSize(10);
+                c.drawText("+" + (numbers.size() - shown - 1) + " more", 120, 229, p);
+            }
+        }
         p.setTextSize(11);
-        c.drawText("Press green key to call", 120, 210, p);
+        c.drawText("Green key calls first number", 120, 251, p);
     }
 
     private void drawEditor(Canvas c) {
@@ -3057,7 +3088,10 @@ public class C2PhoneView extends View {
 
         if ("CALL".equals(key)) {
             if ("dial".equals(page)) startCall(dial);
-            else if ("contactDetail".equals(page)) startCall(contacts.get(contactIndex).number);
+            else if ("contactDetail".equals(page)) {
+                if (contacts.isEmpty()) showNotice("Contact unavailable");
+                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
+            }
             else if ("speedDials".equals(page)) {
                 String number = speedDialNumbers.get(sel + 2);
                 if (number != null) startCall(number);
@@ -3222,8 +3256,10 @@ public class C2PhoneView extends View {
         }
 
         if ("contactDetail".equals(page)) {
-            if ("OK".equals(key)) startCall(contacts.get(contactIndex).number);
-            else if ("RSK".equals(key)) back();
+            if ("OK".equals(key)) {
+                if (contacts.isEmpty()) showNotice("Contact unavailable");
+                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
+            } else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
             return;
@@ -3976,8 +4012,15 @@ public class C2PhoneView extends View {
     private int matchingContactIndex(String number) {
         String key = contactMatchKey(number);
         if (key.isEmpty()) return -1;
-        for (int i = 0; i < contacts.size(); i++)
-            if (key.equals(contactMatchKey(contacts.get(i).number))) return i;
+        for (int i = 0; i < contacts.size(); i++) {
+            Contact contact = contacts.get(i);
+            if (key.equals(contactMatchKey(contact.number))) return i;
+            ArrayList<String> numbers = contactNumbersById.get(contact.contactId);
+            if (numbers != null) {
+                for (String candidate : numbers)
+                    if (key.equals(contactMatchKey(candidate))) return i;
+            }
+        }
         return -1;
     }
 
@@ -4365,6 +4408,10 @@ public class C2PhoneView extends View {
             } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
                 addNumberToFilter("Add to blacklist".equals(choice), ct.number);
         } else if ("contactDetail".equals(page)) {
+            if (contacts.isEmpty()) {
+                showNotice("Contact unavailable");
+                return;
+            }
             Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
             if ("Call".equals(choice)) startCall(ct.number);
             else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
