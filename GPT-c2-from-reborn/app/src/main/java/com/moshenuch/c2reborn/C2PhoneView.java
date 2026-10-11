@@ -3847,6 +3847,7 @@ public class C2PhoneView extends View {
         if (optionsOpen) {
             optionsOpen = false;
             optionSubmenuTitle = "";
+            syncCameraPreviewOverlay();
             invalidate();
             return true;
         }
@@ -3901,6 +3902,7 @@ public class C2PhoneView extends View {
             else if ("RSK".equals(key) || "END".equals(key)) {
                 optionsOpen = false;
                 optionSubmenuTitle = "";
+                syncCameraPreviewOverlay();
             }
             invalidate();
             return;
@@ -5038,6 +5040,16 @@ public class C2PhoneView extends View {
         } else showNotice("Already at end of list");
     }
 
+    private void syncCameraPreviewOverlay() {
+        if (isInCameraViewfinder() && getContext() instanceof MainActivity) {
+            final boolean show = !optionsOpen && !confirmOpen;
+            post(() -> {
+                if (isInCameraViewfinder())
+                    ((MainActivity) getContext()).showNativeCameraPreview(show);
+            });
+        }
+    }
+
     private void openOptionsForPage() {
         optionSubmenuTitle = "";
         if ("shortcuts".equals(page) || "shortcutNavigation".equals(page))
@@ -5222,6 +5234,7 @@ public class C2PhoneView extends View {
         addContextNumberOptions();
         optionSel = 0;
         optionsOpen = true;
+        syncCameraPreviewOverlay();
         invalidate();
     }
 
@@ -5409,6 +5422,7 @@ public class C2PhoneView extends View {
     private void chooseOption() {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
+        syncCameraPreviewOverlay();
         String previousSubmenuTitle = optionSubmenuTitle;
         optionSubmenuTitle = "";
 
