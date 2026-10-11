@@ -3833,7 +3833,12 @@ public class C2PhoneView extends View {
         }
 
         if ("CALL".equals(key)) {
-            if ("dial".equals(page)) startCall(dial);
+            // This global Call-key handler runs before page-specific routing.
+            // Answer ringing calls here; otherwise the call-screen handler
+            // never receives the green hardware key.
+            if ("call".equals(page) && C2InCallService.isRinging()) {
+                if (!C2InCallService.answer()) showNotice("Unable to answer call");
+            } else if ("dial".equals(page)) startCall(dial);
             else if ("contactDetail".equals(page)) callSelectedContactNumber();
             else if ("speedDials".equals(page)) {
                 String number = speedDialNumbers.get(sel + 2);
