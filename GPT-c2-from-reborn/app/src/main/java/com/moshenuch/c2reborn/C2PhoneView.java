@@ -2072,10 +2072,22 @@ public class C2PhoneView extends View {
 
     private void drawItemDetail(Canvas c) {
         drawStatus(c, detailTitle.isEmpty() ? "Details" : detailTitle);
+        // Reserve the complete 41px Nokia status/title header and a visual
+        // divider; the old first baseline (y=48) placed 13px letters over
+        // the title baseline (y=37) on Settings > Phone and other details.
+        p.setColor(Color.rgb(70, 82, 95));
+        c.drawRect(9, NativeOverlayLayout.DETAIL_DIVIDER_Y,
+                231, NativeOverlayLayout.DETAIL_DIVIDER_Y + 1, p);
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.LEFT);
-        p.setTextSize(13);
-        drawWrappedText(c, detailText, 10, 48, 215, 18, 12);
+        p.setTypeface(fontRegular);
+        p.setTextSize(NativeOverlayLayout.DETAIL_TEXT_SIZE);
+        drawWrappedText(c, detailText,
+                NativeOverlayLayout.DETAIL_TEXT_X,
+                NativeOverlayLayout.DETAIL_TEXT_BASELINE,
+                NativeOverlayLayout.DETAIL_TEXT_WIDTH,
+                NativeOverlayLayout.DETAIL_LINE_HEIGHT,
+                NativeOverlayLayout.DETAIL_MAX_LINES);
     }
 
     private void drawSoftBar(Canvas c) {
@@ -2195,12 +2207,31 @@ public class C2PhoneView extends View {
     }
 
     private void drawNotice(Canvas c) {
-        p.setColor(Color.argb(225, 20, 25, 27));
-        c.drawRoundRect(new RectF(35, 123, 205, 177), 8, 8, p);
+        // A notice is an opaque foreground box, not see-through list text.
+        // drawWrappedText uses x as its LEFT edge: Paint.Align.CENTER with
+        // x=48 caused "Assigned: Messaging" to lose its initial letters.
+        p.setShader(null);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.rgb(20, 25, 27));
+        c.drawRoundRect(new RectF(
+                NativeOverlayLayout.NOTICE_LEFT, NativeOverlayLayout.NOTICE_TOP,
+                NativeOverlayLayout.NOTICE_RIGHT, NativeOverlayLayout.NOTICE_BOTTOM),
+                8, 8, p);
         p.setColor(Color.WHITE);
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setTextSize(12);
-        drawWrappedText(c, notice, 48, 145, 144, 15, 2);
+        p.setTypeface(fontRegular);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(NativeOverlayLayout.NOTICE_TEXT_SIZE);
+        c.save();
+        c.clipRect(NativeOverlayLayout.NOTICE_TEXT_X,
+                NativeOverlayLayout.NOTICE_TOP + 4,
+                NativeOverlayLayout.NOTICE_TEXT_X + NativeOverlayLayout.NOTICE_TEXT_WIDTH,
+                NativeOverlayLayout.NOTICE_BOTTOM - 4);
+        drawWrappedText(c, notice, NativeOverlayLayout.NOTICE_TEXT_X,
+                NativeOverlayLayout.NOTICE_TEXT_BASELINE,
+                NativeOverlayLayout.NOTICE_TEXT_WIDTH,
+                NativeOverlayLayout.NOTICE_LINE_HEIGHT,
+                NativeOverlayLayout.NOTICE_MAX_LINES);
+        c.restore();
     }
 
     private void drawControls(Canvas c) {
@@ -2965,7 +2996,11 @@ public class C2PhoneView extends View {
             else if (sel == 9) go("callsettings");
             else {
                 detailTitle = itemsFor(page)[sel];
-                detailText = "Setting available in this native recreation.";
+                detailText = sel == 10
+                        ? "Phone settings are not yet implemented in this native recreation.\n"
+                            + "Your Android phone settings remain unchanged."
+                        : "This setting is not yet implemented in this native recreation.\n"
+                            + "No Android system settings were changed.";
                 go("itemDetail");
             }
             return;
