@@ -57,7 +57,7 @@ jobs:
             tools/NativeMenuLayoutSmokeTest.java
           java -cp build/menu-smoke com.moshenuch.c2reborn.NativeMenuLayoutSmokeTest
 
-      - name: Test native Go to shortcut model
+      - name: Test Go to state, dispatch, Restore defaults and video path
         working-directory: GPT-c2-from-reborn
         shell: bash
         run: |
@@ -65,8 +65,32 @@ jobs:
           mkdir -p build/goto-smoke
           javac -d build/goto-smoke \
             app/src/main/java/com/moshenuch/c2reborn/NativeGoToShortcuts.java \
+            app/src/main/java/com/moshenuch/c2reborn/NativeGoToRouter.java \
             tools/NativeGoToShortcutsSmokeTest.java
-          java -cp build/goto-smoke com.moshenuch.c2reborn.NativeGoToShortcutsSmokeTest
+          {
+            echo "GPT C2 native Go to v1.36.0 build-side audit"
+            echo "Model and dispatch: Java 17, same production serializer and router"
+            java -cp build/goto-smoke com.moshenuch.c2reborn.NativeGoToShortcutsSmokeTest
+            echo "Source-wiring checks:"
+            python3 tools/audit_goto_wiring.py
+            echo "Limitations: these are CI self-tests, NOT proof the emulator camera works."
+          } | tee build/goto-smoke/goto-audit-report.txt
+          {
+            echo "## Native Go to — build-side audit"
+            echo 'All checks below must PASS or the APK workflow fails.'
+            echo '~~~text'
+            cat build/goto-smoke/goto-audit-report.txt
+            echo '~~~'
+            echo
+            echo 'Android Video recorder capability and callback results must still be tested on a device.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build-side Go to audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-GoTo-audit-v1.36.0
+          path: GPT-c2-from-reborn/build/goto-smoke/goto-audit-report.txt
+          if-no-files-found: error
 
       - name: Test isolated emulator audit fixtures
         working-directory: GPT-c2-from-reborn
