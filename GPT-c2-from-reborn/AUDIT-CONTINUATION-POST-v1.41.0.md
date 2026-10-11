@@ -1,3 +1,9 @@
+## v1.59.0 on-screen Camera acceptance / v1.60.0 corrections
+
+Moti verified in v1.59.0: live viewfinder, in-house Capture and native Photo result screen work; **stock Android camera never opens**; Back is correct. Mark this Camera photo sequence PASS; retain as regression requirement. Outstanding from same audit: Photo result missing Save/Delete/Send; photos stored only in private files/camera_photos rather than shared DCIM/Pictures.
+
+v1.60 source changes: result softkeys Options/Save/Back; Options includes Save, Delete (Yes/No), Send (Android sharesheet). Capture also publishes JPEG to Android MediaStore Pictures/C2 Reborn on Android 10+ (API 29+) with IS_PENDING atomic publish, providing a public content URI for Android Gallery and sharing; private copy retained for fallback. **Not yet emulator verified**. **Remaining gaps:** Android 9 and earlier do not yet receive a shared Pictures copy; if shared MediaStore fails private fallback remains; deleting the shared result leaves a private duplicate, and may leave a stale record in C2 Gallery. Must reconcile private/shared deletion and user notices before declaring Save/Delete parity complete. Save is automatic on shutter, so Save option currently confirms save (not deferred save). Validate source behaviour against HTML spec.
+
 ## v1.56.0 ON-SCREEN ACCEPTANCE — Home Menu and swirl wallpaper (2026-10-11)
 
 **Verified by Moti on device/emulator:** the new grey swirl wallpaper renders correctly on Home. **Home centre softkey Menu** responds to a single tap and opens the Menu grid; Exit returns Home. Both longstanding defects are **CLOSED / PASS** as of APK v1.56.0, replacing prior unverified/problem statuses for these two items. Preserve this touch routing and wallpaper rendering in subsequent Camera builds; avoid regressing them. Camera preview, native capture/video recording, and HTML parity remain separate outstanding work.
