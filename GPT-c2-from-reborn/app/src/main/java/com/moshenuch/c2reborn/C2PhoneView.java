@@ -2,6 +2,7 @@ package com.moshenuch.c2reborn;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.net.Uri;
@@ -96,6 +97,7 @@ public class C2PhoneView extends View {
     private String groupConfirmNumber = "";
     private final ArrayList<AndroidBackend.DeviceSms> deviceSms = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceSms> smsInbox = new ArrayList<>();
+    private final ArrayList<NativeSmsDetails.Entry> smsExtractedDetails = new ArrayList<>();
     private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceCall> deviceCalls = new ArrayList<>();
     private final HashSet<Long> localReadSmsIds = new HashSet<>();
@@ -362,6 +364,12 @@ public class C2PhoneView extends View {
             deviceSms.clear();
             smsInbox.clear();
             smsThreads.clear();
+            smsExtractedDetails.clear();
+            if ("smsUseDetails".equals(page)) {
+                history.clear();
+                page = "messaging";
+                sel = 0;
+            }
             markedThreadIds.clear();
             markedSmsIds.clear();
             activeMessageId = -1L;
@@ -960,7 +968,12 @@ public class C2PhoneView extends View {
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(15);
             p.setTypeface(selected ? fontBold : fontRegular);
-            c.drawText(items[idx], textX, y + 24, p);
+            String rowText = "smsUseDetails".equals(page)
+                    ? android.text.TextUtils.ellipsize(items[idx],
+                            new android.text.TextPaint(p), 218f,
+                            android.text.TextUtils.TruncateAt.END).toString()
+                    : items[idx];
+            c.drawText(rowText, textX, y + 24, p);
             p.setTypeface(fontRegular);
             String sub = subtitleFor(page, idx);
             if (!sub.isEmpty()) {
@@ -1963,6 +1976,7 @@ public class C2PhoneView extends View {
             case "drafts": return "Drafts";
             case "outbox": return "Outbox";
             case "savedmessages": return "Saved items";
+            case "smsUseDetails": return "Use detail";
             case "reports": return "Delivery reports";
             case "email": return "E-mail";
             case "ims": return "IMs";
@@ -2084,6 +2098,12 @@ public class C2PhoneView extends View {
             }
             case "outbox":
                 return new String[]{"(empty)"};
+            case "smsUseDetails": {
+                String[] labels = new String[smsExtractedDetails.size()];
+                for (int i = 0; i < labels.length; i++)
+                    labels[i] = smsExtractedDetails.get(i).label();
+                return labels;
+            }
             case "savedmessages": {
                 String[] labels = new String[savedSmsTemplates.size()];
                 for (int i = 0; i < labels.length; i++) {
@@ -2283,6 +2303,11 @@ public class C2PhoneView extends View {
                 String[] routes = {"","conversations","drafts","outbox","sent","savedmessages","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings"};
                 go(routes[Math.max(1, Math.min(sel, routes.length - 1))]);
             }
+            return;
+        }
+
+        if ("smsUseDetails".equals(page)) {
+            showSelectedSmsDetail();
             return;
         }
 
@@ -4094,6 +4119,15 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
         else if ("savedmessages".equals(page))
             optionItems = new String[]{"Use template","Details","Delete template","Delete all templates","New message","Memory status"};
+        else if ("smsUseDetails".equals(page)) {
+            NativeSmsDetails.Entry entry = selectedSmsDetail();
+            if (entry == null) optionItems = new String[]{"Back"};
+            else if (NativeSmsDetails.Entry.PHONE.equals(entry.kind))
+                optionItems = new String[]{"Details","Call","Send message","Save a contact","Copy"};
+            else if (NativeSmsDetails.Entry.EMAIL.equals(entry.kind))
+                optionItems = new String[]{"Details","Compose e-mail","Copy"};
+            else optionItems = new String[]{"Details","Open link","Copy"};
+        }
         else if ("inbox".equals(page)) {
             AndroidBackend.DeviceSms target = sel >= 0 && sel < smsInbox.size() ? smsInbox.get(sel) : null;
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
@@ -4102,7 +4136,7 @@ public class C2PhoneView extends View {
         else if ("messageRead".equals(page)) {
             AndroidBackend.DeviceSms chosen = smsById(activeMessageId);
             optionItems = chosen != null && chosen.type != Telephony.Sms.MESSAGE_TYPE_INBOX
-                    ? new String[]{"Forward","Delete","Call","Message details","Conversation view","New message","Copy as template"}
+                    ? new String[]{"Forward","Delete","Call","Use detail","Message details","Conversation view","New message","Copy as template"}
                     : new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
                              chosen != null && isSmsUnread(chosen) ? "Mark as read" : "Mark as unread"};
         }
@@ -4113,10 +4147,10 @@ public class C2PhoneView extends View {
         else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms target = conversationMessageAt(sel);
             if (target != null && target.type == Telephony.Sms.MESSAGE_TYPE_INBOX)
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Use detail","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
                         isSmsUnread(target) ? "Mark as read" : "Mark as unread"};
             else
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Use detail","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
         }
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
@@ -4417,7 +4451,8 @@ public class C2PhoneView extends View {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
 
-        if ("Contact".equals(choice) || "Save a contact".equals(choice)) {
+        if (!"smsUseDetails".equals(page) &&
+                ("Contact".equals(choice) || "Save a contact".equals(choice))) {
             openNumberContact(selectedNumberForOptions(), "Contact".equals(choice));
             return;
         }
@@ -4537,6 +4572,8 @@ public class C2PhoneView extends View {
                 markedThreadIds.clear();
                 showNotice("Marks cleared");
             }
+        } else if ("smsUseDetails".equals(page)) {
+            useSelectedSmsDetailOption(choice);
         } else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms m = conversationMessageAt(sel);
             if ("Reply".equals(choice) && m != null) {
@@ -4548,6 +4585,8 @@ public class C2PhoneView extends View {
                 forwardSmsCopy(m);
             } else if ("Copy as template".equals(choice)) {
                 saveSmsAsTemplate(m);
+            } else if ("Use detail".equals(choice)) {
+                showSmsUseDetails(m);
             } else if ("Message details".equals(choice)) {
                 showMessageDetails(m);
             } else if ("Delete".equals(choice)) {
@@ -4600,6 +4639,7 @@ public class C2PhoneView extends View {
                 }
             } else if ("Call".equals(choice)) startCall(selected.address);
             else if ("Copy as template".equals(choice)) saveSmsAsTemplate(selected);
+            else if ("Use detail".equals(choice)) showSmsUseDetails(selected);
             else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Hide this message in the app? Phone SMS unchanged.");
             else if ("Forward".equals(choice)) forwardSmsCopy(selected);
             else if ("Edit".equals(choice)) {
@@ -5556,6 +5596,98 @@ public class C2PhoneView extends View {
                     + "\nDelivery not verified.";
         }
         go("itemDetail");
+    }
+
+    /**
+     * Parse only the highlighted source message. Displaying results never
+     * changes Android SMS records or starts any external action.
+     */
+    private void showSmsUseDetails(AndroidBackend.DeviceSms sms) {
+        smsExtractedDetails.clear();
+        if (!deviceSmsActive || sms == null) {
+            showNotice("SMS unavailable");
+            return;
+        }
+        smsExtractedDetails.addAll(NativeSmsDetails.extract(sms.address, sms.body));
+        if (smsExtractedDetails.isEmpty()) {
+            showNotice("No usable details in SMS");
+            return;
+        }
+        go("smsUseDetails");
+    }
+
+    private NativeSmsDetails.Entry selectedSmsDetail() {
+        if (!deviceSmsActive || sel < 0 || sel >= smsExtractedDetails.size())
+            return null;
+        return smsExtractedDetails.get(sel);
+    }
+
+    private void showSelectedSmsDetail() {
+        NativeSmsDetails.Entry entry = selectedSmsDetail();
+        if (entry == null) {
+            showNotice("No detail selected");
+            return;
+        }
+        detailTitle = entry.kind + " detail";
+        detailText = entry.value + "\n\nOptions offers actions for this detail."
+                + "\nExtracted locally from SMS; original message unchanged.";
+        go("itemDetail");
+    }
+
+    private void copySmsDetail(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            showNotice("Nothing to copy");
+            return;
+        }
+        try {
+            ClipboardManager clipboard = (ClipboardManager)
+                    getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                showNotice("Clipboard unavailable");
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("SMS detail", value));
+            showNotice("Detail copied");
+        } catch (RuntimeException ex) {
+            showNotice("Clipboard unavailable");
+        }
+    }
+
+    private void useSelectedSmsDetailOption(String choice) {
+        if ("Back".equals(choice)) {
+            back();
+            return;
+        }
+        NativeSmsDetails.Entry entry = selectedSmsDetail();
+        if (entry == null) {
+            showNotice("No detail selected");
+            return;
+        }
+        if ("Details".equals(choice)) showSelectedSmsDetail();
+        else if ("Copy".equals(choice)) copySmsDetail(entry.value);
+        else if (NativeSmsDetails.Entry.PHONE.equals(entry.kind)) {
+            if ("Call".equals(choice)) startCall(entry.value);
+            else if ("Send message".equals(choice)) composeForContactNumber(entry.value);
+            else if ("Save a contact".equals(choice)) openNumberContact(entry.value, false);
+        } else if ("Compose e-mail".equals(choice) &&
+                NativeSmsDetails.Entry.EMAIL.equals(entry.kind)) {
+            openSmsDetailExternal(new Intent(Intent.ACTION_SENDTO,
+                    Uri.fromParts("mailto", entry.value, null)));
+        } else if ("Open link".equals(choice) &&
+                NativeSmsDetails.Entry.WEB.equals(entry.kind)) {
+            String url = entry.value.startsWith("www.") ? "https://" + entry.value : entry.value;
+            if (url.startsWith("https://") || url.startsWith("http://"))
+                openSmsDetailExternal(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            else showNotice("Unsupported link");
+        }
+    }
+
+    private void openSmsDetailExternal(Intent intent) {
+        try {
+            getContext().startActivity(intent);
+        } catch (RuntimeException ex) {
+            showNotice("No compatible Android app available");
+        }
     }
 
     /**
