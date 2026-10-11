@@ -57,6 +57,17 @@ jobs:
             tools/NativeMenuLayoutSmokeTest.java
           java -cp build/menu-smoke com.moshenuch.c2reborn.NativeMenuLayoutSmokeTest
 
+      - name: Test native Go to shortcut model
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/goto-smoke
+          javac -d build/goto-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeGoToShortcuts.java \
+            tools/NativeGoToShortcutsSmokeTest.java
+          java -cp build/goto-smoke com.moshenuch.c2reborn.NativeGoToShortcutsSmokeTest
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
