@@ -29,34 +29,21 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Restore original C2 HTML Nokia swirl wallpaper
+      - name: Generate 240x320 Nokia-style grey swirl wallpaper
         shell: bash
         run: |
           set -euo pipefail
           dst="GPT-c2-from-reborn/app/src/main/res/drawable/screen_wallpaper.png"
-          mkdir -p "$(dirname "$dst")"
-          # Ground-up HTML default theme uses this *original* Black menu-screen
-          # artwork. Nokia/background PNG in upstream Git is corrupt (EF BF BD).
-          curl --fail --location --retry 3 --silent --show-error \
-            "https://raw.githubusercontent.com/mbaiforinsticnt-dev/c2-reborn/main/ground-up/assets/themes/Black/menu-screen_240x320.png" \
-            --output "$dst"
-          actual="$(git hash-object "$dst")"
-          expected="8c1a3585929258ee15e5be51099c6f6ea1bcb790"
-          test "$actual" = "$expected" || { echo "Original HTML artwork hash mismatch"; exit 1; }
-          file "$dst"
-          echo "Primary asset first bytes:"
-          od -An -tx1 -N24 "$dst"
-          # Also package unscaled bytes as an Android asset. Unlike drawable
-          # decoding this cannot apply density scaling or resource qualifiers.
+          python3 GPT-c2-from-reborn/tools/create_swirl_wallpaper.py "$dst"
           mkdir -p GPT-c2-from-reborn/app/src/main/assets
           cp "$dst" GPT-c2-from-reborn/app/src/main/assets/nokia_wallpaper.png
           python3 - <<'PY'
           from pathlib import Path
           import struct
           data=Path("GPT-c2-from-reborn/app/src/main/assets/nokia_wallpaper.png").read_bytes()
-          assert data[:8] == bytes.fromhex("89504e470d0a1a0a"), "Wallpaper is not PNG"
-          assert struct.unpack(">II", data[16:24]) == (240,320), "Wallpaper dimensions wrong"
-          print("Original Nokia wallpaper PNG packaged as raw Android asset:",len(data),"bytes")
+          assert data[:8] == bytes.fromhex("89504e470d0a1a0a")
+          assert struct.unpack(">II",data[16:24]) == (240,320)
+          print("Valid 240x320 swirl PNG packaged:",len(data),"bytes")
           PY
 
       - name: Restore pinned Nokia checkbox/radio PNG assets
