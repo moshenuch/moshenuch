@@ -31,3 +31,9 @@ APK v1.8.0 GitHub Actions compile/publish to be checked after commit. No device 
 - Guarded Conversation details/Delete conversation when no actual thread is selected, avoiding an action on permission-placeholder rows.
 - Marked indicators still use generic check glyphs. Firmware p0456/p0457 bitmap parity is pending source asset extraction and screenshot testing.
 - Source-only changes: compile and release pipeline verification still required.
+
+## APK v1.8.2 — cross-folder deletion safety
+- Confirmed static bug: `executeConfirmed(deleteSms)` previously preferred all `markedSmsIds` even when on Inbox or MessageRead, which could silently hide unrelated messages marked earlier in another conversation.
+- Fix: only consume `markedSmsIds` on `conversation` page and constrain the IDs to current `conversationMessages()`; Inbox/MessageRead uses `activeMessageId` only.
+- Local-hide semantics retained: this never deletes provider SMS, and requires a Yes/No confirmation.
+- Regression needs real-device demonstration with two conversation threads, marked items in one and Inbox deletion in another.

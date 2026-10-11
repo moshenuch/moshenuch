@@ -3428,8 +3428,13 @@ public class C2PhoneView extends View {
             showNotice("Conversation hidden in app");
         } else if ("deleteSms".equals(action)) {
             HashSet<Long> targets = new HashSet<>();
-            if (!markedSmsIds.isEmpty()) targets.addAll(markedSmsIds);
-            else if ("conversation".equals(page)) {
+            // Bulk marks only apply inside the active conversation. Deleting
+            // one SMS from Inbox/MessageRead must never hide stale marked IDs.
+            if ("conversation".equals(page) && !markedSmsIds.isEmpty()) {
+                for (AndroidBackend.DeviceSms m : conversationMessages()) {
+                    if (markedSmsIds.contains(m.id)) targets.add(m.id);
+                }
+            } else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
                 if (m != null) targets.add(m.id);
             } else if (activeMessageId > 0) targets.add(activeMessageId);

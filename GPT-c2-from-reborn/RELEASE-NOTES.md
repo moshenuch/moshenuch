@@ -1,4 +1,4 @@
-GPT c2 from reborn — APK v1.8.1 / HTML reference v6.342
+GPT c2 from reborn — APK v1.8.2 / HTML reference v6.342
 
 Native Java/Canvas. This HTML version is a reference; the APK remains a partial native implementation.
 
@@ -14,3 +14,5 @@ UNVERIFIED: visual parity for most nested icons/fonts and detailed SMS states, c
 - SMS conversation threads and individual messages now support Mark all and Unmark all from Options.
 - Switching to another conversation clears message selections, preventing accidental deletion of messages previously marked in a different thread.
 - Empty conversation lists no longer prompt to delete a nonexistent thread.
+
+- Inbox/MessageRead deletion now ignores marked SMS from other screens or conversations, always targeting the actual highlighted/opened SMS ID.
