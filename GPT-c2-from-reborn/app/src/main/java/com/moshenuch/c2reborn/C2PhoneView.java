@@ -1649,25 +1649,41 @@ public class C2PhoneView extends View {
 
     private void drawCall(Canvas c) {
         drawStatus(c, "Call");
-        p.setColor(themeText());
-        p.setTextAlign(Paint.Align.CENTER);
+        int state = C2InCallService.state();
+        String status = state == android.telecom.Call.STATE_RINGING ? "Incoming call" :
+                state == android.telecom.Call.STATE_DIALING ? "Calling." :
+                state == android.telecom.Call.STATE_CONNECTING ? "Connecting." :
+                state == android.telecom.Call.STATE_ACTIVE ? "In call" :
+                state == android.telecom.Call.STATE_HOLDING ? "On hold" : "Calling.";
+        p.setColor(Color.rgb(22, 66, 122));
+        c.drawRoundRect(new RectF(7, 46, 233, 242), 8, 8, p);
+        p.setColor(Color.rgb(125, 168, 212));
+        c.drawRoundRect(new RectF(16, 54, 224, 87), 5, 5, p);
+        p.setColor(Color.WHITE);
         p.setTypeface(fontBold);
-        p.setTextSize(20);
-        c.drawText(contactNameFor(activeCall), 120, 86, p);
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setTextSize(16);
+        c.drawText(status, 120, 76, p);
+        String displayName = contactNameFor(activeCall);
+        p.setTextSize(19);
+        if (displayName.length() > 21) displayName = displayName.substring(0, 20) + "…";
+        c.drawText(displayName, 120, 116, p);
         p.setTypeface(fontRegular);
         p.setTextSize(13);
+        if (!displayName.equals(activeCall))
+            c.drawText(activeCall, 120, 139, p);
         long connectedAt = C2InCallService.connectTime();
-        long secs = connectedAt > 0
-                ? Math.max(0, (System.currentTimeMillis() - connectedAt) / 1000L)
-                : 0L;
-        c.drawText(formatSeconds(secs), 120, 119, p);
-        p.setTextSize(12);
-        c.drawText(loudspeaker ? "Loudspeaker on" : "Handset", 120, 151, p);
-        p.setColor(Color.rgb(66,156,74));
-        c.drawCircle(120, 210, 26, p);
+        long secs = connectedAt > 0 && state == android.telecom.Call.STATE_ACTIVE
+                ? Math.max(0, (System.currentTimeMillis() - connectedAt) / 1000L) : 0L;
+        c.drawText(connectedAt > 0 ? formatSeconds(secs) : "00:00", 120, 166, p);
+        p.setColor(Color.rgb(10, 35, 65));
+        c.drawRoundRect(new RectF(25, 184, 215, 195), 4, 4, p);
+        p.setColor(Color.rgb(135, 193, 246));
+        c.drawRoundRect(new RectF(27, 186, 30 + (int)(Math.min(60,secs) * 3), 193), 3, 3, p);
         p.setColor(Color.WHITE);
-        p.setTextSize(22);
-        c.drawText("☏", 120, 218, p);
+        p.setTextSize(12);
+        c.drawText(C2InCallService.isRinging() ? "Call to answer" :
+                loudspeaker ? "Loudspeaker on" : "Handset", 120, 228, p);
     }
 
     private void drawMessageRead(Canvas c) {
@@ -3932,7 +3948,9 @@ public class C2PhoneView extends View {
         }
 
         if ("call".equals(page)) {
-            if ("OK".equals(key)) endCall();
+            if ("CALL".equals(key) && C2InCallService.isRinging()) {
+                if (!C2InCallService.answer()) showNotice("Unable to answer call");
+            } else if ("OK".equals(key)) endCall();
             else if ("RSK".equals(key)) toggleSpeaker();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
