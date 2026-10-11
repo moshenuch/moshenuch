@@ -1,3 +1,7 @@
+## APK v1.48.0 — Log Options six-entry implementation
+
+C2 native Log list pages (All calls, Missed, Received, Dialled) now use the six reference Options entries: Mark >; Mark all; Unmark all; Delete selected; Add to blacklist; Add to whitelist. Mark > opens Mark/Unmark submenu. Mark all marks records in the current call-log list, with keys retained across navigation; Delete selected asks for Yes confirmation and only hides those entries locally in C2, preserving the real Android call-log records. Blacklist and whitelist use existing app-local number-filter actions, not system network call blocking. Full emulator test required: exact popup styling and page applicability, marks, deletion confirmation and persistence, filter results, and empty list. Bumped to v1.48.0. Caller-name matching fixes from v1.47.0 remain awaiting the user's on-screen audit.
+
 ## User-verified v1.44.0 Phone success and v1.46.0 follow-ups
 
 **Confirmed on emulator, demo off:** C2 fully owns ordinary outgoing call UI with blue Nokia panel, Calling/In call status, timer and progress bar; Google Dialer never appeared; OK/red-key termination returns to C2 Home; call-log entry appears and shows contact name, date and time. Duration is unverified. User reports v1.43 direct release link returned 404; v1.44 is the actual audited build. Do not regress this major acceptance pass.
