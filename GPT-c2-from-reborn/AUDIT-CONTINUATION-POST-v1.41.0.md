@@ -1,10 +1,14 @@
+## Camera parity clarification (2026-10-11)
+
+Moti corrected the earlier message: the mentioned video was sent in error. **No reference footage is coming or required.** Camera view is a first-class parity category: implement and audit the native Android Camera screen against the live C2 Reborn HTML specification (https://mbaiforinsticnt-dev.github.io/c2-reborn/index.html), to the same standard as Contacts, SMS and Log. Use HTML screen behaviour, Nokia controls, softkeys, Options, viewfinder and capture flow as source of truth. Do not defer Camera implementation waiting for video footage. Video recorder remains part of Media and should follow HTML where specified.
+
 ## New parity category — Camera and Video recorder (requested 2026-10-11)
 
 Moti requests the **Camera view** and **Video recorder** be treated as a first-class Nokia C2-01 parity category, at the same level of scrutiny as Contacts, SMS, Home, and Log. Required: in-house Nokia-style viewfinder UI rather than handing the entire screen to the stock Android camera, faithful status indicators, per-mode Options/submenus and softkey behaviour, image capture/shutter flow, saved-photo preview and gallery integration, video record/stop/save/review flow. Native hardware camera input and permissions must still function; avoid WebView. Verify screen layout, icon style, touch/physical-key mapping, correct camera orientation, lifecycle, and permission denial paths against forthcoming footage from Moti.
 
-**Reference footage is pending.** Do not assert detailed Nokia control mapping or pixel-matched UI before reviewing it. Existing native implementation routes Camera/Video recorder menu choices through startCameraCapture(...); that external capture path should be audited and replaced/extended with an embedded viewfinder as appropriate, without regressing actual camera hardware functionality.
+Reference footage is not expected. Derive detailed control mapping from the HTML implementation and verify against it. Existing native implementation routes Camera/Video recorder menu choices through startCameraCapture(...); that external capture path should be audited and replaced/extended with an embedded viewfinder as appropriate, without regressing actual camera hardware functionality.
 
-Priority: retain currently verified calling, contacts, SMS and Log behaviour; add Camera/Video recorder to outstanding parity work; first baseline audit once footage arrives.
+Priority: retain currently verified calling, contacts, SMS and Log behaviour; add Camera/Video recorder to outstanding parity work; begin source-based Camera parity audit now.
 
 ## v1.53.0 on-screen audit and v1.54.0 source changes
 
