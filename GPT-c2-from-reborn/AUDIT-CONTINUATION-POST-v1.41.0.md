@@ -1,3 +1,11 @@
+## v1.53.0 on-screen audit and v1.54.0 source changes
+
+**Verified in v1.53.0:** Log marked-row tick renders; Names/Log Options popups show Select; Delete selected confirmation now says Nokia "Delete?" with Yes/No; Settings Demo data is accessible and seeds conversations successfully; unread SMS dot clears when entering a conversation.
+
+**Still failing after fresh reinstalls across v1.47/v1.49/v1.53:** Home LCD centre "Menu" text receives no working tap while physical OK opens menu and centre "End" works inside calls. v1.54 expands specifically Home's central LCD hitbox down into the bezel gap (but not into physical OK) and up slightly, preserving central shortcut assignment; requires user on-device verification, no proof of fix yet.
+
+**Wallpaper regression v1.53:** Home is solid mid-grey. The Java drawHome fallback is EXACTLY mid-grey when wallpaper Bitmap is null, which matches symptom, but no runtime log yet establishes whether failure is in resource decode or wrong asset contents. v1.54 makes the build package original HTML Nokia PNG as raw Android asset (with pinned Git blob and PNG dimensions check); native view decodes through AssetManager and logs "C2Wallpaper" success and errors. User must still compare resulting image to reference HTML. Do not redraw. If remains flat, inspect C2Wallpaper logcat and confirm correct HTML source asset is used.
+
 ## v1.49 emulator follow-up — 2026-10-11
 
 User confirms Log Delete selected functions end-to-end: mark, Delete selected, Yes, row disappears. However the marked check/tick is invisible in v1.49 (v1.51 source adds an indicator, unverified). Nokia confirm must read exactly "Delete?" not "Hide selected call records in this app?" — corrected in v1.53.0.
