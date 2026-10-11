@@ -130,6 +130,13 @@ public class MainActivity extends Activity {
                     results[0] == PackageManager.PERMISSION_GRANTED);
     }
 
+    /** Log only fixed capture state in debug builds; never URI or media bytes. */
+    private void auditCapture(String action) {
+        if ((getApplicationInfo().flags &
+                android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+            android.util.Log.i("C2GoToAudit", action);
+    }
+
     /** Request microphone only when the user explicitly selects Record. */
     public boolean ensureRecorderPermission() {
         if (Build.VERSION.SDK_INT < 23 ||
@@ -160,6 +167,7 @@ public class MainActivity extends Activity {
      * permission, global storage permission or a WebView.
      */
     public void launchCameraCapture(boolean video) {
+        auditCapture(video ? "Android capture REQUEST VIDEO" : "Android capture REQUEST PHOTO");
         Uri output = C2MediaProvider.pendingUri(this, video);
         Intent intent = new Intent(video
                 ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
@@ -172,7 +180,9 @@ public class MainActivity extends Activity {
             pendingCameraOutput = output;
             pendingCameraVideo = video;
             startActivityForResult(intent, video ? REQ_CAPTURE_VIDEO : REQ_CAPTURE_IMAGE);
+            auditCapture(video ? "Android VIDEO intent accepted" : "Android PHOTO intent accepted");
         } catch (Exception ex) {
+            auditCapture(video ? "Android VIDEO intent unavailable" : "Android PHOTO intent unavailable");
             C2MediaProvider.discard(this, output);
             pendingCameraOutput = null;
             if (phoneView != null)
@@ -214,6 +224,9 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_CAPTURE_IMAGE || requestCode == REQ_CAPTURE_VIDEO) {
+            auditCapture("Android capture result " +
+                    (requestCode == REQ_CAPTURE_VIDEO ? "VIDEO" : "PHOTO") +
+                    (resultCode == RESULT_OK ? " OK" : " CANCEL/ERROR"));
             Uri pending = pendingCameraOutput;
             pendingCameraOutput = null;
             boolean video = requestCode == REQ_CAPTURE_VIDEO;

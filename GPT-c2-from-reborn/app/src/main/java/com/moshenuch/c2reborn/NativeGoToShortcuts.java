@@ -61,6 +61,47 @@ final class NativeGoToShortcuts {
         return true;
     }
 
+    /**
+     * These JSON integer arrays are the exact same strings stored in Android
+     * SharedPreferences by C2PhoneView. The pure-Java CI test round-trips the
+     * same format, including app restart simulated by a new instance.
+     */
+    String serializedOrder() { return intArray(order); }
+    String serializedEnabled() { return intArray(enabledIds()); }
+
+    boolean restoreSerialized(String savedOrder, String savedEnabled) {
+        return restore(parseIntArray(savedOrder), parseIntArray(savedEnabled));
+    }
+
+    private static String intArray(ArrayList<Integer> values) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(values.get(i));
+        }
+        return sb.append(']').toString();
+    }
+
+    /** Strict parsing of the old and current JSON-array SharedPreferences. */
+    private static ArrayList<Integer> parseIntArray(String value) {
+        if (value == null) return null;
+        String json = value.trim();
+        if (json.length() < 2 || json.charAt(0) != '[' ||
+                json.charAt(json.length() - 1) != ']') return null;
+        String middle = json.substring(1, json.length() - 1).trim();
+        ArrayList<Integer> decoded = new ArrayList<>();
+        if (middle.isEmpty()) return decoded;
+        String[] tokens = middle.split(",", -1);
+        if (tokens.length > COUNT) return null;
+        for (String token : tokens) {
+            String trimmed = token.trim();
+            if (!trimmed.matches("-?[0-9]+")) return null;
+            try { decoded.add(Integer.parseInt(trimmed)); }
+            catch (NumberFormatException e) { return null; }
+        }
+        return decoded;
+    }
+
     ArrayList<Integer> order() {
         return new ArrayList<>(order);
     }

@@ -542,17 +542,10 @@ public class C2PhoneView extends View {
             storedMenu.clear();
         }
         menuOrder.addAll(NativeMenuLayout.validatedOrder(storedMenu));
-        try {
-            ArrayList<Integer> order = new ArrayList<>();
-            ArrayList<Integer> visible = new ArrayList<>();
-            JSONArray storedOrder = new JSONArray(prefs.getString("goto_order_v1", "[]"));
-            JSONArray storedVisible = new JSONArray(prefs.getString("goto_visible_v1", "[]"));
-            for (int i = 0; i < storedOrder.length(); i++) order.add(storedOrder.getInt(i));
-            for (int i = 0; i < storedVisible.length(); i++) visible.add(storedVisible.getInt(i));
-            goToShortcuts.restore(order, visible);
-        } catch (Exception ignored) {
-            goToShortcuts.restoreDefaults();
-        }
+        boolean goToRestored = goToShortcuts.restoreSerialized(
+                prefs.getString("goto_order_v1", "[]"),
+                prefs.getString("goto_visible_v1", "[]"));
+        auditGoTo("load restored=" + goToRestored);
         profile = prefs.getString("profile", "General");
         theme = prefs.getString("theme", "Dark");
         if ("Nokia".equals(theme)) theme = "Dark";
@@ -790,13 +783,24 @@ public class C2PhoneView extends View {
         showNotice(black ? "Added to blacklist" : "Added to whitelist");
     }
 
+    /**
+     * Log only fixed numeric shortcut IDs (never contact names, phone numbers,
+     * messages, or other private data). Disable in non-debuggable builds.
+     * On emulator: adb logcat -s C2GoToAudit:I '*:S'
+     */
+    private void auditGoTo(String event) {
+        if (!isDemoToolsAvailable()) return;
+        android.util.Log.i("C2GoToAudit",
+                event + " order=" + goToShortcuts.serializedOrder()
+                        + " shown=" + goToShortcuts.serializedEnabled());
+    }
+
     private void saveGoToShortcuts() {
-        JSONArray order = new JSONArray();
-        JSONArray visible = new JSONArray();
-        for (Integer id : goToShortcuts.order()) order.put(id);
-        for (Integer id : goToShortcuts.enabledIds()) visible.put(id);
-        prefs.edit().putString("goto_order_v1", order.toString())
-                .putString("goto_visible_v1", visible.toString()).apply();
+        prefs.edit()
+                .putString("goto_order_v1", goToShortcuts.serializedOrder())
+                .putString("goto_visible_v1", goToShortcuts.serializedEnabled())
+                .apply();
+        auditGoTo("save");
     }
 
     private void saveMenuPreferences() {
@@ -3546,6 +3550,8 @@ public class C2PhoneView extends View {
         if (confirmOpen) {
             if ("LSK".equals(key) || "OK".equals(key)) executeConfirmed();
             else if ("RSK".equals(key) || "END".equals(key)) {
+                if ("restoreGoTo".equals(confirmAction))
+                    auditGoTo("restore canceled NO; unchanged");
                 confirmOpen = false;
                 confirmAction = "";
                 confirmText = "";
@@ -4470,34 +4476,40 @@ public class C2PhoneView extends View {
     }
 
     private void openGoToShortcut(int shortcutId) {
-        switch (shortcutId) {
-            case 0:
-                locked = true;
-                unlockStep = 0;
-                history.clear();
-                page = "home";
-                sel = 0;
-                showNotice("Keypad locked");
-                break;
-            case 1: go("profiles"); break;
-            case 2: go("alarm"); break;
-            case 3: startCameraCapture(false); break;
-            case 4: startCameraCapture(true); break;
-            case 5: go("calculator"); break;
-            case 6:
-                browserUrl = "https://www.nokia.com/";
-                go("browser");
-                break;
-            case 7: go("music"); break;
-            case 8: go("conversations"); break;
-            default: showNotice("No shortcut selected");
-        }
+        // Dispatch through the EXACT same router exercised by CI tests.
+        // This prevents a rearranged/hidden visual row from changing its
+        // stable destination or converting Video into photo capture.
+        auditGoTo("launch destination=" + shortcutId);
+        boolean recognized = NativeGoToRouter.launch(shortcutId,
+                new NativeGoToRouter.Handler() {
+                    @Override public void lockKeypad() {
+                        locked = true;
+                        unlockStep = 0;
+                        history.clear();
+                        page = "home";
+                        sel = 0;
+                        showNotice("Keypad locked");
+                    }
+                    @Override public void openPage(String target) {
+                        go(target);
+                    }
+                    @Override public void capture(boolean video) {
+                        auditGoTo(video ? "capture VIDEO" : "capture PHOTO");
+                        startCameraCapture(video);
+                    }
+                    @Override public void browser() {
+                        browserUrl = "https://www.nokia.com/";
+                        go("browser");
+                    }
+                });
+        if (!recognized) showNotice("No shortcut selected");
     }
 
     private void toggleGoToOrganiseSelection() {
         int id = goToShortcuts.visualId(sel);
         boolean wasVisible = goToShortcuts.isEnabled(id);
         if (goToShortcuts.toggleAt(sel)) {
+            auditGoTo("toggle item=" + id + " enabled=" + !wasVisible);
             saveGoToShortcuts();
             showNotice(wasVisible ? "Shortcut hidden" : "Shortcut shown");
         } else if (wasVisible && goToShortcuts.enabledCount() == 1) {
@@ -4509,6 +4521,7 @@ public class C2PhoneView extends View {
         int from = sel;
         if (goToShortcuts.move(from, direction)) {
             sel = from + direction;
+            auditGoTo("move from=" + from + " to=" + sel);
             saveGoToShortcuts();
             showNotice("Shortcut moved");
         } else showNotice("Already at end of list");
@@ -5586,6 +5599,7 @@ public class C2PhoneView extends View {
         if ("clearAuditDemo".equals(action)) {
             changeAuditDemoMode(false);
         } else if ("restoreGoTo".equals(action)) {
+            auditGoTo("restore confirmed YES");
             goToShortcuts.restoreDefaults();
             saveGoToShortcuts();
             sel = 0;
