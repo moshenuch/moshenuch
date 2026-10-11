@@ -939,6 +939,7 @@ public class C2PhoneView extends View {
         else if ("compose".equals(page)) drawCompose(c);
         else if ("dial".equals(page)) drawDial(c);
         else if ("call".equals(page)) drawCall(c);
+        else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) drawNokiaCameraViewfinder(c);
         else if ("calculator".equals(page)) drawCalculator(c);
         else if ("loan".equals(page)) drawLoan(c);
         else if ("stopwatch".equals(page)) drawStopwatch(c);
@@ -2211,6 +2212,7 @@ public class C2PhoneView extends View {
                         menuMovingFrom < 0 ? "Done" : "Cancel"};
             return new String[]{"Options", "Select", "Exit"};
         }
+        if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
         if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
@@ -4047,6 +4049,15 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
+            if ("OK".equals(key) || "CALL".equals(key))
+                launchHardwareCapture("videoViewfinder".equals(page));
+            else if ("LSK".equals(key)) openOptionsForPage();
+            else if ("RSK".equals(key)) back();
+            invalidate();
+            return;
+        }
+
         if ("calculator".equals(page)) {
             handleCalculatorKey(key);
             return;
@@ -4705,9 +4716,37 @@ public class C2PhoneView extends View {
     }
 
     private void startCameraCapture(boolean video) {
+        // First enter the in-house Nokia UI rather than directly leaving C2.
+        go(video ? "videoViewfinder" : "cameraViewfinder");
+    }
+
+    private void launchHardwareCapture(boolean video) {
         if (getContext() instanceof MainActivity)
             ((MainActivity) getContext()).launchCameraCapture(video);
         else showNotice("Android camera is unavailable");
+    }
+
+    private void drawNokiaCameraViewfinder(Canvas c) {
+        boolean video = "videoViewfinder".equals(page);
+        drawStatus(c, video ? "Video recorder" : "Camera");
+        p.setColor(Color.rgb(19, 26, 30));
+        c.drawRect(6, 45, 234, 253, p);
+        p.setColor(Color.rgb(83, 105, 110));
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.5f);
+        c.drawRect(8, 47, 232, 251, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setTypeface(fontBold);
+        p.setColor(Color.WHITE);
+        p.setTextSize(17);
+        c.drawText(video ? "Video recorder" : "Camera", 120, 110, p);
+        p.setTypeface(fontRegular);
+        p.setTextSize(12);
+        c.drawText("Camera preview not yet embedded", 120, 141, p);
+        c.drawText("Select Capture to use device camera", 120, 161, p);
+        p.setTextSize(13);
+        c.drawText(video ? "Video mode" : "Photo mode", 120, 228, p);
     }
 
     public void onCameraCaptureFailed(String reason) {
@@ -4925,6 +4964,7 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Assign","Restore defaults","Help"};
         else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
         else if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
+        else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) optionItems = new String[]{"Capture","Switch mode","Help"};
         else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
@@ -5310,6 +5350,14 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
+            if ("Capture".equals(choice)) launchHardwareCapture("videoViewfinder".equals(page));
+            else if ("Switch mode".equals(choice))
+                go("cameraViewfinder".equals(page) ? "videoViewfinder" : "cameraViewfinder");
+            else if ("Help".equals(choice))
+                showNotice("Native preview is still under development");
+            return;
+        }
         if ("settings".equals(page) && "Demo data (debug)".equals(choice)) {
             if (isDemoToolsAvailable()) go("demoTools");
             else showNotice("Debug tools unavailable");
