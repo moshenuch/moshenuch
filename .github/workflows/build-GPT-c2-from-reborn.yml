@@ -29,6 +29,9 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Restore pinned Nokia checkbox/radio PNG assets
+        run: python3 GPT-c2-from-reborn/tools/extract_selection_icons.py
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
