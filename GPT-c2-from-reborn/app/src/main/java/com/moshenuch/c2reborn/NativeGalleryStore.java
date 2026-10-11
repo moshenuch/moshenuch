@@ -14,16 +14,21 @@ import org.json.JSONObject;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /** A user-selected, app-local media index. Never deletes or modifies device files. */
 final class NativeGalleryStore {
     static final class Entry {
         final String uri;
         final String title;
-        Entry(String uri, String title) {
+        final long addedAt;
+        Entry(String uri, String title, long addedAt) {
             this.uri = uri;
             this.title = title;
+            this.addedAt = addedAt;
         }
     }
 
@@ -47,7 +52,8 @@ final class NativeGalleryStore {
                 if (j == null) continue;
                 String uri = j.optString("uri", "");
                 if (uri.startsWith("content://"))
-                    out.add(new Entry(uri, j.optString("title", "File")));
+                    out.add(new Entry(uri, j.optString("title", "File"),
+                            j.optLong("addedAt", 0L)));
             }
         } catch (Exception ignored) { }
     }
@@ -59,6 +65,7 @@ final class NativeGalleryStore {
                 JSONObject j = new JSONObject();
                 j.put("uri", entry.uri);
                 j.put("title", entry.title);
+                j.put("addedAt", entry.addedAt);
                 a.put(j);
             }
         } catch (Exception ignored) { }
@@ -84,11 +91,27 @@ final class NativeGalleryStore {
                 if (c != null && c.moveToFirst()) name = c.getString(0);
             } catch (Exception ignored) { }
             if (name == null || name.trim().isEmpty()) name = "Selected media";
-            list.add(new Entry(value, name));
+            list.add(new Entry(value, name, System.currentTimeMillis() + count));
             count++;
         }
-        persist(video);
+        if (count > 0) sort(video, sortMode(video));
         return count;
+    }
+
+    int sortMode(boolean video) {
+        return prefs.getInt(video ? "gallery_sort_video_v1" : "gallery_sort_image_v1", 2);
+    }
+
+    void sort(boolean video, int mode) {
+        if (mode < 0 || mode > 2) return;
+        ArrayList<Entry> list = video ? videos : images;
+        Comparator<Entry> name = (a, b) ->
+                a.title.toLowerCase(Locale.ROOT).compareTo(b.title.toLowerCase(Locale.ROOT));
+        if (mode == 0) Collections.sort(list, name);
+        else if (mode == 1) Collections.sort(list, name.reversed());
+        else Collections.sort(list, (a, b) -> Long.compare(b.addedAt, a.addedAt));
+        prefs.edit().putInt(video ? "gallery_sort_video_v1" : "gallery_sort_image_v1", mode).apply();
+        persist(video);
     }
 
     Entry at(boolean video, int index) {

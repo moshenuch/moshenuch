@@ -55,6 +55,8 @@ public class C2PhoneView extends View {
     private Bitmap galleryPreviewBitmap;
     private String galleryPreviewTitle = "";
     private String galleryPreviewUri = "";
+    private int galleryPreviewIndex = -1;
+    private boolean gallerySortVideos = false;
     private final Deque<PageState> history = new ArrayDeque<>();
 
     private float fitScale = 1f, offX = 0f, offY = 0f;
@@ -682,6 +684,11 @@ public class C2PhoneView extends View {
             float textX = showIcons ? 49 : 10;
             if ("conversations".equals(page)) textX = 20;
             if ("conversation".equals(page)) textX = 36;
+            if ("gallerySort".equals(page)) {
+                drawFirmwareChoice(c, idx == galleryStore.sortMode(gallerySortVideos)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
             if (("blackmode".equals(page) || "whitemode".equals(page)) && idx < 2) {
                 boolean enabled = "blackmode".equals(page) ? blacklistEnabled : whitelistEnabled;
                 drawFirmwareChoice(c, idx == (enabled ? 1 : 0) ? "RADIO_ON" : "RADIO_OFF",
@@ -1604,6 +1611,7 @@ public class C2PhoneView extends View {
             case "galleryImages": return "Images";
             case "galleryVideos": return "Video clips";
             case "galleryPreview": return "Image";
+            case "gallerySort": return "Sort files";
             case "media": return "Media";
             case "organiser": return "Organiser";
             case "maps": return "Maps";
@@ -1755,6 +1763,7 @@ public class C2PhoneView extends View {
                 return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
             case "gallery":
                 return new String[]{"Memory card","Images","Video clips","Music files","Themes","Graphics","Tones","Recordings","Received files"};
+            case "gallerySort": return new String[]{"Name A–Z","Name Z–A","Newest added"};
             case "galleryImages":
             case "galleryVideos": {
                 java.util.List<NativeGalleryStore.Entry> media =
@@ -2058,6 +2067,13 @@ public class C2PhoneView extends View {
                         : "Not yet implemented in this native Gallery.\nImages and Video clips can be selected from Android.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("gallerySort".equals(page)) {
+            galleryStore.sort(gallerySortVideos, sel);
+            back();
+            showNotice("Sort order updated");
             return;
         }
 
@@ -2447,6 +2463,7 @@ public class C2PhoneView extends View {
     }
 
     private void back() {
+        int previewTargetIndex = "galleryPreview".equals(page) ? galleryPreviewIndex : -1;
         if ("galleryPreview".equals(page)) clearGalleryPreview();
         resetTap();
         optionsOpen = false;
@@ -2462,6 +2479,8 @@ public class C2PhoneView extends View {
             page = "home";
             sel = 0;
         }
+        if (previewTargetIndex >= 0 && "galleryImages".equals(page))
+            sel = Math.min(previewTargetIndex, Math.max(0, galleryStore.images.size() - 1));
         invalidate();
     }
 
@@ -2710,7 +2729,10 @@ public class C2PhoneView extends View {
         }
 
         if ("browser".equals(page) || "itemDetail".equals(page) || "galleryPreview".equals(page)) {
-            if ("RSK".equals(key)) back();
+            if ("galleryPreview".equals(page) &&
+                    ("LEFT".equals(key) || "RIGHT".equals(key)))
+                showAdjacentImage("LEFT".equals(key) ? -1 : 1);
+            else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             else if ("OK".equals(key) && "browser".equals(page)) showNotice("Offline simulation");
             invalidate();
@@ -3061,6 +3083,51 @@ public class C2PhoneView extends View {
         musicTrack = (musicTrack + delta + tracks.length) % tracks.length;
     }
 
+    private void showGalleryDetails(boolean selectedOnly, boolean video) {
+        if (selectedOnly) {
+            NativeGalleryStore.Entry entry = "galleryPreview".equals(page)
+                    ? findGalleryPreviewEntry() :
+                    ("galleryImages".equals(page) || "galleryVideos".equals(page)
+                            ? galleryStore.at(video, sel) : null);
+            if (entry != null) {
+                Uri uri = Uri.parse(entry.uri);
+                String mime = null;
+                Long size = null;
+                try {
+                    mime = getContext().getContentResolver().getType(uri);
+                    try (android.database.Cursor cursor = getContext().getContentResolver()
+                            .query(uri, new String[]{android.provider.OpenableColumns.SIZE},
+                                    null, null, null)) {
+                        if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0))
+                            size = cursor.getLong(0);
+                    }
+                } catch (Exception ignored) { }
+                detailTitle = "File details";
+                detailText = "Name: " + entry.title +
+                        "\nType: " + (mime == null ? "Unknown" : mime) +
+                        "\nSize: " + (size == null ? "Unknown" : size + " bytes") +
+                        "\nOriginal: Android document" +
+                        "\nRemove from Gallery affects this app only";
+                go("itemDetail");
+                return;
+            }
+        }
+        detailTitle = "Gallery memory";
+        detailText = "User-selected images: " + galleryStore.images.size() +
+                "\nUser-selected videos: " + galleryStore.videos.size() +
+                "\nReal device storage: not queried" +
+                "\nOriginal device media unchanged";
+        go("itemDetail");
+    }
+
+    private NativeGalleryStore.Entry findGalleryPreviewEntry() {
+        if (galleryPreviewIndex >= 0)
+            return galleryStore.at(false, galleryPreviewIndex);
+        for (NativeGalleryStore.Entry e : galleryStore.images)
+            if (e.uri.equals(galleryPreviewUri)) return e;
+        return null;
+    }
+
     private void openGalleryFolder(boolean video) {
         go(video ? "galleryVideos" : "galleryImages");
         if (galleryStore.entries(video).isEmpty())
@@ -3081,6 +3148,10 @@ public class C2PhoneView extends View {
 
     public void onGalleryPicked(boolean video, java.util.List<Uri> uris) {
         int added = galleryStore.add(video, uris);
+        if ("galleryPreview".equals(page)) {
+            clearGalleryPreview();
+            back();
+        }
         sel = 0;
         if (added > 0) showNotice(added + " file(s) added to Gallery");
         else showNotice("No new files selected");
@@ -3100,11 +3171,30 @@ public class C2PhoneView extends View {
                 showNotice("No compatible video player");
             return;
         }
+        int selected = sel;
+        showGalleryPreviewAt(selected);
+        go("galleryPreview");
+    }
+
+    private void showGalleryPreviewAt(int index) {
+        NativeGalleryStore.Entry item = galleryStore.at(false, index);
+        if (item == null) return;
         clearGalleryPreview();
+        galleryPreviewIndex = index;
         galleryPreviewUri = item.uri;
         galleryPreviewTitle = item.title;
         galleryPreviewBitmap = galleryStore.decodePreview(item.uri, 240, 240);
-        go("galleryPreview");
+        invalidate();
+    }
+
+    private void showAdjacentImage(int offset) {
+        int n = galleryStore.images.size();
+        if (n == 0) {
+            showNotice("Gallery is empty");
+            return;
+        }
+        int index = galleryPreviewIndex >= 0 ? galleryPreviewIndex : 0;
+        showGalleryPreviewAt((index + offset + n) % n);
     }
 
     private void clearGalleryPreview() {
@@ -3114,6 +3204,7 @@ public class C2PhoneView extends View {
         }
         galleryPreviewUri = "";
         galleryPreviewTitle = "";
+        galleryPreviewIndex = -1;
     }
 
     private void openOptionsForPage() {
@@ -3172,10 +3263,12 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","View photos","View videos","Details","Memory status",
                     "Type of view","Sort","Add folder"};
         else if ("galleryImages".equals(page) || "galleryVideos".equals(page))
-            optionItems = new String[]{"Open","Add from phone","Details","Remove from gallery",
-                    "Clear folder","Memory status"};
+            optionItems = new String[]{"Open","Add from phone","Details","Sort",
+                    "Remove from gallery","Clear folder","Memory status"};
         else if ("galleryPreview".equals(page))
             optionItems = new String[]{"Details","Remove from gallery","Add from phone"};
+        else if ("gallerySort".equals(page))
+            optionItems = new String[]{"Select"};
         else if ("media".equals(page))
             optionItems = new String[]{"Open","View photos","View videos","Settings","Memory in use"};
         else if ("organiser".equals(page))
@@ -3490,6 +3583,8 @@ public class C2PhoneView extends View {
                     requestConfirm("hideCallList", "Hide all calls in this list? Android call log unchanged.");
                 else showNotice("No calls in list");
             } else showNotice("Not implemented: " + choice);
+        } else if ("gallerySort".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
         } else if ("gallery".equals(page) || "galleryImages".equals(page)
                 || "galleryVideos".equals(page) || "galleryPreview".equals(page)) {
             boolean video = "galleryVideos".equals(page);
@@ -3498,13 +3593,17 @@ public class C2PhoneView extends View {
             else if ("View videos".equals(choice)) openGalleryFolder(true);
             else if ("Add from phone".equals(choice)) {
                 pickGalleryFiles(video);
+            } else if ("Sort".equals(choice)) {
+                if ("gallery".equals(page) && sel != 1 && sel != 2) {
+                    showNotice("Open Images or Video clips to sort");
+                } else {
+                    gallerySortVideos = "galleryVideos".equals(page) ||
+                            ("gallery".equals(page) && sel == 2);
+                    go("gallerySort");
+                    sel = galleryStore.sortMode(gallerySortVideos);
+                }
             } else if ("Details".equals(choice) || "Memory status".equals(choice)) {
-                detailTitle = "Gallery details";
-                detailText = "User-selected images: " + galleryStore.images.size()
-                        + "\nUser-selected videos: " + galleryStore.videos.size()
-                        + "\nDevice storage usage: not queried"
-                        + "\nOriginal device files are never deleted.";
-                go("itemDetail");
+                showGalleryDetails("Details".equals(choice), video);
             } else if ("Remove from gallery".equals(choice)) {
                 if ("galleryPreview".equals(page)) {
                     if (!galleryPreviewUri.isEmpty())
