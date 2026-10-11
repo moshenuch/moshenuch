@@ -339,6 +339,92 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /** Demo-data controls are absent from non-debuggable release APKs. */
+    private boolean isDemoToolsAvailable() {
+        return (getContext().getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+    }
+
+    private void clearFixtureReadAndHiddenOverrides() {
+        boolean dirtyRead = false, dirtyHidden = false;
+        for (Long id : new ArrayList<>(localReadSmsIds)) {
+            if (NativeAuditFixtures.isFixtureMessageId(id)) {
+                localReadSmsIds.remove(id);
+                dirtyRead = true;
+            }
+        }
+        for (Long id : new ArrayList<>(localUnreadSmsIds)) {
+            if (NativeAuditFixtures.isFixtureMessageId(id)) {
+                localUnreadSmsIds.remove(id);
+                dirtyRead = true;
+            }
+        }
+        for (Long id : new ArrayList<>(hiddenSmsIds)) {
+            if (NativeAuditFixtures.isFixtureMessageId(id)) {
+                hiddenSmsIds.remove(id);
+                dirtyHidden = true;
+            }
+        }
+        if (dirtyRead) persistSmsReadOverrides();
+        if (dirtyHidden) saveLongSet("sms_hidden", hiddenSmsIds);
+        markedSmsIds.clear();
+        markedThreadIds.clear();
+        smsExtractedDetails.clear();
+        activeMessageId = -1L;
+        activeThreadId = -1L;
+    }
+
+    /**
+     * Separate, reversible, opt-in set of debug fixtures. No provider insert,
+     * update, delete, SMS send or call is ever part of this transition.
+     */
+    private void changeAuditDemoMode(boolean enable) {
+        if (!isDemoToolsAvailable()) {
+            showNotice("Debug tools unavailable");
+            return;
+        }
+        clearFixtureReadAndHiddenOverrides();
+        demoMode = enable;
+        prefs.edit().putBoolean("audit_demo_mode_v1", enable).apply();
+        refreshContactsFromPhone();
+        if (!enable && !backend.has(Manifest.permission.READ_CONTACTS)) {
+            // Restore any preexisting app-local Contacts that demo mode hid.
+            contacts.clear();
+            try {
+                JSONArray stored = new JSONArray(prefs.getString("contacts", "[]"));
+                for (int i = 0; i < stored.length(); i++) {
+                    JSONObject item = stored.optJSONObject(i);
+                    if (item != null)
+                        contacts.add(new Contact(item.optString("name"),
+                                item.optString("number")));
+                }
+            } catch (Exception ignored) { }
+        }
+        refreshSmsFromPhone();
+        history.clear();
+        page = enable ? "conversations" : "settings";
+        sel = enable ? 0 : 15;
+        optionsOpen = false;
+        markedContactIndices.clear();
+        contactIndex = 0;
+        showNotice(enable ? "DEMO loaded: 12 contacts, 12 SMS" : "Demo data cleared");
+        invalidate();
+    }
+
+    private void showAuditDemoDetails() {
+        detailTitle = "Debug demo data";
+        detailText = "12 fictional contacts (alphabetical)"
+                + "\n2 contacts with multiple numbers"
+                + "\n12 SMS across 6 conversations"
+                + "\n3 unread incoming SMS and sent/read items"
+                + "\nSender with no saved contact"
+                + "\nPhone, email and web link examples"
+                + "\nOnly in this app (no provider writes)"
+                + "\nReal calls, SMS sending and Contacts edits blocked"
+                + "\nSelect Seed again to reset read/hidden state";
+        go("itemDetail");
+    }
+
     private void refreshDeviceData() {
         refreshContactsFromPhone();
         refreshSmsFromPhone();
@@ -862,6 +948,14 @@ public class C2PhoneView extends View {
             if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(59, 4, 78, 19), p);
             else drawUnreadEnvelope(c, 61, 5, Color.WHITE);
         }
+        if (demoMode) {
+            p.setColor(Color.rgb(255, 209, 70));
+            p.setTypeface(fontBold);
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setTextSize(11);
+            c.drawText("DEMO", 150, 17, p);
+        }
+        p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(fontRegular);
         p.setTextSize(14);
@@ -908,6 +1002,14 @@ public class C2PhoneView extends View {
         if (alarmOn) {
             p.setTextSize(11);
             c.drawText("Alarm " + alarmTime, 120, 142, p);
+        }
+        if (demoMode) {
+            p.setColor(Color.rgb(255, 209, 70));
+            p.setTypeface(fontBold);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(14);
+            c.drawText("DEMO DATA (DEBUG)", 120, 165, p);
+            p.setTypeface(fontRegular);
         }
 
         p.setTextAlign(Paint.Align.LEFT);
@@ -2188,6 +2290,7 @@ public class C2PhoneView extends View {
             case "speedDialAssign": return "Select speed dial";
             case "log": return "Log";
             case "settings": return "Settings";
+            case "demoTools": return "Demo data (debug)";
             case "callsettings": return "Call settings";
             case "speedDialMode": return "Speed dialling";
             case "callfilter": return "Call filtering";
@@ -2382,7 +2485,14 @@ public class C2PhoneView extends View {
             case "dialled":
                 return callItemsFor(CallLog.Calls.OUTGOING_TYPE);
             case "settings":
+                if (isDemoToolsAvailable())
+                    return new String[]{"Profiles","Themes","Tones","Lights","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","Phone","Accessories","Configuration","Security","Rest. factory sett.","Demo data (debug)"};
                 return new String[]{"Profiles","Themes","Tones","Lights","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","Phone","Accessories","Configuration","Security","Rest. factory sett."};
+            case "demoTools":
+                return isDemoToolsAvailable() ? new String[]{
+                    "Seed / reset sample data",
+                    "Clear demo data",
+                    "What is included"} : new String[0];
             case "aboutNative":
                 return new String[]{"APK version: " + installedApkVersion(),"HTML reference: v6.343","Partial native update","No WebView"};
             case "callsettings":
@@ -2767,8 +2877,21 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("demoTools".equals(page)) {
+            if (!isDemoToolsAvailable()) {
+                showNotice("Debug tools unavailable");
+                return;
+            }
+            if (sel == 0) changeAuditDemoMode(true);
+            else if (sel == 1) requestConfirm("clearAuditDemo",
+                    "Clear all fictional contacts and SMS and return to your phone?");
+            else showAuditDemoDetails();
+            return;
+        }
+
         if ("settings".equals(page)) {
-            if (sel == 0) go("profiles");
+            if (sel == 15 && isDemoToolsAvailable()) go("demoTools");
+            else if (sel == 0) go("profiles");
             else if (sel == 1) go("themes");
             else if (sel == 6) go("shortcuts");
             else if (sel == 7) {
@@ -4392,7 +4515,8 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
-        if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
+        if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
+        else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
             if (sel == 1) optionItems = new String[]{"New message","Inbox view","Message log","SIM messages","Memory status"};
@@ -4762,7 +4886,10 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("menu".equals(page)) {
+        if ("demoTools".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
+            else if ("What is included".equals(choice)) showAuditDemoDetails();
+        } else if ("menu".equals(page)) {
             if ("Main menu view".equals(choice)) {
                 go("menuViewPicker");
                 sel = NativeMenuLayout.modeIndex(menuView);
@@ -5456,7 +5583,9 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("restoreGoTo".equals(action)) {
+        if ("clearAuditDemo".equals(action)) {
+            changeAuditDemoMode(false);
+        } else if ("restoreGoTo".equals(action)) {
             goToShortcuts.restoreDefaults();
             saveGoToShortcuts();
             sel = 0;
