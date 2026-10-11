@@ -2265,11 +2265,17 @@ public class C2PhoneView extends View {
         }
 
         if ("inbox".equals(page)) {
-            inboxIndex = sel;
-            if (deviceSmsActive && sel < smsInbox.size()) {
-                activeMessageId = smsInbox.get(sel).id;
-                markSmsReadLocally(activeMessageId);
+            if (!deviceSmsActive) {
+                showNotice("Allow SMS permission");
+                return;
             }
+            if (sel < 0 || sel >= smsInbox.size()) {
+                showNotice("No received message selected");
+                return;
+            }
+            inboxIndex = sel;
+            activeMessageId = smsInbox.get(sel).id;
+            markSmsReadLocally(activeMessageId);
             go("messageRead");
             return;
         }
@@ -4551,11 +4557,14 @@ public class C2PhoneView extends View {
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
             // An Inbox Options action must refer to the highlighted row, not a
             // message previously opened in another conversation or folder.
-            if ("inbox".equals(page) && sel >= 0 && sel < smsInbox.size()) {
-                inboxIndex = sel;
-                activeMessageId = smsInbox.get(sel).id;
-            }
-            AndroidBackend.DeviceSms selected = smsById(activeMessageId);
+            AndroidBackend.DeviceSms selected;
+            if ("inbox".equals(page)) {
+                selected = sel >= 0 && sel < smsInbox.size() ? smsInbox.get(sel) : null;
+                if (selected != null) {
+                    inboxIndex = sel;
+                    activeMessageId = selected.id;
+                }
+            } else selected = smsById(activeMessageId);
             if (selected == null) {
                 showNotice("Message unavailable");
             } else if ("Reply".equals(choice) || "Reply as".equals(choice)) {
