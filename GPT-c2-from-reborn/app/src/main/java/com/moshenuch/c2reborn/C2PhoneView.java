@@ -1083,14 +1083,26 @@ public class C2PhoneView extends View {
 
     private void drawMessageRead(Canvas c) {
         AndroidBackend.DeviceSms m = smsById(activeMessageId);
-        String name = m == null ? inboxName(inboxIndex) : contactNameFor(m.address);
+        String name = m == null ? "Message unavailable" : contactNameFor(m.address);
         drawStatus(c, name);
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(12);
-        c.drawText(m != null && m.type == Telephony.Sms.MESSAGE_TYPE_SENT ? "Sent" : "Received", 8, 38, p);
+        boolean outgoing = m != null && m.type != Telephony.Sms.MESSAGE_TYPE_INBOX;
+        Bitmap icon = m == null ? null : RebornIconAtlas.get(outgoing ? "SMS_SENT" :
+                (isSmsUnread(m) ? "SMS_UNREAD" : "SMS_READ"));
+        if (icon != null) c.drawBitmap(icon, null, new RectF(8, 43, 31, 66), p);
+        c.drawText(m == null ? "Unavailable" : outgoing ? "Sent record" :
+                (isSmsUnread(m) ? "Unread" : "Received"), icon == null ? 8 : 36, 57, p);
+        if (m != null) {
+            p.setTextAlign(Paint.Align.RIGHT);
+            p.setTextSize(10);
+            c.drawText(new SimpleDateFormat("dd/MM HH:mm", Locale.UK).format(new Date(m.date)),
+                    231, 75, p);
+        }
+        p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(14);
-        drawWrappedText(c, m == null ? inboxBody(inboxIndex) : m.body, 8, 66, 220, 18, 11);
+        drawWrappedText(c, m == null ? "Message no longer available." : m.body, 8, 94, 220, 18, 10);
     }
 
     private void drawContactDetail(Canvas c) {
@@ -1334,7 +1346,11 @@ public class C2PhoneView extends View {
         if ("stopwatch".equals(page)) return new String[]{"Split", stopwatchRunning ? "Stop" : "Start", "Back"};
         if ("countdown".equals(page)) return new String[]{"Options", "Start", "Back"};
         if ("music".equals(page)) return new String[]{"Options", musicPlaying ? "Pause" : "Play", "Back"};
-        if ("messageRead".equals(page)) return new String[]{"Options", "Reply", "Back"};
+        if ("messageRead".equals(page)) {
+            AndroidBackend.DeviceSms selected = smsById(activeMessageId);
+            return new String[]{"Options", selected != null &&
+                    selected.type != Telephony.Sms.MESSAGE_TYPE_INBOX ? "Forward" : "Reply", "Back"};
+        }
         if ("contactDetail".equals(page)) return new String[]{"Options", "Call", "Back"};
         if ("edit".equals(page) || "alarmEdit".equals(page)) return new String[]{"Save", "", editBuffer.isEmpty() ? "Back" : "Clear"};
         if ("browser".equals(page)) return new String[]{"Options", "Go", "Back"};
@@ -2579,10 +2595,15 @@ public class C2PhoneView extends View {
 
         if ("messageRead".equals(page)) {
             if ("OK".equals(key)) {
-                recipient = activeMessageAddress();
-                messageBody = "";
-                composeFocus = 1;
-                go("compose");
+                AndroidBackend.DeviceSms current = smsById(activeMessageId);
+                if (current == null) showNotice("Message unavailable");
+                else if (current.type != Telephony.Sms.MESSAGE_TYPE_INBOX) forwardSmsCopy(current);
+                else {
+                    recipient = current.address;
+                    messageBody = "";
+                    composeFocus = 1;
+                    go("compose");
+                }
             } else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
@@ -2964,12 +2985,18 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","New message","Delete draft","Delete all drafts","Inbox view","Folder details","Memory status"};
         else if ("outbox".equals(page) || "savedmessages".equals(page))
             optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
-        else if ("inbox".equals(page) || "messageRead".equals(page))
+        else if ("inbox".equals(page))
             optionItems = new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+        else if ("messageRead".equals(page)) {
+            AndroidBackend.DeviceSms chosen = smsById(activeMessageId);
+            optionItems = chosen != null && chosen.type != Telephony.Sms.MESSAGE_TYPE_INBOX
+                    ? new String[]{"Forward","Delete","Call","Message details","Conversation view","New message","Copy as template"}
+                    : new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message"};
+        }
         else if ("conversations".equals(page))
             optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all"};
         else if ("conversation".equals(page))
-            optionItems = new String[]{"Reply","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+            optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Move","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
         else if ("contacts".equals(page))
@@ -3098,9 +3125,7 @@ public class C2PhoneView extends View {
                 if (sel < smsThreads.size()) startCall(smsThreads.get(sel).address);
             } else if ("Conversation details".equals(choice)) {
                 if (sel >= 0 && sel < smsThreads.size()) {
-                    detailTitle = "Message details";
-                    detailText = "Type: Conversation\nContact: " + itemsFor("conversations")[sel];
-                    go("itemDetail");
+                    showConversationDetails(smsThreads.get(sel).threadId);
                 } else showNotice("No conversation selected");
             } else if ("Delete conversation".equals(choice)) {
                 if (smsThreads.isEmpty()) {
@@ -3136,12 +3161,18 @@ public class C2PhoneView extends View {
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
+            } else if ("Forward".equals(choice)) {
+                forwardSmsCopy(m);
+            } else if ("Message details".equals(choice)) {
+                showMessageDetails(m);
             } else if ("Delete".equals(choice)) {
-                int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
-                requestConfirm("deleteSms", "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
+                if (m != null || !markedSmsIds.isEmpty()) {
+                    int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
+                    requestConfirm("deleteSms", "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
+                } else showNotice("No message selected");
             } else if ("Call".equals(choice) && m != null) startCall(m.address);
             else if ("Go to Drafts".equals(choice)) go("drafts");
-            else if ("Conversation details".equals(choice)) showNotice("Conversation details");
+            else if ("Conversation details".equals(choice)) showConversationDetails(activeThreadId);
             else if ("Mark".equals(choice) && m != null) {
                 if (!markedSmsIds.add(m.id)) markedSmsIds.remove(m.id);
                 showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
@@ -3153,7 +3184,7 @@ public class C2PhoneView extends View {
             } else if ("Unmark all".equals(choice)) {
                 markedSmsIds.clear();
                 showNotice("Marks cleared");
-            } else showNotice(choice);
+            } else showNotice("Not implemented: " + choice);
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
             // An Inbox Options action must refer to the highlighted row, not a
             // message previously opened in another conversation or folder.
@@ -3161,24 +3192,36 @@ public class C2PhoneView extends View {
                 inboxIndex = sel;
                 activeMessageId = smsInbox.get(sel).id;
             }
-            if ("Reply".equals(choice) || "Reply as".equals(choice)) {
-                recipient = activeMessageAddress();
-                messageBody = "";
-                composeFocus = 1;
-                go("compose");
-            } else if ("Call".equals(choice)) startCall(activeMessageAddress());
+            AndroidBackend.DeviceSms selected = smsById(activeMessageId);
+            if (selected == null) {
+                showNotice("Message unavailable");
+            } else if ("Reply".equals(choice) || "Reply as".equals(choice)) {
+                if (selected.type != Telephony.Sms.MESSAGE_TYPE_INBOX) {
+                    showNotice("Sent message: use Forward");
+                } else {
+                    recipient = selected.address;
+                    messageBody = "";
+                    composeFocus = 1;
+                    go("compose");
+                }
+            } else if ("Call".equals(choice)) startCall(selected.address);
             else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Hide this message in the app? Phone SMS unchanged.");
-            else if ("Forward".equals(choice) || "Edit".equals(choice) || "New message".equals(choice)) {
+            else if ("Forward".equals(choice)) forwardSmsCopy(selected);
+            else if ("Edit".equals(choice)) {
+                // Editing a received provider SMS is not permitted; make a copy in Compose.
+                forwardSmsCopy(selected);
+                showNotice("Editing a copy");
+            } else if ("New message".equals(choice)) {
                 recipient = "";
-                messageBody = "Forwarded message";
+                messageBody = "";
                 composeFocus = 0;
                 go("compose");
-            } else if ("Conversation view".equals(choice)) go("conversations");
-            else if ("Message details".equals(choice)) {
-                detailTitle = "Message details";
-                detailText = "Type: Text message\nStatus: Read";
-                go("itemDetail");
-            } else showNotice(choice);
+            } else if ("Conversation view".equals(choice)) {
+                activeThreadId = selected.threadId;
+                markedSmsIds.clear();
+                go("conversation");
+            } else if ("Message details".equals(choice)) showMessageDetails(selected);
+            else showNotice("Not implemented: " + choice);
         } else if ("compose".equals(page)) {
             if ("Send".equals(choice)) sendMessage();
             else if ("Add recipient >".equals(choice)) go("recipientPicker");
@@ -3594,6 +3637,66 @@ public class C2PhoneView extends View {
             if (Character.isDigit(ch)) b.append(ch);
         }
         return b.toString();
+    }
+
+    private void forwardSmsCopy(AndroidBackend.DeviceSms message) {
+        if (message == null) {
+            showNotice("Message unavailable");
+            return;
+        }
+        // Preserve the original text, but do not copy a destination automatically.
+        recipient = "";
+        messageBody = message.body == null ? "" : message.body;
+        composeFocus = 0;
+        inputMode = "T9";
+        go("compose");
+    }
+
+    private void showMessageDetails(AndroidBackend.DeviceSms message) {
+        if (message == null) {
+            showNotice("Message unavailable");
+            return;
+        }
+        boolean received = message.type == Telephony.Sms.MESSAGE_TYPE_INBOX;
+        String state = received ? (isSmsUnread(message) ? "Unread" : "Read in app")
+                : "Stored outgoing (delivery unconfirmed)";
+        detailTitle = "Message details";
+        detailText = "Type: Text message\nDirection: " + (received ? "Received" : "Outgoing")
+                + "\nStatus: " + state
+                + "\n" + (received ? "From: " : "To: ") + message.address
+                + "\nDate: " + new SimpleDateFormat("dd MMM yyyy HH:mm", Locale.UK)
+                .format(new Date(message.date))
+                + "\nLength: " + (message.body == null ? 0 : message.body.length()) + " chars";
+        go("itemDetail");
+    }
+
+    private void showConversationDetails(long threadId) {
+        int received = 0, outgoing = 0, unread = 0;
+        long latest = 0L;
+        String number = "";
+        for (AndroidBackend.DeviceSms sms : deviceSms) {
+            if (sms.threadId != threadId) continue;
+            if (number.isEmpty()) number = sms.address;
+            if (sms.type == Telephony.Sms.MESSAGE_TYPE_INBOX) {
+                received++;
+                if (isSmsUnread(sms)) unread++;
+            } else outgoing++;
+            if (sms.date > latest) latest = sms.date;
+        }
+        if (received + outgoing == 0) {
+            showNotice("Conversation unavailable");
+            return;
+        }
+        detailTitle = "Conversation details";
+        detailText = "Contact: " + contactNameFor(number)
+                + "\nNumber: " + number
+                + "\nMessages: " + (received + outgoing)
+                + "\nReceived: " + received
+                + "\nOutgoing: " + outgoing
+                + "\nUnread in app: " + unread
+                + "\nLast: " + new SimpleDateFormat("dd MMM yyyy HH:mm", Locale.UK)
+                        .format(new Date(latest));
+        go("itemDetail");
     }
 
     private String buildThreadDetail(long threadId) {
