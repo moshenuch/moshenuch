@@ -6640,15 +6640,24 @@ public class C2PhoneView extends View {
         }
         Contact c = contacts.get(index);
         if (deviceContactsActive) {
-            if (!backend.deleteContact(c.contactId)) {
+            boolean deleted = backend.deleteContact(c.contactId);
+            // Refresh on success AND failure so stale rows cannot mislead the user.
+            refreshContactsFromPhone();
+            if (!deleted) {
                 showNotice("Unable to delete contact");
                 return;
             }
-            refreshContactsFromPhone();
+            for (Contact remaining : contacts) {
+                if (remaining.contactId == c.contactId) {
+                    showNotice("Contact still on device");
+                    return;
+                }
+            }
         } else {
             contacts.remove(index);
             saveContacts();
         }
+        sel = Math.max(0, Math.min(sel, contacts.size() - 1));
         showNotice("Contact deleted");
     }
 
