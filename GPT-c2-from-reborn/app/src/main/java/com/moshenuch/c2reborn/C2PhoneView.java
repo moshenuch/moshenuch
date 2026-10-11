@@ -4722,6 +4722,10 @@ public class C2PhoneView extends View {
         return null;
     }
 
+    public boolean isInCameraViewfinder() {
+        return "cameraViewfinder".equals(page) || "videoViewfinder".equals(page);
+    }
+
     private void startCameraCapture(boolean video) {
         // First enter the in-house Nokia UI rather than directly leaving C2.
         go(video ? "videoViewfinder" : "cameraViewfinder");
