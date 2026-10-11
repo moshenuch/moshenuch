@@ -34,6 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           dst="GPT-c2-from-reborn/app/src/main/res/drawable/screen_wallpaper.png"
+          python3 -m pip install --user --quiet "Pillow==11.3.0"
           python3 GPT-c2-from-reborn/tools/create_swirl_wallpaper.py "$dst"
           mkdir -p GPT-c2-from-reborn/app/src/main/assets
           cp "$dst" GPT-c2-from-reborn/app/src/main/assets/nokia_wallpaper.png
