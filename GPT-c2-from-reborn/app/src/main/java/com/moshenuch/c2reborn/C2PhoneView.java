@@ -4734,11 +4734,18 @@ public class C2PhoneView extends View {
     }
 
     private void launchHardwareCapture(boolean video) {
-        if (getContext() instanceof MainActivity)
-            ((MainActivity) getContext()).showNativeCameraPreview(false);
-        if (getContext() instanceof MainActivity)
-            ((MainActivity) getContext()).launchCameraCapture(video);
-        else showNotice("Android camera is unavailable");
+        if (!(getContext() instanceof MainActivity)) {
+            showNotice("Android camera is unavailable");
+            return;
+        }
+        MainActivity host = (MainActivity) getContext();
+        if (!video) {
+            // Photo shutter stays inside C2; only Video still uses Android.
+            host.captureNativePhoto();
+        } else {
+            host.showNativeCameraPreview(false);
+            host.launchCameraCapture(true);
+        }
     }
 
     private void drawNokiaCameraViewfinder(Canvas c) {
