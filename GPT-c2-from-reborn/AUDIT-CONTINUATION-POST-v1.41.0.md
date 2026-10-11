@@ -1,3 +1,9 @@
+## Names Options reference correction — 17 entries
+
+User established exact Nokia HTML Names Options order: Search; Call >; Send message >; View conversations; Add new >; Edit >; Delete contact; Add to group; Selecting options >; Details; Add to contact; Edit contact; Copy contact; Move contact; Merge contact; Add to blacklist; Add to whitelist. Popup title Options only, no counter, solid dark list, white selection bar, softkeys Options / Details / Back.
+
+Native source list is now exactly these 17 strings in this order. Existing Search, Call, SMS, Add new, Edit, Delete, Add to group, Details, View conversations, blacklist/whitelist are routed; Selecting options > displays Mark/Mark all/Unmark all/Delete selected. **Limitations:** Call >, Send message >, Add new >, Edit > still dispatch directly rather than opening reference-style submenus. Add to contact, Copy contact, Move contact, Merge contact presently show explicit not-implemented notices rather than silently mutating data. Selection submenu and 17-item list require emulator verification. Do not claim full functional parity yet.
+
 ## 2026-10-11 Options popup screenshot parity
 
 Names Options screenshot shows black 28px title strip with only **Options**, six rows visible (Search, Call >, Send message >, Add new >, Edit >, Delete contact) and the underlying softbar Options / Details / Back. Names option strings already match these six in order within the twelve total. Suppressed numeric options counter in native overlay (now applies to all Options popups). Call-log list pages now show Details centre softkey, retaining existing open-details action.
