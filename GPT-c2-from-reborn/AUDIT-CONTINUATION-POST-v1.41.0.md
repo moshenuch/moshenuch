@@ -1,3 +1,9 @@
+## APK v1.44.0 — Nokia native calling screen follow-up
+
+v1.43.0 CI and GitHub release were confirmed successful. v1.44.0 source introduces Nokia-like blue calling panel showing Telecom state (Calling., Connecting., Incoming call, In call, On hold), resolved contact name, number, connected timer, progress indicator, and handset/loudspeaker. C2InCallService has an incoming-call answer action bound to the green CALL hardware key; OK/End remains call termination. Requires emulator/on-device verification. The user must grant Android default Phone role; real calls still run through Telecom. Do not advertise that Google screens can never appear (OS controls role, emergency UI and device-level policies).
+
+**Pending:** Test default-role prompt/return, first/second dial, actual outgoing and incoming calls, background re-entry, end/hangup, user-rejected role, device without Telecom capability, speaker, Bluetooth and emergency. Verify graphical pixel fidelity against HTML v6.343. Also fix the six exact Log Options actions previously requested.
+
 ## APK v1.43.0 default-dialer integration — source committed, real-device test REQUIRED
 
 New native `C2InCallService` with Telecom Call callbacks; manifest registers BIND_INCALL_SERVICE and ACTION_DIAL default-dialer eligibility. `MainActivity` requests Android ROLE_DIALER upon first outgoing call if role not granted. The user must accept; after approval they must dial again. The role restriction prevents claiming stock-free calling without OS approval, and emergency calls may still be handled by the system.
