@@ -82,6 +82,11 @@ public class C2PhoneView extends View {
     private final ArrayList<String> whitelistNumbers = new ArrayList<>();
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    // Functional Nokia multi-tap search, with an optional numeric mode.
+    private String contactSearchQuery = "";
+    private boolean contactSearchNumeric = false;
+    private int contactSearchLastKey = -1, contactSearchTapCycle = 0;
+    private long contactSearchLastAt = 0L;
     // Android contact IDs map to all their numbers; one phonebook row per ID.
     private final HashMap<Long, ArrayList<String>> contactNumbersById = new HashMap<>();
     private final NativeContactGroups contactGroups;
@@ -704,6 +709,7 @@ public class C2PhoneView extends View {
         else if ("messageRead".equals(page)) drawMessageRead(c);
         else if ("conversation".equals(page)) drawConversation(c);
         else if ("contactDetail".equals(page)) drawContactDetail(c);
+        else if ("contactSearch".equals(page)) drawContactSearch(c);
         else if ("edit".equals(page)) drawEditor(c);
         else if ("alarmEdit".equals(page)) drawAlarmEdit(c);
         else if ("itemDetail".equals(page)) drawItemDetail(c);
@@ -1325,6 +1331,63 @@ public class C2PhoneView extends View {
         drawWrappedText(c, m == null ? "Message no longer available." : m.body, 8, 94, 220, 18, 10);
     }
 
+    private void drawContactSearch(Canvas c) {
+        if (wallpaper != null) c.drawBitmap(wallpaper, null, new RectF(0, 18, 240, 296), p);
+        drawStatus(c, "Search names");
+        p.setColor(Color.rgb(19, 24, 36));
+        c.drawRect(5, 37, 235, 85, p);
+        p.setColor(Color.WHITE);
+        p.setTypeface(fontRegular);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTextSize(11);
+        c.drawText(contactSearchNumeric ? "Number search (123)" : "Name search (abc)", 11, 52, p);
+        p.setTextSize(18);
+        String queryLabel = contactSearchQuery.isEmpty() ? "Search..." : contactSearchQuery;
+        c.drawText(android.text.TextUtils.ellipsize(queryLabel,
+                new android.text.TextPaint(p), 211f,
+                android.text.TextUtils.TruncateAt.START).toString(), 11, 76, p);
+        ArrayList<Integer> matches = contactSearchMatches();
+        if (matches.isEmpty()) {
+            p.setTextSize(13);
+            p.setTextAlign(Paint.Align.CENTER);
+            c.drawText(contacts.isEmpty() ? "No contacts" : "No matches", 120, 162, p);
+        } else {
+            int visible = 5;
+            int first = Math.max(0, Math.min(sel - 2, Math.max(0, matches.size() - visible)));
+            for (int index = first; index < Math.min(matches.size(), first + visible); index++) {
+                Contact found = contacts.get(matches.get(index));
+                int row = index - first;
+                float top = 87 + row * 38;
+                boolean highlighted = index == sel;
+                if (highlighted) {
+                    p.setColor(Color.WHITE);
+                    c.drawRect(5, top, 234, top + 36, p);
+                }
+                p.setColor(highlighted ? Color.BLACK : Color.WHITE);
+                p.setTextAlign(Paint.Align.LEFT);
+                p.setTypeface(highlighted ? fontBold : fontRegular);
+                p.setTextSize(14);
+                c.drawText(android.text.TextUtils.ellipsize(found.name,
+                        new android.text.TextPaint(p), 214f,
+                        android.text.TextUtils.TruncateAt.END).toString(), 11, top + 16, p);
+                p.setTypeface(fontRegular);
+                p.setTextSize(11);
+                p.setColor(highlighted ? Color.DKGRAY : Color.LTGRAY);
+                c.drawText(android.text.TextUtils.ellipsize(found.number,
+                        new android.text.TextPaint(p), 213f,
+                        android.text.TextUtils.TruncateAt.END).toString(), 11, top + 31, p);
+            }
+            p.setTextAlign(Paint.Align.RIGHT);
+            p.setColor(Color.WHITE);
+            p.setTextSize(10);
+            c.drawText((Math.min(sel, matches.size() - 1) + 1)
+                    + "/" + matches.size(), 231, 282, p);
+        }
+        p.setColor(Color.WHITE);
+        p.setTypeface(fontRegular);
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
     private void drawContactDetail(Canvas c) {
         drawStatus(c, "Contact details");
         p.setColor(themeText());
@@ -1691,6 +1754,9 @@ public class C2PhoneView extends View {
         }
         if ("contactDetail".equals(page)) return new String[]{"Options",
                 currentContactNumbers().isEmpty() ? "" : "Call", "Back"};
+        if ("contactSearch".equals(page)) return new String[]{"Options",
+                contactSearchMatches().isEmpty() ? "" : "Open",
+                contactSearchQuery.isEmpty() ? "Back" : "Clear"};
         if ("edit".equals(page) || "alarmEdit".equals(page)) return new String[]{"Save", "", editBuffer.isEmpty() ? "Back" : "Clear"};
         if ("browser".equals(page)) return new String[]{"Options", "Go", "Back"};
         if ("itemDetail".equals(page)) return new String[]{"Options", "", "Back"};
@@ -1885,6 +1951,7 @@ public class C2PhoneView extends View {
             case "emojiPicker": return "Emoticons";
             case "contacts": return "Contacts";
             case "contactsNames": return "Names";
+            case "contactSearch": return "Search names";
             case "contactGroups": return "Groups";
             case "groupMembers": {
                 NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
@@ -2395,6 +2462,10 @@ public class C2PhoneView extends View {
         if ("contactsNames".equals(page) && !contacts.isEmpty()) {
             contactIndex = sel;
             go("contactDetail"); // Starts on the contact's primary number.
+            return;
+        }
+        if ("contactSearch".equals(page)) {
+            openContactSearchResult();
             return;
         }
 
@@ -3139,6 +3210,11 @@ public class C2PhoneView extends View {
                 if (m != null) startCall(m.address);
             }
             else if ("home".equals(page)) go("dialled");
+            else if ("contactSearch".equals(page)) {
+                Contact found = selectedContactSearchResult();
+                if (found != null) startCall(found.number);
+                else showNotice("No matching contact");
+            }
             else if (Arrays.asList("calllog","missed","received","dialled").contains(page)) {
                 startCall(callNumberAt(page, sel));
             }
@@ -3288,6 +3364,15 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("contactSearch".equals(page)) {
+            handleContactSearchKey(key);
+            return;
+        }
+        if ("contactsNames".equals(page) && (isDigit(key) || "#".equals(key))) {
+            beginContactSearch();
+            handleContactSearchKey(key);
+            return;
+        }
         if ("contactDetail".equals(page)) {
             ArrayList<String> numbers = currentContactNumbers();
             if ("UP".equals(key) && !numbers.isEmpty())
@@ -3338,6 +3423,116 @@ public class C2PhoneView extends View {
         }
 
         if ("RSK".equals(key)) back();
+    }
+
+    private void beginContactSearch() {
+        contactSearchQuery = "";
+        contactSearchNumeric = false;
+        resetContactSearchTap();
+        go("contactSearch");
+    }
+
+    private void resetContactSearchTap() {
+        contactSearchLastKey = -1;
+        contactSearchTapCycle = 0;
+        contactSearchLastAt = 0L;
+    }
+
+    private ArrayList<Integer> contactSearchMatches() {
+        ArrayList<Integer> matches = new ArrayList<>();
+        String query = contactSearchQuery.toLowerCase(Locale.ROOT).trim();
+        String digits = digitsOnly(contactSearchQuery);
+        for (int i = 0; i < contacts.size(); i++) {
+            Contact contact = contacts.get(i);
+            boolean found;
+            if (contactSearchNumeric) {
+                found = !digits.isEmpty() && digitsOnly(contact.number).contains(digits);
+                if (!found) {
+                    ArrayList<String> aliases = contactNumbersById.get(contact.contactId);
+                    if (aliases != null)
+                        for (String alternative : aliases)
+                            if (!digits.isEmpty() && digitsOnly(alternative).contains(digits)) {
+                                found = true;
+                                break;
+                            }
+                }
+            } else found = query.isEmpty() ||
+                    contact.name.toLowerCase(Locale.ROOT).contains(query);
+            if (found) matches.add(i);
+        }
+        return matches;
+    }
+
+    private Contact selectedContactSearchResult() {
+        ArrayList<Integer> matches = contactSearchMatches();
+        if (sel < 0 || sel >= matches.size()) return null;
+        int index = matches.get(sel);
+        return index < contacts.size() ? contacts.get(index) : null;
+    }
+
+    private void openContactSearchResult() {
+        ArrayList<Integer> matches = contactSearchMatches();
+        if (sel < 0 || sel >= matches.size()) {
+            showNotice("No matching contact");
+            return;
+        }
+        contactIndex = matches.get(sel);
+        go("contactDetail");
+    }
+
+    private void handleContactSearchKey(String key) {
+        if ("UP".equals(key) || "DOWN".equals(key)) {
+            resetContactSearchTap();
+            int count = contactSearchMatches().size();
+            if (count > 0)
+                sel = "UP".equals(key) ? (sel - 1 + count) % count : (sel + 1) % count;
+        } else if ("OK".equals(key)) openContactSearchResult();
+        else if ("LSK".equals(key)) {
+            resetContactSearchTap();
+            openOptionsForPage();
+        } else if ("RSK".equals(key)) {
+            if (contactSearchQuery.isEmpty()) back();
+            else {
+                contactSearchQuery = contactSearchQuery.substring(0, contactSearchQuery.length() - 1);
+                sel = 0;
+            }
+            resetContactSearchTap();
+        } else if ("#".equals(key)) {
+            contactSearchNumeric = !contactSearchNumeric;
+            contactSearchQuery = "";
+            sel = 0;
+            resetContactSearchTap();
+        } else if ("*".equals(key)) {
+            if (contactSearchNumeric && contactSearchQuery.length() < 24) {
+                contactSearchQuery += "+";
+                sel = 0;
+            }
+            resetContactSearchTap();
+        } else if (isDigit(key)) {
+            int digit = key.charAt(0) - '0';
+            if (contactSearchNumeric) {
+                if (contactSearchQuery.length() < 24) contactSearchQuery += key;
+                resetContactSearchTap();
+            } else {
+                String[] maps = {" ", ".,?!1", "abc2", "def3", "ghi4",
+                        "jkl5", "mno6", "pqrs7", "tuv8", "wxyz9"};
+                String values = maps[digit];
+                long now = SystemClock.uptimeMillis();
+                if (digit == contactSearchLastKey && now - contactSearchLastAt < 1050
+                        && !contactSearchQuery.isEmpty()) {
+                    contactSearchTapCycle = (contactSearchTapCycle + 1) % values.length();
+                    contactSearchQuery = contactSearchQuery.substring(0, contactSearchQuery.length() - 1)
+                            + values.charAt(contactSearchTapCycle);
+                } else if (contactSearchQuery.length() < 24) {
+                    contactSearchTapCycle = 0;
+                    contactSearchQuery += values.charAt(0);
+                }
+                contactSearchLastKey = digit;
+                contactSearchLastAt = now;
+            }
+            sel = 0;
+        }
+        invalidate();
     }
 
     private void handleComposeKey(String key) {
@@ -3888,6 +4083,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
               "Delete contact","Mark >","Mark all","Unmark all","Delete selected",
               "Add to blacklist","Add to whitelist"};
+        else if ("contactSearch".equals(page))
+            optionItems = new String[]{"Open","Call","Send message","Clear search","Back"};
         else if ("contactGroups".equals(page))
             optionItems = new String[]{"Open","Create group","Rename group","Delete group","Group details","Memory status"};
         else if ("groupMembers".equals(page))
@@ -4380,7 +4577,7 @@ public class C2PhoneView extends View {
         } else if ("contacts".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("Add new".equals(choice)) beginContactEdit(-1);
-            else if ("Search".equals(choice)) showNotice("Search not yet implemented");
+            else if ("Search".equals(choice)) beginContactSearch();
             else if ("Memory status".equals(choice)) {
                 detailTitle = "Contacts memory";
                 detailText = "Visible contacts: " + contacts.size()
@@ -4481,7 +4678,26 @@ public class C2PhoneView extends View {
             else showNotice("Not implemented: " + choice);
         } else if ("speedDialMode".equals(page)) {
             if ("Select".equals(choice)) openSelected();
+        } else if ("contactSearch".equals(page)) {
+            if ("Open".equals(choice)) openContactSearchResult();
+            else if ("Call".equals(choice)) {
+                Contact found = selectedContactSearchResult();
+                if (found == null) showNotice("No matching contact");
+                else startCall(found.number);
+            } else if ("Send message".equals(choice)) {
+                Contact found = selectedContactSearchResult();
+                if (found == null) showNotice("No matching contact");
+                else composeForContactNumber(found.number);
+            } else if ("Clear search".equals(choice)) {
+                contactSearchQuery = "";
+                sel = 0;
+                resetContactSearchTap();
+            } else if ("Back".equals(choice)) back();
         } else if ("contactsNames".equals(page)) {
+            if ("Search".equals(choice)) {
+                beginContactSearch();
+                return;
+            }
             if (contacts.isEmpty()) return;
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
             Contact ct = contacts.get(contactIndex);
@@ -4495,8 +4711,7 @@ public class C2PhoneView extends View {
             else if ("Edit >".equals(choice)) beginContactEdit(contactIndex);
             else if ("Delete contact".equals(choice)) {
                 requestConfirm("deleteContact", "Delete this contact?");
-            } else if ("Search".equals(choice)) showNotice("Search");
-            else if ("Mark >".equals(choice)) {
+            } else if ("Mark >".equals(choice)) {
                 if (!markedContactIndices.add(contactIndex)) markedContactIndices.remove(contactIndex);
                 showNotice(markedContactIndices.contains(contactIndex) ? "Marked" : "Unmarked");
             } else if ("Mark all".equals(choice)) {
