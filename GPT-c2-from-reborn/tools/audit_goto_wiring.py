@@ -66,8 +66,10 @@ verify("Real handler forwards video boolean to camera",
        "startCameraCapture(video);" in route)
 verify("C2 Camera enters in-house viewfinder",
        'go(video ? "videoViewfinder" : "cameraViewfinder")' in capture)
-verify("In-house Capture action retains real Android photo/video capture",
-       "launchCameraCapture(video);" in launch_capture)
+verify("In-house photo shutter uses embedded JPEG capture",
+       "captureNativePhoto();" in launch_capture)
+verify("Video capture retains Android recorder fallback",
+       "launchCameraCapture(true);" in launch_capture)
 verify("Android Video recorder selects ACTION_VIDEO_CAPTURE",
        "MediaStore.ACTION_VIDEO_CAPTURE" in android_camera and
        "MediaStore.ACTION_IMAGE_CAPTURE" in android_camera and
