@@ -2214,7 +2214,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
-        if ("cameraResult".equals(page)) return new String[]{"", "Back", "Back"};
+        if ("cameraResult".equals(page)) return new String[]{"Options", "Save", "Back"};
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
         if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
@@ -4059,7 +4059,15 @@ public class C2PhoneView extends View {
         }
 
         if ("cameraResult".equals(page)) {
-            if ("OK".equals(key) || "RSK".equals(key) || "END".equals(key)) {
+            if ("LSK".equals(key)) {
+                openOptionsForPage();
+                return;
+            }
+            if ("OK".equals(key)) {
+                showNotice("Photo saved to Pictures");
+                return;
+            }
+            if ("RSK".equals(key) || "END".equals(key)) {
                 back();
                 if (getContext() instanceof MainActivity)
                     post(() -> ((MainActivity) getContext()).showNativeCameraPreview(true));
@@ -4809,8 +4817,10 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    private Uri capturedPhotoUri;
     private Bitmap capturedPhotoPreview;
     private void showCapturedPhoto(Uri uri) {
+        capturedPhotoUri = uri;
         if (capturedPhotoPreview != null) {
             capturedPhotoPreview.recycle();
             capturedPhotoPreview = null;
@@ -5035,6 +5045,7 @@ public class C2PhoneView extends View {
         else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
         else if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
         else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) optionItems = new String[]{"Capture","Switch mode","Help"};
+        else if ("cameraResult".equals(page)) optionItems = new String[]{"Save","Delete","Send"};
         else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
@@ -5417,6 +5428,15 @@ public class C2PhoneView extends View {
                 inputMode = "T9";
                 go("compose");
             }
+            return;
+        }
+
+        if ("cameraResult".equals(page)) {
+            if ("Save".equals(choice)) showNotice("Photo saved to Pictures");
+            else if ("Send".equals(choice) && capturedPhotoUri != null &&
+                    getContext() instanceof MainActivity)
+                ((MainActivity) getContext()).shareCapturedPhoto(capturedPhotoUri);
+            else if ("Delete".equals(choice)) requestConfirm("deleteCapturedPhoto", "Delete?");
             return;
         }
 
@@ -6247,6 +6267,21 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
+        if ("deleteCapturedPhoto".equals(action)) {
+            if (capturedPhotoUri != null && getContext() instanceof MainActivity &&
+                    ((MainActivity) getContext()).deleteCapturedPhoto(capturedPhotoUri)) {
+                capturedPhotoUri = null;
+                if (capturedPhotoPreview != null) {
+                    capturedPhotoPreview.recycle();
+                    capturedPhotoPreview = null;
+                }
+                back();
+                showNotice("Photo deleted");
+                if (getContext() instanceof MainActivity)
+                    post(() -> ((MainActivity) getContext()).showNativeCameraPreview(true));
+            } else showNotice("Unable to delete photo");
+            return;
+        }
         if ("hideMarkedCalls".equals(action)) {
             hiddenCallKeys.addAll(markedCallKeys);
             markedCallKeys.clear();
