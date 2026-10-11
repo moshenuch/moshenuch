@@ -1,3 +1,11 @@
+## Critical correction — real Android contact Edit Save (v1.42.0)
+
+The failed Edit Save test was on a **real Android contact "Ab" created manually through the C2 app, with demo data OFF**, not a seeded fixture. The previous demo-only explanation was incorrect. This is a genuine provider/edit failure and top Contacts priority. Code now handles name-only changes with a direct StructuredName row update rather than the two-operation phone+name batch when the selected phone number is unchanged; failures display Contact save failed instead of incorrectly asserting a permission failure. The existing save-success path refreshes and returns to details. **Requires emulator retest**; this code-level hypothesis is not yet verified, and editing name-plus-number still follows the batch update path.
+
+## Phone top priority (v1.42.0 user audit)
+
+Real outgoing calls leak to stock Google Dialer, including the Google call screen and post-hangup dialer main screen. ACTION_CALL in AndroidBackend causes this. A genuine in-app real-call flow requires default phone role + InCallService with Telecom.Call lifecycle and a C2 activity, including call state/end/timer and return to C2. No claims of full in-app calling until role/manifest/service, on-device test and system behaviour are verified; emergency calls remain under Android system control. My shortcuts No cancellation, manual adding and sorting are verified.
+
 ## v1.42.0 on-screen regression findings
 
 User-confirmed passes: demo-contact deletion gives explanatory notice, contact details avatar/blue handset row/Number 1 of 1 footer and Options/Call/Back match HTML; Home light softkey bar, new-contact automatic capitalisation, Names name-only rows.
