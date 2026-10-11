@@ -78,6 +78,8 @@ public class C2PhoneView extends View {
     private final HashSet<Long> markedThreadIds = new HashSet<>();
     private final HashSet<Long> markedSmsIds = new HashSet<>();
     private final HashSet<Integer> markedContactIndices = new HashSet<>();
+    // Call records are hidden within this app; the Android call log stays untouched.
+    private final HashSet<String> hiddenCallKeys = new HashSet<>();
     private long activeThreadId = -1L;
     private long activeMessageId = -1L;
     private float conversationScrollY = 0f;
@@ -240,7 +242,9 @@ public class C2PhoneView extends View {
         deviceCallsActive = backend.has(Manifest.permission.READ_CALL_LOG);
         if (!deviceCallsActive) return;
         deviceCalls.clear();
-        deviceCalls.addAll(backend.loadCalls(300));
+        for (AndroidBackend.DeviceCall item : backend.loadCalls(300)) {
+            if (!hiddenCallKeys.contains(callRecordKey(item))) deviceCalls.add(item);
+        }
     }
 
     private void loadState() {
@@ -262,6 +266,8 @@ public class C2PhoneView extends View {
         loadDrafts();
         loadLongSet("sms_local_read", localReadSmsIds);
         loadLongSet("sms_hidden", hiddenSmsIds);
+        hiddenCallKeys.addAll(prefs.getStringSet("call_hidden_v1",
+                java.util.Collections.<String>emptySet()));
 
         try {
             JSONArray a = new JSONArray(prefs.getString("contacts", "[]"));
@@ -1896,8 +1902,7 @@ public class C2PhoneView extends View {
         }
 
         if (Arrays.asList("calllog","missed","received","dialled").contains(page)) {
-            dial = callNumberAt(page, sel);
-            showNotice("Ready to call");
+            showCallDetails(page, sel);
             return;
         }
 
@@ -3011,9 +3016,9 @@ public class C2PhoneView extends View {
               "Copy number","Send business card >","Add to group","Speed dial",
               "Add to blacklist","Add to whitelist"};
         else if ("log".equals(page))
-            optionItems = new String[]{"View","Call","Send message","Save","Delete","Clear lists","Call timers"};
+            optionItems = new String[]{"View","Call","Clear lists","Restore hidden calls","Call timers"};
         else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
-            optionItems = new String[]{"Call","Send message","Save to contacts","Delete","Clear list"};
+            optionItems = new String[]{"View","Call","Send message","Save to contacts","Delete","Clear list"};
         else if ("settings".equals(page))
             optionItems = new String[]{"Open","Search","Help","About APK"};
         else if ("blackpool".equals(page) || "whitepool".equals(page))
@@ -3299,18 +3304,44 @@ public class C2PhoneView extends View {
             else showNotice(choice.replace(" >",""));
         } else if ("log".equals(page)) {
             if ("View".equals(choice)) openSelected();
-            else if ("Call".equals(choice)) openSelected();
-            else if ("Clear lists".equals(choice)) showNotice("Not supported: call log unchanged");
-            else if ("Call timers".equals(choice)) {
+            else if ("Call".equals(choice)) showNotice("Select a call from a call list");
+            else if ("Clear lists".equals(choice)) {
+                if (deviceCalls.isEmpty()) showNotice("No visible calls");
+                else requestConfirm("hideAllCalls", "Hide all call records in this app? Android call log unchanged.");
+            } else if ("Restore hidden calls".equals(choice)) {
+                if (hiddenCallKeys.isEmpty()) showNotice("No hidden calls");
+                else requestConfirm("restoreCalls", "Restore " + hiddenCallKeys.size()
+                        + " app-hidden call records to the lists?");
+            } else if ("Call timers".equals(choice)) {
+                long total = 0;
+                for (AndroidBackend.DeviceCall item : deviceCalls) total += item.duration;
                 detailTitle = "Call timers";
-                detailText = "Call duration\nPacket data counter\nPacket data timer";
+                detailText = "Visible call records: " + deviceCalls.size()
+                        + "\nStored call duration: " + formatSeconds(total)
+                        + "\nAndroid call log unchanged";
                 go("itemDetail");
-            } else showNotice(choice);
+            } else showNotice("Not implemented: " + choice);
         } else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page)) {
-            if ("Call".equals(choice)) {
-                startCall(callNumberAt(page, sel));
-            } else if ("Clear list".equals(choice)) showNotice("Not supported: call log unchanged");
-            else showNotice(choice);
+            AndroidBackend.DeviceCall selectedCall = callRecordForPage(page, sel);
+            if ("View".equals(choice)) showCallDetails(page, sel);
+            else if ("Call".equals(choice)) {
+                if (selectedCall != null) startCall(selectedCall.number);
+                else showNotice("No call selected");
+            } else if ("Send message".equals(choice)) {
+                if (selectedCall != null) composeToCall(selectedCall);
+                else showNotice("No call selected");
+            } else if ("Save to contacts".equals(choice)) {
+                if (selectedCall != null) saveCallAsContact(selectedCall);
+                else showNotice("No call selected");
+            } else if ("Delete".equals(choice)) {
+                if (selectedCall != null)
+                    requestConfirm("hideCall", "Hide this call in the app? Android call log unchanged.");
+                else showNotice("No call selected");
+            } else if ("Clear list".equals(choice)) {
+                if (callItemsFor(callFilterForPage(page)).length > 0 && selectedCall != null)
+                    requestConfirm("hideCallList", "Hide all calls in this list? Android call log unchanged.");
+                else showNotice("No calls in list");
+            } else showNotice("Not implemented: " + choice);
         } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("About APK".equals(choice) && "settings".equals(page)) go("aboutNative");
@@ -3438,7 +3469,44 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("deleteDraft".equals(action)) {
+        if ("restoreCalls".equals(action)) {
+            int n = hiddenCallKeys.size();
+            hiddenCallKeys.clear();
+            persistHiddenCalls();
+            refreshCallsFromPhone();
+            sel = 0;
+            showNotice(n + " call filters removed");
+        } else if ("hideCall".equals(action)) {
+            AndroidBackend.DeviceCall chosen = callRecordForPage(page, sel);
+            if (chosen != null) {
+                hiddenCallKeys.add(callRecordKey(chosen));
+                persistHiddenCalls();
+                refreshCallsFromPhone();
+                sel = Math.min(sel, Math.max(0, callItemsFor(callFilterForPage(page)).length - 1));
+                showNotice("Call hidden in app");
+            }
+        } else if ("hideCallList".equals(action)) {
+            int typeFilter = callFilterForPage(page);
+            int n = 0;
+            for (AndroidBackend.DeviceCall item : deviceCalls) {
+                if (typeFilter == 0 || typeFilter == item.type) {
+                    hiddenCallKeys.add(callRecordKey(item));
+                    n++;
+                }
+            }
+            persistHiddenCalls();
+            refreshCallsFromPhone();
+            sel = 0;
+            showNotice(n + " calls hidden in app");
+        } else if ("hideAllCalls".equals(action)) {
+            int n = deviceCalls.size();
+            for (AndroidBackend.DeviceCall item : deviceCalls)
+                hiddenCallKeys.add(callRecordKey(item));
+            persistHiddenCalls();
+            refreshCallsFromPhone();
+            sel = 0;
+            showNotice(n + " calls hidden in app");
+        } else if ("deleteDraft".equals(action)) {
             if (sel >= 0 && sel < drafts.size()) {
                 drafts.remove(sel);
                 editingDraftIndex = -1;
@@ -3748,6 +3816,70 @@ public class C2PhoneView extends View {
             out.add(label + "  " + fmt.format(new Date(c.date)));
         }
         return out.toArray(new String[0]);
+    }
+
+    private int callFilterForPage(String pg) {
+        if ("missed".equals(pg)) return CallLog.Calls.MISSED_TYPE;
+        if ("received".equals(pg)) return CallLog.Calls.INCOMING_TYPE;
+        if ("dialled".equals(pg)) return CallLog.Calls.OUTGOING_TYPE;
+        return 0;
+    }
+
+    private String callRecordKey(AndroidBackend.DeviceCall call) {
+        return call.number + "|" + call.type + "|" + call.date + "|" + call.duration;
+    }
+
+    private void persistHiddenCalls() {
+        prefs.edit().putStringSet("call_hidden_v1", new HashSet<>(hiddenCallKeys)).apply();
+    }
+
+    private void showCallDetails(String pg, int index) {
+        AndroidBackend.DeviceCall item = callRecordForPage(pg, index);
+        if (item == null) {
+            showNotice(deviceCallsActive ? "No call selected" : "Allow call log permission");
+            return;
+        }
+        String kind;
+        if (item.type == CallLog.Calls.MISSED_TYPE) kind = "Missed";
+        else if (item.type == CallLog.Calls.INCOMING_TYPE) kind = "Received";
+        else if (item.type == CallLog.Calls.OUTGOING_TYPE) kind = "Dialled";
+        else kind = "Other";
+        detailTitle = "Call details";
+        detailText = "Type: " + kind
+                + "\nName: " + (item.name.isEmpty() ? contactNameFor(item.number) : item.name)
+                + "\nNumber: " + (item.number.isEmpty() ? "Unavailable" : item.number)
+                + "\nDate: " + new SimpleDateFormat("dd MMM yyyy HH:mm", Locale.UK)
+                    .format(new Date(item.date))
+                + "\nDuration: " + formatSeconds(item.duration);
+        go("itemDetail");
+    }
+
+    private void composeToCall(AndroidBackend.DeviceCall call) {
+        if (digitsOnly(call.number).isEmpty()) {
+            showNotice("No SMS-capable number");
+            return;
+        }
+        recipient = call.number;
+        messageBody = "";
+        composeFocus = 1;
+        inputMode = "T9";
+        go("compose");
+    }
+
+    private void saveCallAsContact(AndroidBackend.DeviceCall call) {
+        if (digitsOnly(call.number).isEmpty()) {
+            showNotice("No number to save");
+            return;
+        }
+        String display = call.name == null ? "" : call.name.trim();
+        // Keep the name editable; the user must confirm Save before writing
+        // to Android Contacts (and only if Contacts permission is granted).
+        editKind = "contact";
+        editIndex = -1;
+        editBuffer = display + "\n" + call.number;
+        editField = 0;
+        inputMode = "abc";
+        go("edit");
     }
 
     private AndroidBackend.DeviceCall callRecordForPage(String pg, int index) {
