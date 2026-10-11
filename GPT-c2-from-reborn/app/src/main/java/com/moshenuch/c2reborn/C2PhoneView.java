@@ -3340,6 +3340,8 @@ public class C2PhoneView extends View {
         }
         if (previewTargetIndex >= 0 && "galleryImages".equals(page))
             sel = Math.min(previewTargetIndex, Math.max(0, galleryStore.images.size() - 1));
+        if ("goto".equals(page))
+            sel = Math.max(0, Math.min(sel, goToShortcuts.enabledCount() - 1));
         invalidate();
     }
 
