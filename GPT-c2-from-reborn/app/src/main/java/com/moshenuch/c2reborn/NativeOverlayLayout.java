@@ -15,13 +15,13 @@ final class NativeOverlayLayout {
     static final float TITLE_BASELINE = 37f;
     static final float SOFTBAR_TOP = 286f;
 
-    static final float NOTICE_LEFT = 35f;
+    static final float NOTICE_LEFT = 18f;
     static final float NOTICE_TOP = 123f;
-    static final float NOTICE_RIGHT = 205f;
+    static final float NOTICE_RIGHT = 222f;
     static final float NOTICE_BOTTOM = 177f;
-    static final float NOTICE_TEXT_X = 48f;
+    static final float NOTICE_TEXT_X = 30f;
     static final float NOTICE_TEXT_BASELINE = 145f;
-    static final float NOTICE_TEXT_WIDTH = 144f;
+    static final float NOTICE_TEXT_WIDTH = 180f;
     static final float NOTICE_TEXT_SIZE = 12f;
     static final float NOTICE_LINE_HEIGHT = 15f;
     static final int NOTICE_MAX_LINES = 2;
@@ -34,6 +34,15 @@ final class NativeOverlayLayout {
     static final float DETAIL_LINE_HEIGHT = 18f;
     static final int DETAIL_MAX_LINES = 11;
     static final float DETAIL_DIVIDER_Y = 53f;
+
+    // Calculator/Loan display panels must begin below the Nokia title
+    // baseline at y=37; their old y=30/35 panels covered title glyphs.
+    static final float CALC_PANEL_TOP = 48f;
+    static final float CALC_PANEL_BOTTOM = 106f;
+    static final float CALC_VALUE_BASELINE = 88f;
+    static final float CALC_FIRST_OPERATION_BASELINE = 130f;
+    static final float CALC_OPERATION_LINE_SPACING = 24f;
+    static final float LOAN_FIRST_FIELD_TOP = 48f;
 
     private NativeOverlayLayout() { }
 
@@ -49,6 +58,18 @@ final class NativeOverlayLayout {
                     (NOTICE_MAX_LINES - 1) * NOTICE_LINE_HEIGHT + 4f
                         <= NOTICE_BOTTOM - 8f
                 && NOTICE_BACKGROUND_ALPHA == 255;
+    }
+
+    static boolean calculatorPanelFits() {
+        float lastOperation = CALC_FIRST_OPERATION_BASELINE +
+                5f * CALC_OPERATION_LINE_SPACING;
+        return CALC_PANEL_TOP >= HEADER_BOTTOM + 6f
+                && CALC_PANEL_BOTTOM < CALC_FIRST_OPERATION_BASELINE - 11f
+                && CALC_VALUE_BASELINE - 28f > CALC_PANEL_TOP + 6f
+                && CALC_VALUE_BASELINE + 7f < CALC_PANEL_BOTTOM
+                && lastOperation < SOFTBAR_TOP - 12f
+                && LOAN_FIRST_FIELD_TOP >= HEADER_BOTTOM + 6f
+                && LOAN_FIRST_FIELD_TOP + 2f * 62f + 48f < SOFTBAR_TOP;
     }
 
     static boolean detailTextFits() {
