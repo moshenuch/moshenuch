@@ -3088,7 +3088,10 @@ public class C2PhoneView extends View {
 
         if ("CALL".equals(key)) {
             if ("dial".equals(page)) startCall(dial);
-            else if ("contactDetail".equals(page)) startCall(contacts.get(contactIndex).number);
+            else if ("contactDetail".equals(page)) {
+                if (contacts.isEmpty()) showNotice("Contact unavailable");
+                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
+            }
             else if ("speedDials".equals(page)) {
                 String number = speedDialNumbers.get(sel + 2);
                 if (number != null) startCall(number);
@@ -3253,8 +3256,10 @@ public class C2PhoneView extends View {
         }
 
         if ("contactDetail".equals(page)) {
-            if ("OK".equals(key)) startCall(contacts.get(contactIndex).number);
-            else if ("RSK".equals(key)) back();
+            if ("OK".equals(key)) {
+                if (contacts.isEmpty()) showNotice("Contact unavailable");
+                else startCall(contacts.get(Math.min(contactIndex, contacts.size() - 1)).number);
+            } else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
             return;
@@ -4403,6 +4408,10 @@ public class C2PhoneView extends View {
             } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
                 addNumberToFilter("Add to blacklist".equals(choice), ct.number);
         } else if ("contactDetail".equals(page)) {
+            if (contacts.isEmpty()) {
+                showNotice("Contact unavailable");
+                return;
+            }
             Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
             if ("Call".equals(choice)) startCall(ct.number);
             else if ("Edit".equals(choice)) beginContactEdit(contactIndex);
