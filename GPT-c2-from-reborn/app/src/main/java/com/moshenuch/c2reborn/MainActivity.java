@@ -17,6 +17,7 @@ public class MainActivity extends Activity {
     private static final int REQ_PHONE_DATA = 201;
     private static final int REQ_PICK_IMAGES = 301;
     private static final int REQ_PICK_VIDEOS = 302;
+    private static final int REQ_MICROPHONE = 303;
     private C2PhoneView phoneView;
 
     @Override
@@ -58,6 +59,18 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == REQ_PHONE_DATA && phoneView != null) phoneView.onPermissionsChanged();
+        if (requestCode == REQ_MICROPHONE && phoneView != null)
+            phoneView.onMicrophonePermissionResult(results.length > 0 &&
+                    results[0] == PackageManager.PERMISSION_GRANTED);
+    }
+
+    /** Request microphone only when the user explicitly selects Record. */
+    public boolean ensureRecorderPermission() {
+        if (Build.VERSION.SDK_INT < 23 ||
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+            return true;
+        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MICROPHONE);
+        return false;
     }
 
     /** Uses Android's scoped Storage Access Framework. No broad storage permission. */
@@ -110,6 +123,18 @@ public class MainActivity extends Activity {
             } catch (SecurityException ignored) { }
         }
         phoneView.onGalleryPicked(requestCode == REQ_PICK_VIDEOS, chosen);
+    }
+
+    @Override
+    protected void onPause() {
+        if (phoneView != null) phoneView.onAppPaused();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (phoneView != null) phoneView.onAppDestroyed();
+        super.onDestroy();
     }
 
     @Override

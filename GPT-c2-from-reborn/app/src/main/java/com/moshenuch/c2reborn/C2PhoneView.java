@@ -52,6 +52,7 @@ public class C2PhoneView extends View {
     private final SharedPreferences prefs;
     private final AndroidBackend backend;
     private final NativeGalleryStore galleryStore;
+    private final NativeVoiceRecorder voiceRecorder;
     private Bitmap galleryPreviewBitmap;
     private String galleryPreviewTitle = "";
     private String galleryPreviewUri = "";
@@ -198,8 +199,84 @@ public class C2PhoneView extends View {
         backend = new AndroidBackend(context);
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
         galleryStore = new NativeGalleryStore(context, prefs);
+        voiceRecorder = new NativeVoiceRecorder(context);
         loadState();
         refreshDeviceData();
+    }
+
+    public void onMicrophonePermissionResult(boolean granted) {
+        showNotice(granted ? "Microphone ready. Select Record" : "Microphone permission denied");
+        invalidate();
+    }
+
+    public void onAppPaused() {
+        if (voiceRecorder.isRecording()) finishVoiceRecording();
+        voiceRecorder.stopPlayback();
+        invalidate();
+    }
+
+    public void onAppDestroyed() {
+        voiceRecorder.release();
+    }
+
+    private void beginVoiceRecording() {
+        if (voiceRecorder.isRecording()) return;
+        if (!(getContext() instanceof MainActivity)) {
+            showNotice("Microphone unavailable");
+            return;
+        }
+        if (!((MainActivity) getContext()).ensureRecorderPermission()) {
+            showNotice("Allow microphone, then select Record");
+            return;
+        }
+        if (voiceRecorder.start()) showNotice("Recording started");
+        else showNotice("Unable to start recording");
+        invalidate();
+    }
+
+    private void finishVoiceRecording() {
+        if (!voiceRecorder.isRecording()) return;
+        java.io.File saved = voiceRecorder.stop();
+        showNotice(saved == null ? "Recording too short or failed" : "Recording saved");
+        invalidate();
+    }
+
+    private void playSelectedVoiceNote() {
+        if (voiceRecorder.at(sel) == null) {
+            showNotice("No recording selected");
+            return;
+        }
+        if (voiceRecorder.togglePlayback(sel, this::postInvalidate)) {
+            showNotice(voiceRecorder.isPlaying() ? "Playing" : "Playback stopped");
+        } else showNotice("Cannot play recording");
+        invalidate();
+    }
+
+    private void showVoiceRecordingMemory() {
+        java.util.ArrayList<java.io.File> files = voiceRecorder.entries();
+        long size = 0;
+        for (java.io.File f : files) size += f.length();
+        detailTitle = "Recorder memory";
+        detailText = "Saved recordings: " + files.size()
+                + "\nUsed space: " + size + " bytes"
+                + "\nLocation: App private storage"
+                + "\nDelete cannot be undone";
+        go("itemDetail");
+    }
+
+    private void voiceNoteDetails() {
+        java.io.File file = voiceRecorder.at(sel);
+        if (file == null) {
+            showNotice("No recording selected");
+            return;
+        }
+        detailTitle = "Recording details";
+        detailText = "Name: " + file.getName()
+                + "\nSize: " + file.length() + " bytes"
+                + "\nRecorded: " + new SimpleDateFormat("dd MMM yyyy HH:mm", Locale.UK)
+                    .format(new Date(file.lastModified()))
+                + "\nStored privately in this app";
+        go("itemDetail");
     }
 
     public void onPermissionsChanged() {
@@ -524,6 +601,7 @@ public class C2PhoneView extends View {
         else if ("alarmEdit".equals(page)) drawAlarmEdit(c);
         else if ("itemDetail".equals(page)) drawItemDetail(c);
         else if ("galleryPreview".equals(page)) drawGalleryPreview(c);
+        else if ("voiceRecorder".equals(page)) drawNativeVoiceRecorder(c);
         else drawListPage(c);
 
         drawSoftBar(c);
@@ -1332,6 +1410,30 @@ public class C2PhoneView extends View {
         drawWrappedText(c, "Offline native browser simulation. No WebView is used.", 35, 182, 170, 16, 4);
     }
 
+    private void drawNativeVoiceRecorder(Canvas c) {
+        drawStatus(c, "Voice recorder");
+        p.setColor(Color.WHITE);
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setTextSize(17);
+        c.drawText(voiceRecorder.isRecording() ? "Recording" : "Ready to record", 120, 84, p);
+        p.setColor(voiceRecorder.isRecording() ? Color.rgb(225, 55, 55) : Color.GRAY);
+        c.drawCircle(120, 144, voiceRecorder.isRecording() ? 19 : 13, p);
+        p.setColor(Color.WHITE);
+        p.setTextSize(14);
+        long seconds = voiceRecorder.elapsedSeconds();
+        String clock = String.format(Locale.UK, "%02d:%02d", seconds / 60, seconds % 60);
+        c.drawText(clock, 120, 190, p);
+        p.setTextSize(11);
+        c.drawText("Recordings: " + voiceRecorder.entries().size(), 120, 228, p);
+        if (voiceRecorder.isRecording()) {
+            if (voiceRecorder.elapsedSeconds() >= 300) {
+                finishVoiceRecording();
+                showNotice("Five-minute recording limit reached");
+            } else postInvalidateDelayed(500);
+        }
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
     private void drawGalleryPreview(Canvas c) {
         drawStatus(c, galleryPreviewTitle.isEmpty() ? "Images" : galleryPreviewTitle);
         p.setColor(Color.BLACK);
@@ -1384,6 +1486,10 @@ public class C2PhoneView extends View {
         if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
         if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
+        if ("voiceRecorder".equals(page))
+            return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
+        if ("voiceRecordings".equals(page))
+            return new String[]{"Options", voiceRecorder.isPlaying() ? "Stop" : "Play", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
@@ -1608,6 +1714,8 @@ public class C2PhoneView extends View {
             case "connectivity": return "Connectivity";
             case "bluetooth": return "Bluetooth";
             case "gallery": return "Gallery";
+            case "voiceRecorder": return "Voice recorder";
+            case "voiceRecordings": return "Recordings";
             case "galleryImages": return "Images";
             case "galleryVideos": return "Video clips";
             case "galleryPreview": return "Image";
@@ -1763,6 +1871,13 @@ public class C2PhoneView extends View {
                 return new String[]{"Lock keypad","Profiles","Alarm clock","Camera","Video recorder","Calculator","Nokia Browser","Media player","Conversations"};
             case "gallery":
                 return new String[]{"Memory card","Images","Video clips","Music files","Themes","Graphics","Tones","Recordings","Received files"};
+            case "voiceRecordings": {
+                java.util.ArrayList<java.io.File> files = voiceRecorder.entries();
+                if (files.isEmpty()) return new String[]{"(No recordings)"};
+                String[] titles = new String[files.size()];
+                for (int i = 0; i < titles.length; i++) titles[i] = NativeVoiceRecorder.title(files.get(i));
+                return titles;
+            }
             case "gallerySort": return new String[]{"Name A–Z","Name Z–A","Newest added"};
             case "galleryImages":
             case "galleryVideos": {
@@ -2060,6 +2175,7 @@ public class C2PhoneView extends View {
 
         if ("gallery".equals(page)) {
             if (sel == 1 || sel == 2) openGalleryFolder(sel == 2);
+            else if (sel == 7) go("voiceRecordings");
             else {
                 detailTitle = itemsFor(page)[sel];
                 detailText = sel == 0
@@ -2067,6 +2183,11 @@ public class C2PhoneView extends View {
                         : "Not yet implemented in this native Gallery.\nImages and Video clips can be selected from Android.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("voiceRecordings".equals(page)) {
+            playSelectedVoiceNote();
             return;
         }
 
@@ -2084,6 +2205,7 @@ public class C2PhoneView extends View {
 
         if ("media".equals(page)) {
             if (sel == 2) go("music");
+            else if (sel == 4) go("voiceRecorder");
             else if (sel == 0 || sel == 1) {
                 detailTitle = itemsFor(page)[sel];
                 detailText = "Camera capture is not yet supported in this native port.\nUse Gallery to select existing media.";
@@ -2463,6 +2585,9 @@ public class C2PhoneView extends View {
     }
 
     private void back() {
+        if (voiceRecorder.isRecording() && "voiceRecorder".equals(page))
+            finishVoiceRecording();
+        if ("voiceRecordings".equals(page)) voiceRecorder.stopPlayback();
         int previewTargetIndex = "galleryPreview".equals(page) ? galleryPreviewIndex : -1;
         if ("galleryPreview".equals(page)) clearGalleryPreview();
         resetTap();
@@ -2552,6 +2677,8 @@ public class C2PhoneView extends View {
         if ("END".equals(key)) {
             if ("call".equals(page)) endCall();
             else {
+                if (voiceRecorder.isRecording()) finishVoiceRecording();
+                voiceRecorder.stopPlayback();
                 if ("galleryPreview".equals(page)) clearGalleryPreview();
                 if ("compose".equals(page)) saveCurrentDraft();
                 history.clear();
@@ -2724,6 +2851,16 @@ public class C2PhoneView extends View {
             if ("OK".equals(key)) startCall(contacts.get(contactIndex).number);
             else if ("RSK".equals(key)) back();
             else if ("LSK".equals(key)) openOptionsForPage();
+            invalidate();
+            return;
+        }
+
+        if ("voiceRecorder".equals(page)) {
+            if ("OK".equals(key)) {
+                if (voiceRecorder.isRecording()) finishVoiceRecording();
+                else beginVoiceRecording();
+            } else if ("LSK".equals(key)) openOptionsForPage();
+            else if ("RSK".equals(key)) back();
             invalidate();
             return;
         }
@@ -3270,7 +3407,13 @@ public class C2PhoneView extends View {
         else if ("gallerySort".equals(page))
             optionItems = new String[]{"Select"};
         else if ("media".equals(page))
-            optionItems = new String[]{"Open","View photos","View videos","Settings","Memory in use"};
+            optionItems = new String[]{"Open","View photos","View videos","Voice recorder","Settings","Memory in use"};
+        else if ("voiceRecorder".equals(page))
+            optionItems = voiceRecorder.isRecording()
+                    ? new String[]{"Stop and save","Recordings"}
+                    : new String[]{"Record","Recordings","Memory status"};
+        else if ("voiceRecordings".equals(page))
+            optionItems = new String[]{"Play/Stop","Details","Delete","New recording","Memory status"};
         else if ("organiser".equals(page))
             optionItems = new String[]{"Open","Make a note","Week view","Go to date","Go to today","Settings","Memory status"};
         else if ("calendar".equals(page))
@@ -3616,8 +3759,29 @@ public class C2PhoneView extends View {
                     requestConfirm("galleryClear", "Clear this app's selection list? Device files unchanged.");
                 else showNotice("Folder already empty");
             } else showNotice("Not implemented: " + choice);
+        } else if ("voiceRecorder".equals(page)) {
+            if ("Record".equals(choice)) beginVoiceRecording();
+            else if ("Stop and save".equals(choice)) finishVoiceRecording();
+            else if ("Recordings".equals(choice)) {
+                if (voiceRecorder.isRecording()) finishVoiceRecording();
+                go("voiceRecordings");
+            } else if ("Memory status".equals(choice)) showVoiceRecordingMemory();
+            else showNotice("Not implemented: " + choice);
+        } else if ("voiceRecordings".equals(page)) {
+            if ("Play/Stop".equals(choice)) playSelectedVoiceNote();
+            else if ("Details".equals(choice)) voiceNoteDetails();
+            else if ("Delete".equals(choice)) {
+                if (voiceRecorder.at(sel) != null)
+                    requestConfirm("deleteVoiceNote", "Delete this saved recording permanently?");
+                else showNotice("No recording selected");
+            } else if ("New recording".equals(choice)) {
+                voiceRecorder.stopPlayback();
+                go("voiceRecorder");
+            } else if ("Memory status".equals(choice)) showVoiceRecordingMemory();
+            else showNotice("Not implemented: " + choice);
         } else if ("media".equals(page)) {
             if ("Open".equals(choice)) openSelected();
+            else if ("Voice recorder".equals(choice)) go("voiceRecorder");
             else if ("View photos".equals(choice)) openGalleryFolder(false);
             else if ("View videos".equals(choice)) openGalleryFolder(true);
             else if ("Memory in use".equals(choice)) {
@@ -3783,7 +3947,12 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("galleryRemove".equals(action) || "galleryRemovePreview".equals(action)) {
+        if ("deleteVoiceNote".equals(action)) {
+            if (voiceRecorder.delete(sel)) {
+                sel = Math.max(0, Math.min(sel, voiceRecorder.entries().size() - 1));
+                showNotice("Recording deleted");
+            } else showNotice("Unable to delete recording");
+        } else if ("galleryRemove".equals(action) || "galleryRemovePreview".equals(action)) {
             boolean fromPreview = "galleryRemovePreview".equals(action);
             boolean video = "galleryVideos".equals(page);
             int idx = sel;
