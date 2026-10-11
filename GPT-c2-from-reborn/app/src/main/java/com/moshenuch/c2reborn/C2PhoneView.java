@@ -3796,11 +3796,10 @@ public class C2PhoneView extends View {
                     : new String[]{"Reply","Reply as","Delete","Call","Use detail","Forward","Edit","Move","Copy as template","Message details","Conversation view","New message",
                              chosen != null && isSmsUnread(chosen) ? "Mark as read" : "Mark as unread"};
         }
-        else if ("conversations".equals(page)) {
-            SmsThread target = sel >= 0 && sel < smsThreads.size() ? smsThreads.get(sel) : null;
+        else if ("conversations".equals(page))
+            // Both actions remain available when marked threads have mixed unread states.
             optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all",
-                    target != null && threadUnread(target.threadId) ? "Mark as read" : "Mark as unread"};
-        }
+                    "Mark as read","Mark as unread"};
         else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms target = conversationMessageAt(sel);
             if (target != null && target.type == Telephony.Sms.MESSAGE_TYPE_INBOX)
