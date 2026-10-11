@@ -2,6 +2,8 @@ package com.moshenuch.c2reborn;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.net.Uri;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -89,6 +91,10 @@ public class C2PhoneView extends View {
     private final HashSet<Long> markedThreadIds = new HashSet<>();
     private final HashSet<Long> markedSmsIds = new HashSet<>();
     private final HashSet<Integer> markedContactIndices = new HashSet<>();
+    // Nokia speed dials: app-local slot 2..9 to phone-number mapping only.
+    private final HashMap<Integer,String> speedDialNumbers = new HashMap<>();
+    private int speedDialSlot = 2;
+    private String speedDialAssignment = "";
     // Call records are hidden within this app; the Android call log stays untouched.
     private final HashSet<String> hiddenCallKeys = new HashSet<>();
     private long activeThreadId = -1L;
@@ -348,6 +354,13 @@ public class C2PhoneView extends View {
         whitelistEnabled = prefs.getBoolean("rebornWhitelistOn", false);
         loadStringList("rebornBlacklist", blacklistNumbers);
         loadStringList("rebornWhitelist", whitelistNumbers);
+        try {
+            JSONObject speed = new JSONObject(prefs.getString("speed_dials_v1", "{}"));
+            for (int slot = 2; slot <= 9; slot++) {
+                String number = speed.optString(String.valueOf(slot), "");
+                if (!number.trim().isEmpty()) speedDialNumbers.put(slot, number);
+            }
+        } catch (Exception ignored) { }
 
         loadStringList("notes", notes);
         loadStringList("todos", todos);
@@ -474,6 +487,70 @@ public class C2PhoneView extends View {
             }
         } catch (Exception ignored) {}
         prefs.edit().putString("contacts", a.toString()).apply();
+    }
+
+    private void saveSpeedDialSettings() {
+        JSONObject values = new JSONObject();
+        try {
+            for (int slot = 2; slot <= 9; slot++) {
+                String number = speedDialNumbers.get(slot);
+                if (number != null && !number.trim().isEmpty())
+                    values.put(String.valueOf(slot), number);
+            }
+        } catch (Exception ignored) { }
+        prefs.edit().putString("speed_dials_v1", values.toString()).apply();
+    }
+
+    private String[] speedDialSlots() {
+        String[] labels = new String[8];
+        for (int i = 0; i < labels.length; i++) {
+            int slot = i + 2;
+            String number = speedDialNumbers.get(slot);
+            labels[i] = slot + ": " + (number == null ? "(Empty)" : contactNameFor(number));
+        }
+        return labels;
+    }
+
+    private void showSpeedDialDetails(int slot) {
+        String number = speedDialNumbers.get(slot);
+        if (number == null || number.isEmpty()) {
+            showNotice("No number assigned to " + slot);
+            return;
+        }
+        detailTitle = "Speed dial " + slot;
+        detailText = "Contact: " + contactNameFor(number)
+                + "\nNumber: " + number
+                + "\nSaved locally in the APK, not Android speed dials";
+        go("itemDetail");
+    }
+
+    private void assignSpeedDial(int slot, String number) {
+        if (slot < 2 || slot > 9 || number == null || number.trim().isEmpty()) {
+            showNotice("No phone number to assign");
+            return;
+        }
+        speedDialNumbers.put(slot, number);
+        saveSpeedDialSettings();
+        showNotice("Speed dial " + slot + " assigned in app");
+    }
+
+    private void copyNumberToClipboard(String number) {
+        if (number == null || number.trim().isEmpty()) {
+            showNotice("No phone number");
+            return;
+        }
+        try {
+            ClipboardManager clipboard =
+                    (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                showNotice("Clipboard unavailable");
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", number));
+            showNotice("Number copied");
+        } catch (RuntimeException ignored) {
+            showNotice("Clipboard unavailable");
+        }
     }
 
     private void saveFilterSettings() {
@@ -1714,6 +1791,9 @@ public class C2PhoneView extends View {
             case "emojiPicker": return "Emoticons";
             case "contacts": return "Contacts";
             case "contactsNames": return "Names";
+            case "speedDials": return "Speed dials";
+            case "speedDialPicker": return "Choose contact";
+            case "speedDialAssign": return "Select speed dial";
             case "log": return "Log";
             case "settings": return "Settings";
             case "callsettings": return "Call settings";
@@ -1840,6 +1920,14 @@ public class C2PhoneView extends View {
             case "contacts":
                 return new String[]{"Names","Add new","Synchronise all","Settings","Groups","Speed dials","Service numbers","Del. all contacts","Move contacts","Copy contacts"};
             case "contactsNames": {
+                String[] a = new String[contacts.size()];
+                for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
+                return a;
+            }
+            case "speedDials":
+            case "speedDialAssign":
+                return speedDialSlots();
+            case "speedDialPicker": {
                 String[] a = new String[contacts.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
                 return a;
@@ -2073,18 +2161,45 @@ public class C2PhoneView extends View {
             if (sel == 0) {
                 refreshContactsFromPhone();
                 go("contactsNames");
-            }
-            else if (sel == 1) beginContactEdit(-1);
-            else {
+            } else if (sel == 1) beginContactEdit(-1);
+            else if (sel == 2) {
+                refreshContactsFromPhone();
+                showNotice(deviceContactsActive
+                        ? "Android contacts refreshed. Cloud sync not performed."
+                        : "Android Contacts permission unavailable; no cloud sync");
+            } else if (sel == 5) {
+                go("speedDials");
+            } else {
                 detailTitle = itemsFor(page)[sel];
-                if (sel == 2) detailText = "Synchronisation complete.";
-                else if (sel == 4) detailText = "No groups defined.";
-                else if (sel == 5) detailText = "No speed dials assigned.";
-                else if (sel == 6) detailText = "Service numbers from SIM.";
-                else if (sel == 7) detailText = "Delete all contacts.";
-                else detailText = "Contact settings.";
+                if (sel == 4) detailText = "Contact groups are not yet implemented in this APK.";
+                else if (sel == 6) detailText = "SIM service numbers are not available from this APK.";
+                else if (sel == 7) detailText = "Delete all contacts is not implemented.\nNo contacts changed.";
+                else detailText = "This contact option is not yet implemented.\nNo data changed.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("speedDials".equals(page)) {
+            speedDialSlot = sel + 2;
+            if (speedDialNumbers.containsKey(speedDialSlot))
+                showSpeedDialDetails(speedDialSlot);
+            else if (contacts.isEmpty()) showNotice("Add a contact first");
+            else go("speedDialPicker");
+            return;
+        }
+        if ("speedDialAssign".equals(page)) {
+            int slot = sel + 2;
+            assignSpeedDial(slot, speedDialAssignment);
+            back();
+            return;
+        }
+        if ("speedDialPicker".equals(page)) {
+            if (sel >= 0 && sel < contacts.size()) {
+                assignSpeedDial(speedDialSlot, contacts.get(sel).number);
+                back();
+                if ("speedDials".equals(page)) sel = speedDialSlot - 2;
+            } else showNotice("Add a contact first");
             return;
         }
 
@@ -2735,6 +2850,11 @@ public class C2PhoneView extends View {
         if ("CALL".equals(key)) {
             if ("dial".equals(page)) startCall(dial);
             else if ("contactDetail".equals(page)) startCall(contacts.get(contactIndex).number);
+            else if ("speedDials".equals(page)) {
+                String number = speedDialNumbers.get(sel + 2);
+                if (number != null) startCall(number);
+                else showNotice("No speed dial assigned");
+            }
             else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
                 if (m != null) startCall(m.address);
@@ -3472,6 +3592,10 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
               "Delete contact","Mark >","Mark all","Unmark all","Delete selected",
               "Add to blacklist","Add to whitelist"};
+        else if ("speedDials".equals(page))
+            optionItems = new String[]{"Details","Call","Assign / Change","Remove","Memory status"};
+        else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page))
+            optionItems = new String[]{"Select"};
         else if ("contactDetail".equals(page))
             optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >",
               "View conversations","Add image >","Use number","Set as default","Change type >",
@@ -3724,12 +3848,39 @@ public class C2PhoneView extends View {
         } else if ("contacts".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("Add new".equals(choice)) beginContactEdit(-1);
-            else if ("Search".equals(choice)) showNotice("Search");
-            else {
-                detailTitle = "Memory status";
-                detailText = "Phone memory\nSIM card";
+            else if ("Search".equals(choice)) showNotice("Search not yet implemented");
+            else if ("Memory status".equals(choice)) {
+                detailTitle = "Contacts memory";
+                detailText = "Visible contacts: " + contacts.size()
+                        + "\nSource: " + (deviceContactsActive ? "Android contacts" : "App-local contacts")
+                        + "\nSpeed dial assignments: " + speedDialNumbers.size()
+                        + "\nSIM and cloud capacity unavailable";
+                go("itemDetail");
+            } else showNotice("Not implemented: " + choice);
+        } else if ("speedDials".equals(page)) {
+            int slot = sel + 2;
+            String number = speedDialNumbers.get(slot);
+            if ("Details".equals(choice)) showSpeedDialDetails(slot);
+            else if ("Call".equals(choice)) {
+                if (number == null || number.isEmpty()) showNotice("No speed dial assigned");
+                else startCall(number);
+            } else if ("Assign / Change".equals(choice)) {
+                speedDialSlot = slot;
+                if (!contacts.isEmpty()) go("speedDialPicker");
+                else showNotice("Add a contact first");
+            } else if ("Remove".equals(choice)) {
+                if (number == null) showNotice("No assignment to remove");
+                else requestConfirm("removeSpeedDial", "Remove speed dial " + slot
+                        + " from this app? Contact remains unchanged.");
+            } else if ("Memory status".equals(choice)) {
+                detailTitle = "Speed dials";
+                detailText = "Assigned slots: " + speedDialNumbers.size()
+                        + " of 8\nStored within this APK only"
+                        + "\nAndroid system speed dials are unchanged";
                 go("itemDetail");
             }
+        } else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
         } else if ("blackpool".equals(page) || "whitepool".equals(page)) {
             if ("Remove".equals(choice)) openSelected();
         } else if ("callsettings".equals(page) || "callfilter".equals(page)) {
@@ -3779,8 +3930,14 @@ public class C2PhoneView extends View {
                 composeFocus = 1;
                 go("compose");
             } else if ("View conversations".equals(choice)) go("conversations");
-            else if ("Use number".equals(choice) || "Copy number".equals(choice)) showNotice(ct.number);
-            else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
+            else if ("Use number".equals(choice)) {
+                dial = ct.number;
+                go("dial");
+            } else if ("Copy number".equals(choice)) copyNumberToClipboard(ct.number);
+            else if ("Speed dial".equals(choice)) {
+                speedDialAssignment = ct.number;
+                go("speedDialAssign");
+            } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
                 addNumberToFilter("Add to blacklist".equals(choice), ct.number);
             else showNotice(choice.replace(" >",""));
         } else if ("log".equals(page)) {
@@ -4065,7 +4222,13 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("removeMusic".equals(action)) {
+        if ("removeSpeedDial".equals(action)) {
+            int slot = sel + 2;
+            if (speedDialNumbers.remove(slot) != null) {
+                saveSpeedDialSettings();
+                showNotice("Speed dial removed from app");
+            } else showNotice("Speed dial not assigned");
+        } else if ("removeMusic".equals(action)) {
             if (musicEngine.remove(sel)) {
                 sel = Math.min(sel, Math.max(0, musicEngine.tracks.size() - 1));
                 showNotice("Removed from library; original kept");
