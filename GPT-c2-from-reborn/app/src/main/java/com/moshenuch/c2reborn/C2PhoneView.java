@@ -4446,7 +4446,8 @@ public class C2PhoneView extends View {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
 
-        if ("Contact".equals(choice) || "Save a contact".equals(choice)) {
+        if (!"smsUseDetails".equals(page) &&
+                ("Contact".equals(choice) || "Save a contact".equals(choice))) {
             openNumberContact(selectedNumberForOptions(), "Contact".equals(choice));
             return;
         }
@@ -5590,6 +5591,98 @@ public class C2PhoneView extends View {
                     + "\nDelivery not verified.";
         }
         go("itemDetail");
+    }
+
+    /**
+     * Parse only the highlighted source message. Displaying results never
+     * changes Android SMS records or starts any external action.
+     */
+    private void showSmsUseDetails(AndroidBackend.DeviceSms sms) {
+        smsExtractedDetails.clear();
+        if (!deviceSmsActive || sms == null) {
+            showNotice("SMS unavailable");
+            return;
+        }
+        smsExtractedDetails.addAll(NativeSmsDetails.extract(sms.address, sms.body));
+        if (smsExtractedDetails.isEmpty()) {
+            showNotice("No usable details in SMS");
+            return;
+        }
+        go("smsUseDetails");
+    }
+
+    private NativeSmsDetails.Entry selectedSmsDetail() {
+        if (!deviceSmsActive || sel < 0 || sel >= smsExtractedDetails.size())
+            return null;
+        return smsExtractedDetails.get(sel);
+    }
+
+    private void showSelectedSmsDetail() {
+        NativeSmsDetails.Entry entry = selectedSmsDetail();
+        if (entry == null) {
+            showNotice("No detail selected");
+            return;
+        }
+        detailTitle = entry.kind + " detail";
+        detailText = entry.value + "\n\nOptions offers actions for this detail."
+                + "\nExtracted locally from SMS; original message unchanged.";
+        go("itemDetail");
+    }
+
+    private void copySmsDetail(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            showNotice("Nothing to copy");
+            return;
+        }
+        try {
+            ClipboardManager clipboard = (ClipboardManager)
+                    getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                showNotice("Clipboard unavailable");
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("SMS detail", value));
+            showNotice("Detail copied");
+        } catch (RuntimeException ex) {
+            showNotice("Clipboard unavailable");
+        }
+    }
+
+    private void useSelectedSmsDetailOption(String choice) {
+        if ("Back".equals(choice)) {
+            back();
+            return;
+        }
+        NativeSmsDetails.Entry entry = selectedSmsDetail();
+        if (entry == null) {
+            showNotice("No detail selected");
+            return;
+        }
+        if ("Details".equals(choice)) showSelectedSmsDetail();
+        else if ("Copy".equals(choice)) copySmsDetail(entry.value);
+        else if (NativeSmsDetails.Entry.PHONE.equals(entry.kind)) {
+            if ("Call".equals(choice)) startCall(entry.value);
+            else if ("Send message".equals(choice)) composeForContactNumber(entry.value);
+            else if ("Save a contact".equals(choice)) openNumberContact(entry.value, false);
+        } else if ("Compose e-mail".equals(choice) &&
+                NativeSmsDetails.Entry.EMAIL.equals(entry.kind)) {
+            openSmsDetailExternal(new Intent(Intent.ACTION_SENDTO,
+                    Uri.fromParts("mailto", entry.value, null)));
+        } else if ("Open link".equals(choice) &&
+                NativeSmsDetails.Entry.WEB.equals(entry.kind)) {
+            String url = entry.value.startsWith("www.") ? "https://" + entry.value : entry.value;
+            if (url.startsWith("https://") || url.startsWith("http://"))
+                openSmsDetailExternal(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            else showNotice("Unsupported link");
+        }
+    }
+
+    private void openSmsDetailExternal(Intent intent) {
+        try {
+            getContext().startActivity(intent);
+        } catch (RuntimeException ex) {
+            showNotice("No compatible Android app available");
+        }
     }
 
     /**
