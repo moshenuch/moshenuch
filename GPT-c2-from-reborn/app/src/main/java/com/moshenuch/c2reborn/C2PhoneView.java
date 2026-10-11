@@ -1002,7 +1002,7 @@ public class C2PhoneView extends View {
         if (wallpaper != null) {
             p.setColor(Color.WHITE);
             p.setAlpha(255);
-            c.drawBitmap(wallpaper, null, new RectF(0, 0, 240, 286), p);
+            c.drawBitmap(wallpaper, null, new RectF(0, 0, 240, 320), p);
         } else {
             p.setColor(Color.rgb(143, 148, 151));
             c.drawRect(0, 0, 240, 286, p);
