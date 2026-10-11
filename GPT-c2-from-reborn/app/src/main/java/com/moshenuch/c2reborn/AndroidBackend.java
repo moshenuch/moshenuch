@@ -172,6 +172,25 @@ public final class AndroidBackend {
         }
     }
 
+    /** Rename the selected writable raw contact without unnecessarily updating
+     * its unchanged phone-number row. Returns false if nothing was updated. */
+    public boolean updateContactName(long rawContactId, String name) {
+        if (!has(Manifest.permission.WRITE_CONTACTS) ||
+                rawContactId <= 0 || name == null || name.trim().isEmpty()) return false;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name.trim());
+            int count = resolver.update(ContactsContract.Data.CONTENT_URI, values,
+                    ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                    ContactsContract.Data.MIMETYPE + "=?",
+                    new String[]{String.valueOf(rawContactId),
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE});
+            return count > 0;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     /**
      * Limit edits to the specifically selected phone-number data row. Contacts can
      * aggregate multiple raw contacts and each can contain multiple numbers.
