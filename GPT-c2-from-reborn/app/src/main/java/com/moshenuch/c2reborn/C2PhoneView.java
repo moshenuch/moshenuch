@@ -3912,14 +3912,139 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Split timing","Lap timing"};
         else optionItems = new String[]{"Open","Details","Help"};
 
+        // v6.343: add actual saved-contact lookup/new-contact actions on
+        // number-bearing pages. Keep existing Save/Save to contacts entries.
+        addContextNumberOptions();
         optionSel = 0;
         optionsOpen = true;
         invalidate();
     }
 
+    /**
+     * The HTML v6.343 number-options rule is contextual. Using the actual
+     * selected row (rather than its contact display name) also prevents
+     * replying to an unrelated number or saving the wrong contact.
+     */
+    private String selectedNumberForOptions() {
+        AndroidBackend.DeviceSms sms;
+        AndroidBackend.DeviceCall call;
+        switch (page) {
+            case "inbox":
+                sms = sel >= 0 && sel < smsInbox.size() ? smsInbox.get(sel) : null;
+                return sms == null ? null : sms.address;
+            case "messageRead":
+                sms = smsById(activeMessageId);
+                return sms == null ? null : sms.address;
+            case "conversation":
+                sms = conversationMessageAt(sel);
+                return sms == null ? null : sms.address;
+            case "conversations":
+                return sel >= 0 && sel < smsThreads.size() ? smsThreads.get(sel).address : null;
+            case "sent":
+                sms = sentMessageAt(sel);
+                return sms == null ? null : sms.address;
+            case "missed":
+            case "received":
+            case "dialled":
+            case "calllog":
+                call = callRecordForPage(page, sel);
+                return call == null ? null : call.number;
+            case "dial": return dial;
+            case "call": return activeCall;
+            case "groupMembers": return selectedGroupMemberNumber();
+            case "speedDials": return speedDialNumbers.get(sel + 2);
+            default: return null;
+        }
+    }
+
+    /**
+     * Match complete internationally formatted numbers, not merely their last
+     * six or eight digits. This avoids displaying the wrong saved contact.
+     * Android formatting supplies the local country prefix when appropriate.
+     */
+    private String contactMatchKey(String value) {
+        if (value == null || digitsOnly(value).length() < 7) return "";
+        String normalized = android.telephony.PhoneNumberUtils.formatNumberToE164(
+                value, Locale.getDefault().getCountry());
+        if (normalized != null && !normalized.isEmpty()) return normalized;
+        String digits = digitsOnly(value);
+        if (digits.startsWith("00") && digits.length() > 9)
+            return "+" + digits.substring(2);
+        return value.trim().startsWith("+") ? "+" + digits : digits;
+    }
+
+    private int matchingContactIndex(String number) {
+        String key = contactMatchKey(number);
+        if (key.isEmpty()) return -1;
+        for (int i = 0; i < contacts.size(); i++)
+            if (key.equals(contactMatchKey(contacts.get(i).number))) return i;
+        return -1;
+    }
+
+    /** Inject one Nokia number action only where it is not already present. */
+    private void addContextNumberOptions() {
+        String number = selectedNumberForOptions();
+        if (number == null || digitsOnly(number).length() < 3) return;
+        ArrayList<String> menu = new ArrayList<>(Arrays.asList(optionItems));
+        if ("call".equals(page) && !menu.contains("Send message")) {
+            int index = menu.indexOf("Contacts");
+            menu.add(index < 0 ? menu.size() : index, "Send message");
+        }
+        if (!menu.contains("Contact") && !menu.contains("Save a contact") &&
+                !menu.contains("Save") && !menu.contains("Save to contacts")) {
+            String choice = matchingContactIndex(number) >= 0 ? "Contact" : "Save a contact";
+            int before = menu.indexOf("Add to contact");
+            menu.add(before < 0 ? menu.size() : before, choice);
+        }
+        optionItems = menu.toArray(new String[0]);
+    }
+
+    private void openNumberContact(String number, boolean openExisting) {
+        if (number == null || digitsOnly(number).length() < 3) {
+            showNotice("No usable phone number");
+            return;
+        }
+        if (openExisting) {
+            // Re-resolve in case Android contacts were edited since Options opened.
+            int index = matchingContactIndex(number);
+            if (index < 0) {
+                showNotice("Contact no longer available");
+                return;
+            }
+            contactIndex = index;
+            go("contactDetail");
+            return;
+        }
+        // Only prefill. No device or app contact is written without Save.
+        editKind = "contact";
+        editIndex = -1;
+        editBuffer = "\n" + number;
+        editField = 0;
+        inputMode = "abc";
+        go("edit");
+    }
+
     private void chooseOption() {
         String choice = optionItems.length == 0 ? "" : optionItems[optionSel];
         optionsOpen = false;
+
+        if ("Contact".equals(choice) || "Save a contact".equals(choice)) {
+            openNumberContact(selectedNumberForOptions(), "Contact".equals(choice));
+            return;
+        }
+        if ("call".equals(page) && "Send message".equals(choice)) {
+            String number = selectedNumberForOptions();
+            if (number == null || digitsOnly(number).length() < 3) {
+                showNotice("No SMS-capable number");
+            } else {
+                recipient = number;
+                messageBody = "";
+                composeFocus = 1;
+                inputMode = "T9";
+                go("compose");
+            }
+            return;
+        }
 
         if ("menu".equals(page)) {
             if ("Main menu view".equals(choice)) showNotice("Grid with labels");
@@ -4452,7 +4577,7 @@ public class C2PhoneView extends View {
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
-            } else if ("Add to contact".equals(choice)) showNotice("Add to contact");
+            } else if ("Add to contact".equals(choice)) showNotice("Adding a number to an existing contact is not implemented");
         } else if ("call".equals(page)) {
             if ("Loudspeaker".equals(choice)) {
                 toggleSpeaker();
@@ -4875,16 +5000,9 @@ public class C2PhoneView extends View {
     }
 
     private String contactNameFor(String number) {
-        String clean = digitsOnly(number);
-        for (Contact c : contacts) {
-            String other = digitsOnly(c.number);
-            if (!clean.isEmpty() && !other.isEmpty()) {
-                int n = Math.min(8, Math.min(clean.length(), other.length()));
-                if (n >= 6 && clean.substring(clean.length() - n).equals(other.substring(other.length() - n)))
-                    return c.name;
-            }
-        }
-        return number == null || number.isEmpty() ? "Unknown" : number;
+        int index = matchingContactIndex(number);
+        return index >= 0 ? contacts.get(index).name :
+                (number == null || number.isEmpty() ? "Unknown" : number);
     }
 
     private String digitsOnly(String value) {
