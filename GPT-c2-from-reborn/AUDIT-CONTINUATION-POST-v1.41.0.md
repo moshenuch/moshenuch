@@ -1,3 +1,9 @@
+## 2026-10-11 Options popup screenshot parity
+
+Names Options screenshot shows black 28px title strip with only **Options**, six rows visible (Search, Call >, Send message >, Add new >, Edit >, Delete contact) and the underlying softbar Options / Details / Back. Names option strings already match these six in order within the twelve total. Suppressed numeric options counter in native overlay (now applies to all Options popups). Call-log list pages now show Details centre softkey, retaining existing open-details action.
+
+**Evidence limitation:** The second attached screenshot appears to be the GitHub APK release page, not a Log Options popup. The user specified Log options text Mark >, Mark all, Unmark all, Delete selected, Add to blacklist, Add to whitelist, and matching softkeys; the current native call-log option list is *different*. Do not substitute those options without validating the specific Log screen/functionality, because existing Log Actions have separate semantics. Obtain the intended Log reference frame to confirm this before changing call-log menu actions.
+
 ## v1.41.0 multi-number Contacts and SMS audit follow-up
 
 - **Multi-number edit:** user observed editor always targeted number 1. Native provider now carries raw-contact and phone-data IDs alongside each phone number. Editing from Contact details uses the selected number, labels the field Selected number and targets that specific Android Data row. Requires emulator validation with contacts linked across different raw-contact accounts; existing demo data remains read-only.
