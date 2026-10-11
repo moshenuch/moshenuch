@@ -4634,7 +4634,10 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
-        if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
+        if ("shortcuts".equals(page) || "shortcutNavigation".equals(page))
+            optionItems = new String[]{"Assign","Restore defaults","Help"};
+        else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
+        else if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
         else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
@@ -5017,7 +5020,22 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("demoTools".equals(page)) {
+        if ("shortcuts".equals(page) || "shortcutNavigation".equals(page)) {
+            if ("Assign".equals(choice)) openSelected();
+            else if ("Restore defaults".equals(choice))
+                requestConfirm("resetHomeShortcuts",
+                        "Restore Nokia home selection and navigation keys to defaults?");
+            else {
+                detailTitle = "My shortcuts";
+                detailText = "Assign actions to Home keys within this app."
+                        + "\nThe Menu must remain accessible on one key."
+                        + "\nDefault: Left Go to, Right Names, Centre Menu."
+                        + "\nDirectional keys default to unassigned.";
+                go("itemDetail");
+            }
+        } else if ("shortcutAssign".equals(page)) {
+            if ("Assign".equals(choice)) openSelected();
+        } else if ("demoTools".equals(page)) {
             if ("Select".equals(choice)) openSelected();
             else if ("What is included".equals(choice)) showAuditDemoDetails();
         } else if ("menu".equals(page)) {
@@ -5722,7 +5740,11 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("clearAuditDemo".equals(action)) {
+        if ("resetHomeShortcuts".equals(action)) {
+            homeShortcuts.restoreDefaults();
+            saveHomeShortcuts();
+            showNotice("Home shortcuts restored");
+        } else if ("clearAuditDemo".equals(action)) {
             changeAuditDemoMode(false);
         } else if ("restoreGoTo".equals(action)) {
             auditGoTo("restore confirmed YES");
