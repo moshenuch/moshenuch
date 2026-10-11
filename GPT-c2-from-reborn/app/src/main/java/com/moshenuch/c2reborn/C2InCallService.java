@@ -25,6 +25,14 @@ public final class C2InCallService extends InCallService {
         return true;
     }
 
+    static boolean answer() {
+        if (current == null || current.getState() != Call.STATE_RINGING) return false;
+        current.answer(VideoProfile.STATE_AUDIO_ONLY);
+        return true;
+    }
+    static boolean isRinging() {
+        return current != null && current.getState() == Call.STATE_RINGING;
+    }
     static boolean hasCall() { return current != null; }
     static int state() { return current == null ? Call.STATE_DISCONNECTED : current.getState(); }
     static String number() {
