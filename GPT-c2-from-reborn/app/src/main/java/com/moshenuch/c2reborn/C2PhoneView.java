@@ -5539,7 +5539,28 @@ public class C2PhoneView extends View {
             }
             contactIndex = Math.max(0, Math.min(sel, contacts.size()-1));
             Contact ct = contacts.get(contactIndex);
-            if ("Details".equals(choice)) openSelected();
+            if ("Call >".equals(choice) || "Send message >".equals(choice) ||
+                    "Add new >".equals(choice) || "Edit >".equals(choice)) {
+                optionItems = "Call >".equals(choice)
+                        ? new String[]{"Call selected"} :
+                        "Send message >".equals(choice)
+                        ? new String[]{"Message selected"} :
+                        "Add new >".equals(choice)
+                        ? new String[]{"New contact"} :
+                        new String[]{"Edit selected"};
+                optionSel = 0;
+                optionsOpen = true;
+                return;
+            }
+            if ("Call selected".equals(choice)) startCall(ct.number);
+            else if ("Message selected".equals(choice)) {
+                recipient = ct.number;
+                messageBody = "";
+                composeFocus = 1;
+                go("compose");
+            } else if ("New contact".equals(choice)) beginContactEdit(-1);
+            else if ("Edit selected".equals(choice)) beginContactEdit(contactIndex);
+            else if ("Details".equals(choice)) openSelected();
             else if ("View conversations".equals(choice)) go("conversations");
             else if ("Edit contact".equals(choice)) beginContactEdit(contactIndex);
             else if ("Add to group".equals(choice)) {
