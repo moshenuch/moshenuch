@@ -1328,51 +1328,73 @@ public class C2PhoneView extends View {
     private void drawContactDetail(Canvas c) {
         drawStatus(c, "Contact details");
         p.setColor(themeText());
-        p.setTextAlign(Paint.Align.CENTER);
+        p.setTextAlign(Paint.Align.LEFT);
         if (contacts.isEmpty()) {
             p.setTextSize(13);
-            c.drawText("Contact unavailable", 120, 150, p);
+            c.drawText("Contact unavailable", 12, 95, p);
             return;
         }
 
         Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size() - 1)));
         ArrayList<String> numbers = currentContactNumbers();
-        p.setTextSize(38);
-        c.drawText("●", 120, 84, p);
+        // Source-exact HTML v6.343 CONTbust portrait: 42x42 CSS pixels,
+        // right-aligned beside the contact name, not a fabricated dot glyph.
+        Bitmap portrait = NokiaContactSprites.bust();
+        if (portrait != null) {
+            p.setFilterBitmap(true);
+            c.drawBitmap(portrait, null, new RectF(187, 43, 229, 85), p);
+        }
+        p.setColor(themeText());
         p.setTypeface(fontBold);
-        p.setTextSize(17);
-        c.drawText(ct.name, 120, 123, p);
+        p.setTextSize(18);
+        String shownName = android.text.TextUtils.ellipsize(ct.name,
+                new android.text.TextPaint(p), 172f,
+                android.text.TextUtils.TruncateAt.END).toString();
+        c.drawText(shownName, 9, 77, p);
         p.setTypeface(fontRegular);
 
         if (numbers.isEmpty()) {
             p.setTextSize(13);
-            c.drawText("No phone numbers", 120, 183, p);
+            c.drawText("No phone numbers", 12, 124, p);
             return;
         }
-        int selected = Math.max(0, Math.min(sel, numbers.size() - 1));
-        // Four rows fit between the Nokia status and 3-softkey bar.
+        sel = Math.max(0, Math.min(sel, numbers.size() - 1));
+        int selected = sel;
+        // Keep v1.27's individual phone-number selection while reproducing
+        // the original Nokia handset icon and highlight on each number row.
         int first = Math.min(Math.max(0, selected - 2), Math.max(0, numbers.size() - 4));
+        Bitmap handset = NokiaContactSprites.phone();
+        c.save();
+        c.clipRect(1, 95, 239, 276);
         for (int i = first; i < Math.min(first + 4, numbers.size()); i++) {
             int row = i - first;
-            float y = 146 + row * 28;
+            float top = 104 + row * 42;
             boolean active = i == selected;
             if (active) {
-                p.setColor(Color.rgb(48, 104, 179));
-                c.drawRoundRect(new RectF(7, y - 4, 233, y + 23), 3, 3, p);
+                p.setColor(Color.rgb(228, 231, 232));
+                c.drawRoundRect(new RectF(6, top, 234, top + 40), 2, 2, p);
             }
-            p.setColor(active ? Color.WHITE : themeText());
-            p.setTextSize(14);
+            if (handset != null) {
+                p.setFilterBitmap(true);
+                c.drawBitmap(handset, null, new RectF(11, top + 8, 33, top + 30), p);
+            }
             p.setTextAlign(Paint.Align.LEFT);
-            String value = numbers.get(i);
-            String shortValue = android.text.TextUtils.ellipsize(value, new android.text.TextPaint(p),
-                    212f, android.text.TextUtils.TruncateAt.END).toString();
-            c.drawText(shortValue, 15, y + 15, p);
-            p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(15);
+            p.setTypeface(active ? fontBold : fontRegular);
+            p.setColor(active ? Color.rgb(17, 17, 17) : themeText());
+            String shortValue = android.text.TextUtils.ellipsize(
+                    numbers.get(i), new android.text.TextPaint(p), 193f,
+                    android.text.TextUtils.TruncateAt.END).toString();
+            c.drawText(shortValue, 38, top + 26, p);
         }
+        c.restore();
+        p.setTypeface(fontRegular);
         p.setColor(themeText());
+        p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(10);
         c.drawText("Number " + (selected + 1) + " of " + numbers.size()
-                + "  •  Up/Down to select", 120, 273, p);
+                + "  •  Up/Down", 120, 283, p);
+        p.setTextAlign(Paint.Align.LEFT);
     }
 
     private void drawEditor(Canvas c) {
