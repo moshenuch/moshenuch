@@ -68,8 +68,9 @@ verify("C2 Camera enters in-house viewfinder",
        'go(video ? "videoViewfinder" : "cameraViewfinder")' in capture)
 verify("In-house photo shutter uses embedded JPEG capture",
        "captureNativePhoto();" in launch_capture)
-verify("Video capture retains Android recorder fallback",
-       "launchCameraCapture(true);" in launch_capture)
+verify("Video never delegates to Android recorder",
+       "launchCameraCapture(" not in launch_capture and
+       "In-house video recording is under development" in launch_capture)
 verify("Android Video recorder selects ACTION_VIDEO_CAPTURE",
        "MediaStore.ACTION_VIDEO_CAPTURE" in android_camera and
        "MediaStore.ACTION_IMAGE_CAPTURE" in android_camera and
