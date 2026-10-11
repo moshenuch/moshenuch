@@ -37,11 +37,22 @@ def verify(title: str, result: bool):
 notice = method("private void drawNotice(Canvas c)")
 details = method("private void drawItemDetail(Canvas c)")
 status = method("private void drawStatus(Canvas c, String title)")
+calculator = method("private void drawCalculator(Canvas c)")
+loan = method("private void drawLoan(Canvas c)")
 settings = method("private void openSelected()")
 
-verify("Original notice text is still driven by showNotice",
-       "drawWrappedText(c, notice" in notice and
+verify("Notices still driven by showNotice and rendered only during expiry",
+       "NativeNoticeText.wrap(notice" in notice and
        'noticeUntil > SystemClock.uptimeMillis()' in source)
+verify("Notice uses real Paint glyph measurement rather than fixed character estimates",
+       "p::measureText" in notice)
+verify("Notice explicitly draws only width-bounded wrapped lines",
+       "for (int i = 0; i < lines.size(); i++)" in notice and
+       "c.drawText(lines.get(i), NativeOverlayLayout.NOTICE_TEXT_X" in notice)
+verify("Notice keeps safe horizontal insets for long prompts",
+       "NOTICE_LEFT = 18f" in geometry and
+       "NOTICE_RIGHT = 222f" in geometry and
+       "NOTICE_TEXT_WIDTH = 180f" in geometry)
 verify("Notice background is truly opaque rather than the old alpha=225",
        "p.setColor(Color.rgb(20, 25, 27))" in notice and
        "Color.argb(225" not in notice)
@@ -74,6 +85,18 @@ verify("Item-detail typography left aligned and predictable",
 verify("Item-detail text stops before the Nokia softkey bar",
        "NativeOverlayLayout.DETAIL_MAX_LINES" in details and
        "NativeOverlayLayout.DETAIL_LINE_HEIGHT" in details)
+verify("Calculator panel starts below the Nokia title status rectangle",
+       "drawStatus(c, \"Calculator\")" in calculator and
+       "NativeOverlayLayout.CALC_PANEL_TOP" in calculator and
+       "NativeOverlayLayout.CALC_PANEL_BOTTOM" in calculator and
+       "c.drawRect(8, 30, 232, 95, p)" not in calculator)
+verify("Calculator value and operations use tested lower screen positions",
+       "NativeOverlayLayout.CALC_VALUE_BASELINE" in calculator and
+       "NativeOverlayLayout.CALC_FIRST_OPERATION_BASELINE" in calculator and
+       "NativeOverlayLayout.CALC_OPERATION_LINE_SPACING" in calculator)
+verify("Loan calculator first field also clears the Nokia title",
+       "NativeOverlayLayout.LOAN_FIRST_FIELD_TOP" in loan and
+       "float y = 35 + i * 62" not in loan)
 verify("Settings Phone stub is described as not implemented, rather than working",
        "detailText = sel == 10" in settings and
        "Phone settings are not yet implemented" in settings and
@@ -85,4 +108,4 @@ verify("Overlay layout constants are bounded to Nokia screen",
        "LCD_HEIGHT = 320f" in geometry and
        "NOTICE_BACKGROUND_ALPHA = 255" in geometry)
 
-print("Nokia notice and Phone detail renderer wiring: all checks passed")
+print("Nokia notice, Calculator/Loan title and Phone detail wiring: all checks passed")
