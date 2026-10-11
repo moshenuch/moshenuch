@@ -1661,7 +1661,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTypeface(fontBold);
         p.setTextSize(20);
-        c.drawText(activeCall, 120, 86, p);
+        c.drawText(contactNameFor(activeCall), 120, 86, p);
         p.setTypeface(fontRegular);
         p.setTextSize(13);
         long secs = Math.max(0, (SystemClock.elapsedRealtime() - callStarted) / 1000L);
@@ -2138,7 +2138,7 @@ public class C2PhoneView extends View {
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
-        if ("call".equals(page)) return new String[]{"Options", "End", "Loudsp."};
+        if ("call".equals(page)) return new String[]{"Options", "End", loudspeaker ? "Handset" : "Loudsp."};
         if ("calculator".equals(page)) return new String[]{"Options", "=", "Back"};
         if ("loan".equals(page)) return new String[]{"Calculate", "", "Back"};
         if ("stopwatch".equals(page)) return new String[]{"Split", stopwatchRunning ? "Stop" : "Start", "Back"};
@@ -3844,7 +3844,7 @@ public class C2PhoneView extends View {
         }
 
         if ("call".equals(page)) {
-            if ("OK".equals(key)) toggleSpeaker();
+            if ("OK".equals(key)) endCall();
             else if ("RSK".equals(key)) toggleSpeaker();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
