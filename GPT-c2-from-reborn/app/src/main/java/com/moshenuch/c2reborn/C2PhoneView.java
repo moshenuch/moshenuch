@@ -3412,8 +3412,8 @@ public class C2PhoneView extends View {
                 editTargetRawId = ct.rawContactId;
                 editTargetDataId = ct.phoneDataId;
             }
-            editBuffer = ct.name + "\\n" + chosenNumber;
-        } else editBuffer = "\\n";
+            editBuffer = ct.name + "\n" + chosenNumber;
+        } else editBuffer = "\n";
         editField = 0;
         inputMode = "Abc";
         go("edit");
