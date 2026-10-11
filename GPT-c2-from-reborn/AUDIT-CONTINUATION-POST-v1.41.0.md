@@ -4,6 +4,18 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## User v1.41.0 Phone/Log/SMS emulator audit (seeded data)
+
+**Defects:** call screen shows raw number rather than matching contact name; centre End did not end call despite repeated presses; stock Android white Calling screen appears above C2; Log recorded 00:11 for call observed 00:52+; contact's saved 555-5 becomes 5555 in Log.
+
+**Visual/interaction mismatches:** speaker softkey stays Loudsp. after enabling rather than changing to Handset; Conversations unread red dot appears on icon AND at right edge; conversation messages are chat bubbles rather than HTML/Nokia list rows.
+
+**Verified:** Log menu arrow icons; Thread Options has 15 entries; Conversations Options has 11 entries. Contact edit/delete, multi-number, Use detail remain in testing.
+
+**Source fixes started:** call screen resolves display name via contactNameFor(activeCall); centre OK calls endCall instead of toggleSpeaker; RSK toggle shows Handset when speaker enabled. **Important limitation:** AndroidBackend.endCall() can fail or be unavailable, while local endCall() currently clears the visual call state regardless; on-device termination is not yet proven. Likewise ACTION_CALL launching platform UI is an Android integration limitation—not solved by changing Canvas. A fully custom in-call experience may require default-dialer/InCallService integration and user-granted role, not merely suppressing the system app. Timer is elapsed time since intent dispatch rather than actual connection duration; compare Android call-log duration before changing source. Number formatting should be preserved in presentation while comparisons use normalized forms. Unread-dot and conversation-list rendering require screenshot/reference confirmation before choosing the correct single indicator and layout.
+
+**Release gate:** Verify physical call termination (not only on-screen timer), actual connection state, permission handling, log duration against provider, and contact formatting. Do not mark the five uncorrected issues as resolved.
+
 ## Further v1.41.0 Contacts editor audit
 
 - **Confirmed defect:** OK after entering the contact Name failed to advance to Number; subsequent number-key presses were interpreted as alphabetic multi-tap. Production key handler called saveEdit() on OK for any field. Corrected source so first OK on Name resets multi-tap state, focuses Number and selects 123 mode; OK on Number and Save softkey invoke validation/save. Up/Down field changes also switch alphabetic/numeric modes.
