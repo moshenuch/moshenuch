@@ -1,3 +1,11 @@
+## v1.42.0 on-screen regression findings
+
+User-confirmed passes: demo-contact deletion gives explanatory notice, contact details avatar/blue handset row/Number 1 of 1 footer and Options/Call/Back match HTML; Home light softkey bar, new-contact automatic capitalisation, Names name-only rows.
+
+Failures: (1) Edit contact Save stays on editor without confirmation and name does not update. Source reveals demoMode short-circuits saves as read-only, so tests must distinguish seeded demo from real writable Android contacts. Fix should support safe app-local fixture editing if demo edits are required without altering phone contacts; live provider errors need accurate failure notices. (2) Editing name typing 'xy' displays lowercase although Abc; verify multi-tap first-letter cycle and replace semantics. (3) Opening SMS thread leaves unread dot; source now marks entire active thread read on entry and persists local read-state, requiring retest. (4) Compose from contact details appears to show doubled Write message input; current Canvas contains only one composer panel, while sendMessage can show a 'Write message' notice on empty body. Reproduce physical touch/key path before modifying editor. (5) Tapping Home's centre softkey label did not open Menu, while physical OK did. Screen-centre touch hit region now maps to OK, requiring retest. (6) Grey swirl wallpaper still missing; current packaged bitmap must be compared with HTML artwork.
+
+No claims of overall v1.42.0 completion. Preserve the above verified graphics.
+
 ## Names Options reference correction — 17 entries
 
 User established exact Nokia HTML Names Options order: Search; Call >; Send message >; View conversations; Add new >; Edit >; Delete contact; Add to group; Selecting options >; Details; Add to contact; Edit contact; Copy contact; Move contact; Merge contact; Add to blacklist; Add to whitelist. Popup title Options only, no counter, solid dark list, white selection bar, softkeys Options / Details / Back.
