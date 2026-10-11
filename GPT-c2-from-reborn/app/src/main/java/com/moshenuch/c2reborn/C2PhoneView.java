@@ -2158,7 +2158,9 @@ public class C2PhoneView extends View {
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
         if ("dial".equals(page)) return new String[]{"Options", "Call", dial.isEmpty() ? "Back" : "Clear"};
-        if ("call".equals(page)) return new String[]{"Options", "End", loudspeaker ? "Handset" : "Loudsp."};
+        if ("call".equals(page)) return new String[]{
+                "Options", C2InCallService.isRinging() ? "Answer" : "End",
+                loudspeaker ? "Handset" : "Loudsp."};
         if ("calculator".equals(page)) return new String[]{"Options", "=", "Back"};
         if ("loan".equals(page)) return new String[]{"Calculate", "", "Back"};
         if ("stopwatch".equals(page)) return new String[]{"Split", stopwatchRunning ? "Stop" : "Start", "Back"};
@@ -3765,6 +3767,11 @@ public class C2PhoneView extends View {
             invalidate();
             return true;
         }
+        if ("call".equals(page) && C2InCallService.hasCall()) {
+            // Android Back must not leave a live call stranded behind the UI.
+            showNotice("Press End to finish call");
+            return true;
+        }
         if (!"home".equals(page)) {
             back();
             return true;
@@ -3955,8 +3962,11 @@ public class C2PhoneView extends View {
         if ("call".equals(page)) {
             if ("CALL".equals(key) && C2InCallService.isRinging()) {
                 if (!C2InCallService.answer()) showNotice("Unable to answer call");
-            } else if ("OK".equals(key)) endCall();
-            else if ("RSK".equals(key)) toggleSpeaker();
+            } else if ("OK".equals(key)) {
+                if (C2InCallService.isRinging()) {
+                    if (!C2InCallService.answer()) showNotice("Unable to answer call");
+                } else endCall();
+            } else if ("RSK".equals(key)) toggleSpeaker();
             else if ("LSK".equals(key)) openOptionsForPage();
             invalidate();
             return;
