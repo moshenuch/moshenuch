@@ -2767,6 +2767,10 @@ public class C2PhoneView extends View {
                 activeThreadId = smsThreads.get(sel).threadId;
                 // Marks belong only to the conversation in which they were made.
                 markedSmsIds.clear();
+                // Entering a thread marks every received message read in the
+                // app, not just a single message opened later.
+                if (setThreadSmsReadStateLocally(activeThreadId, false) > 0)
+                    persistSmsReadOverrides();
                 go("conversation");
             } else showNotice("SMS permission required");
             return;
@@ -5377,6 +5381,10 @@ public class C2PhoneView extends View {
             } else if ("Conversation view".equals(choice)) {
                 activeThreadId = selected.threadId;
                 markedSmsIds.clear();
+                // Entering a thread marks every received message read in the
+                // app, not just a single message opened later.
+                if (setThreadSmsReadStateLocally(activeThreadId, false) > 0)
+                    persistSmsReadOverrides();
                 go("conversation");
             } else if ("Message details".equals(choice)) showMessageDetails(selected);
             else if ("Mark as read".equals(choice) || "Mark as unread".equals(choice)) {
@@ -6881,6 +6889,12 @@ public class C2PhoneView extends View {
     }
 
     private String hitKey(float x, float y) {
+        // Touch-screen representation of the centre Nokia softkey shares
+        // the Home Menu binding with the physical OK button.
+        if ("home".equals(page) &&
+                x >= SX + SW / 3f && x <= SX + 2f * SW / 3f &&
+                y >= SY + SH * 286f / 320f && y <= SY + SH)
+            return "OK";
         if (new RectF(55, 402, 125, 430).contains(x,y)) return "LSK";
         if (new RectF(235, 402, 305, 430).contains(x,y)) return "RSK";
         if (new RectF(55, 448, 137, 497).contains(x,y)) return "CALL";
