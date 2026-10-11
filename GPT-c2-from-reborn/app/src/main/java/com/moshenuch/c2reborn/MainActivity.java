@@ -165,6 +165,40 @@ public class MainActivity extends Activity {
         cameraPreview.start();
     }
 
+    void captureNativePhoto() {
+        if (cameraPreview == null || !cameraPreview.isRunning()) {
+            onNativePhotoFailed("Camera preview unavailable");
+            return;
+        }
+        cameraPreview.capturePhoto(this);
+    }
+
+    void onNativePhotoFailed(String message) {
+        if (phoneView != null) phoneView.onCameraCaptureFailed(message);
+    }
+
+    void saveNativePhoto(byte[] jpeg) {
+        if (jpeg == null || jpeg.length < 128 || jpeg.length > 24 * 1024 * 1024) {
+            onNativePhotoFailed("Camera returned invalid photo");
+            return;
+        }
+        Uri pending = C2MediaProvider.pendingUri(this, false);
+        try {
+            try (java.io.OutputStream out = getContentResolver().openOutputStream(pending)) {
+                if (out == null) throw new java.io.IOException("No photo output stream");
+                out.write(jpeg);
+            }
+            Uri result = C2MediaProvider.complete(this, pending, false, null);
+            if (result == null) throw new java.io.IOException("Photo could not be saved");
+            showNativeCameraPreview(false);
+            if (phoneView != null) phoneView.onCameraCaptureCompleted(false, result);
+        } catch (Exception ex) {
+            android.util.Log.e("C2Camera", "In-house photo save failed", ex);
+            C2MediaProvider.discard(this, pending);
+            onNativePhotoFailed("Unable to save photo");
+        }
+    }
+
     private void layoutCameraPreview() {
         if (phoneView == null || cameraPreview == null) return;
         float scale = Math.min(phoneView.getWidth() / 360f, phoneView.getHeight() / 780f);
