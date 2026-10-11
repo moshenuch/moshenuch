@@ -940,6 +940,7 @@ public class C2PhoneView extends View {
         else if ("dial".equals(page)) drawDial(c);
         else if ("call".equals(page)) drawCall(c);
         else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) drawNokiaCameraViewfinder(c);
+        else if ("cameraResult".equals(page)) drawCameraResult(c);
         else if ("calculator".equals(page)) drawCalculator(c);
         else if ("loan".equals(page)) drawLoan(c);
         else if ("stopwatch".equals(page)) drawStopwatch(c);
@@ -2213,6 +2214,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
+        if ("cameraResult".equals(page)) return new String[]{"", "Back", "Back"};
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
         if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
@@ -4056,6 +4058,14 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("cameraResult".equals(page)) {
+            if ("OK".equals(key) || "RSK".equals(key) || "END".equals(key)) {
+                back();
+                if (getContext() instanceof MainActivity)
+                    post(() -> ((MainActivity) getContext()).showNativeCameraPreview(true));
+            }
+            return;
+        }
         if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
             if ("OK".equals(key) || "CALL".equals(key))
                 launchHardwareCapture("videoViewfinder".equals(page));
@@ -4740,11 +4750,11 @@ public class C2PhoneView extends View {
         }
         MainActivity host = (MainActivity) getContext();
         if (!video) {
-            // Photo shutter stays inside C2; only Video still uses Android.
             host.captureNativePhoto();
         } else {
-            host.showNativeCameraPreview(false);
-            host.launchCameraCapture(true);
+            // Never transfer control to a stock camera/recorder Activity.
+            // Recording is disabled until a C2-hosted MediaRecorder is ready.
+            showNotice("In-house video recording is under development");
         }
     }
 
@@ -4783,7 +4793,11 @@ public class C2PhoneView extends View {
             showNotice("Capture saved, but could not be added to Gallery");
             return;
         }
-        go(video ? "galleryVideos" : "galleryImages");
+        if (!video) {
+            showCapturedPhoto(uri);
+            return;
+        }
+        go("galleryVideos");
         java.util.List<NativeGalleryStore.Entry> entries = galleryStore.entries(video);
         for (int i = 0; i < entries.size(); i++) {
             if (entries.get(i).uri.equals(uri.toString())) {
@@ -4793,6 +4807,40 @@ public class C2PhoneView extends View {
         }
         showNotice(video ? "Video saved in private Gallery" : "Photo saved in private Gallery");
         invalidate();
+    }
+
+    private Bitmap capturedPhotoPreview;
+    private void showCapturedPhoto(Uri uri) {
+        if (capturedPhotoPreview != null) {
+            capturedPhotoPreview.recycle();
+            capturedPhotoPreview = null;
+        }
+        try (java.io.InputStream input = getContext().getContentResolver().openInputStream(uri)) {
+            if (input != null) {
+                android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+                opts.inSampleSize = 4;
+                capturedPhotoPreview = BitmapFactory.decodeStream(input, null, opts);
+            }
+        } catch (Exception error) {
+            android.util.Log.w("C2Camera", "Unable to render captured photo", error);
+        }
+        go("cameraResult");
+        showNotice("Photo saved");
+    }
+
+    private void drawCameraResult(Canvas c) {
+        drawStatus(c, "Photo");
+        p.setColor(Color.rgb(22, 28, 31));
+        c.drawRect(6, 42, 234, 270, p);
+        if (capturedPhotoPreview != null) {
+            p.setColor(Color.WHITE);
+            c.drawBitmap(capturedPhotoPreview, null, new RectF(8, 44, 232, 268), p);
+        } else {
+            p.setColor(Color.WHITE);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(13);
+            c.drawText("Photo saved", 120, 158, p);
+        }
     }
 
     private void openGalleryFolder(boolean video) {
