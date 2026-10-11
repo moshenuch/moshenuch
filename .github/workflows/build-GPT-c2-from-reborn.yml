@@ -35,9 +35,51 @@ jobs:
       - name: Restore pinned Nokia Sans font faces
         run: python3 GPT-c2-from-reborn/tools/extract_nokia_fonts.py
 
-      - name: Build native debug APK
+      # This is OPTIONAL until the repo owner configures the four Actions
+      # secrets. Missing secrets continue the legacy debug build, explicitly
+      # flagged as NON-UPGRADABLE. Never put signing credentials in a commit.
+      - name: Prepare persistent APK signing
+        shell: bash
+        env:
+          C2_KEYSTORE_BASE64: ${{ secrets.C2_SIGNING_KEYSTORE_BASE64 }}
+          C2_SIGNING_STORE_PASSWORD: ${{ secrets.C2_SIGNING_STORE_PASSWORD }}
+          C2_SIGNING_KEY_ALIAS: ${{ secrets.C2_SIGNING_KEY_ALIAS }}
+          C2_SIGNING_KEY_PASSWORD: ${{ secrets.C2_SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${C2_KEYSTORE_BASE64}" ]]; then
+            if [[ -n "${C2_SIGNING_STORE_PASSWORD}" || -n "${C2_SIGNING_KEY_ALIAS}" || -n "${C2_SIGNING_KEY_PASSWORD}" ]]; then
+              echo "::error::Incomplete signing secrets: keystore missing."
+              exit 1
+            fi
+            echo "::warning::Using disposable GitHub-runner debug signing. The APK will NOT update earlier APKs in place."
+            echo "C2_SIGNING_MODE=ephemeral-debug" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [[ -z "${C2_SIGNING_STORE_PASSWORD}" || -z "${C2_SIGNING_KEY_ALIAS}" || -z "${C2_SIGNING_KEY_PASSWORD}" ]]; then
+            echo "::error::All three signing password/alias secrets are required with the keystore."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$C2_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/c2-signing.jks"
+          keytool -list -keystore "$RUNNER_TEMP/c2-signing.jks" -storepass "$C2_SIGNING_STORE_PASSWORD" -alias "$C2_SIGNING_KEY_ALIAS" > /dev/null
+          echo "C2_SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/c2-signing.jks" >> "$GITHUB_ENV"
+          echo "C2_SIGNING_MODE=persistent-release" >> "$GITHUB_ENV"
+
+      - name: Build native APK
         working-directory: GPT-c2-from-reborn
-        run: gradle --no-daemon clean assembleDebug
+        env:
+          C2_SIGNING_STORE_PASSWORD: ${{ secrets.C2_SIGNING_STORE_PASSWORD }}
+          C2_SIGNING_KEY_ALIAS: ${{ secrets.C2_SIGNING_KEY_ALIAS }}
+          C2_SIGNING_KEY_PASSWORD: ${{ secrets.C2_SIGNING_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${C2_SIGNING_MODE}" == "persistent-release" ]]; then
+            gradle --no-daemon clean assembleRelease
+          else
+            gradle --no-daemon clean assembleDebug
+          fi
 
       - name: HTML reference
         id: html
@@ -55,8 +97,20 @@ jobs:
           VERSION=$(awk -F'"' '/versionName/ {print $2; exit}' GPT-c2-from-reborn/app/build.gradle)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare APK
-        run: cp GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk "GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk"
+      - name: Prepare and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${C2_SIGNING_MODE}" == "persistent-release" ]]; then
+            SRC=GPT-c2-from-reborn/app/build/outputs/apk/release/app-release.apk
+          else
+            SRC=GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk
+          fi
+          DEST="GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk"
+          cp "$SRC" "$DEST"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$DEST"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -72,6 +126,9 @@ jobs:
           body: |
             APK version: v${{ steps.version.outputs.version }}
             Pinned HTML reference: v${{ steps.html.outputs.version }}
+            Signing mode: ${{ env.C2_SIGNING_MODE }}.
+            Only the persistent-release signing mode can produce reliably
+            upgradable APKs; switching certificates requires uninstall once.
             Native Android Java/Canvas application (not a WebView).
             Working scope and outstanding differences are documented in
             https://github.com/moshenuch/moshenuch/blob/main/GPT-c2-from-reborn/RELEASE-NOTES.md
