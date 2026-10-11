@@ -4507,6 +4507,7 @@ public class C2PhoneView extends View {
         int id = goToShortcuts.visualId(sel);
         boolean wasVisible = goToShortcuts.isEnabled(id);
         if (goToShortcuts.toggleAt(sel)) {
+            auditGoTo("toggle item=" + id + " enabled=" + !wasVisible);
             saveGoToShortcuts();
             showNotice(wasVisible ? "Shortcut hidden" : "Shortcut shown");
         } else if (wasVisible && goToShortcuts.enabledCount() == 1) {
@@ -4518,6 +4519,7 @@ public class C2PhoneView extends View {
         int from = sel;
         if (goToShortcuts.move(from, direction)) {
             sel = from + direction;
+            auditGoTo("move from=" + from + " to=" + sel);
             saveGoToShortcuts();
             showNotice("Shortcut moved");
         } else showNotice("Already at end of list");
@@ -5595,6 +5597,7 @@ public class C2PhoneView extends View {
         if ("clearAuditDemo".equals(action)) {
             changeAuditDemoMode(false);
         } else if ("restoreGoTo".equals(action)) {
+            auditGoTo("restore confirmed YES");
             goToShortcuts.restoreDefaults();
             saveGoToShortcuts();
             sel = 0;
