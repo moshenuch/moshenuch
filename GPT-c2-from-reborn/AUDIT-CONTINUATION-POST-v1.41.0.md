@@ -1,0 +1,31 @@
+# C2 Reborn native APK continuation after v1.41.0
+
+**Baseline:** APK v1.41.0; HTML reference v6.343 (read-only).  
+**Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
+**CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
+
+## Confirmed implementation baseline
+- Native Java/Canvas, not WebView.
+- v1.41.0: measured, two-line bounded Nokia notices; Calculator and Loan title-safe panel start.
+- v1.39.0: user-verified uncut conversation names with mark indicators and unread dots.
+- v1.38.0: user-verified Home softkeys, four navigation directions, persistence after force-stop, and Menu-reachability protection.
+- Unassigned navigation picker intentionally starts at None.
+- v1.37.0: bulk SMS read/unread selection restricts actions to marked received messages in active thread; static/fixture tests pass.
+
+## Priority emulator acceptance matrix (not yet verified)
+1. On Pixel 4 Android 11 check full text of *Keep Menu on at least one home key*, no clipping at 240px or bleed-through, including long Assignment notices.
+2. Check full Calculator and Loan calculator titles above panel.
+3. My shortcuts > Restore defaults: No retains assignments; Yes restores all defaults; ensure persistence over force-stop and relaunch.
+4. In Conversations, mark only a subset of incoming SMS, then execute Mark as read / unread; verify only chosen incoming rows change, unread status indicators are correct and sent/out-of-thread rows remain unchanged.
+5. Test Messaging templates and Saved: view/create/select/delete/back with confirm prompts and compare exact HTML v6.343 actions.
+6. Test Menu > Options > Organise and Go to > Options > Organise, check order, hidden items and persistence on cold start.
+7. Check icon fidelity and menu positions against HTML v6.343.
+
+## Release criteria for v1.42.0
+- Correct demonstrated parity gaps in production Java, not just audit documents.
+- Add a regression test for each fix, confirm source-to-screen wiring, run GitHub Actions and install on emulator.
+- Publish versioned APK with distinct HTML reference in filename.
+- Do not claim emulator confirmation from CI-only tests.
+- Address stable APK signing separately; debug signing may change between builds and force uninstall.
+
+This checklist documents the continuation point; it is not a v1.42.0 release.
