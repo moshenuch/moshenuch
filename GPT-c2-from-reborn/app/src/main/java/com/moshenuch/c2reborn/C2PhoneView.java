@@ -7092,6 +7092,14 @@ public class C2PhoneView extends View {
     }
 
     private String hitKey(float x, float y) {
+        // The Home LCD centre label visually sits above the navigation
+        // controls. Provide a generous *Home-only* target so tapping the
+        // visible Menu text cannot land in the small inactive bezel gap.
+        // Physical OK remains in its own d-pad rectangle below y=455.
+        if ("home".equals(page) && x >= SX + SW / 3f &&
+                x <= SX + 2f * SW / 3f &&
+                y >= SY + SH * 276f / 320f && y < 432f)
+            return "OK";
         // Touch-screen representation of the centre Nokia softkey shares
         // the Home Menu binding with the physical OK button.
         // The LCD softkey labels are touch targets on EVERY page.
