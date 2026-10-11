@@ -1633,7 +1633,7 @@ public class C2PhoneView extends View {
         p.setTextSize(9);
         int smsLength = messageBody.length();
         int smsSegments = Math.max(1, (smsLength <= 160 ? 1 : (smsLength + 152) / 153));
-        int smsRemaining = smsSegments == 1 ? 160 - smsLength : smsSegments * 153 - smsLength;
+        int smsRemaining = 160 - smsLength; // Reference displays negative overflow, e.g. -6/2
         c.drawText(smsRemaining + "/" + smsSegments, 229, 288, p);
     }
 
