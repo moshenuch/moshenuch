@@ -1666,6 +1666,28 @@ public class C2PhoneView extends View {
         p.setTextSize(16);
         c.drawText(status, 120, 76, p);
         String displayName = contactNameFor(activeCall);
+        // Telecom can report country-code-normalised numbers. Compare against
+        // every provider contact number, including secondary numbers, before
+        // falling back to the call-log's cached name.
+        if (displayName.equals(activeCall) && activeCall != null && !activeCall.isEmpty()) {
+            for (Contact contact : contacts) {
+                boolean match = android.telephony.PhoneNumberUtils.compare(
+                        contact.number, activeCall);
+                ArrayList<String> aliases = contactNumbersById.get(contact.contactId);
+                if (!match && aliases != null) {
+                    for (String alias : aliases) {
+                        if (android.telephony.PhoneNumberUtils.compare(alias, activeCall)) {
+                            match = true;
+                            break;
+                        }
+                    }
+                }
+                if (match && contact.name != null && !contact.name.isEmpty()) {
+                    displayName = contact.name;
+                    break;
+                }
+            }
+        }
         // Cached call-log names can resolve contacts whose provider number
         // differs from Telecom's dial string (country code, separators, etc).
         if (displayName.equals(activeCall)) {
