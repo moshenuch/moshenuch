@@ -1292,7 +1292,7 @@ public class C2PhoneView extends View {
             }
             c.drawText(rowText, textX, y + 24, p);
             p.setTypeface(fontRegular);
-            String sub = subtitleFor(page, idx);
+            String sub = "contactsNames".equals(page) ? "" : subtitleFor(page, idx);
             if (!sub.isEmpty()) {
                 p.setColor(selected ? Color.DKGRAY : Color.LTGRAY);
                 p.setTextSize(11);
@@ -2133,6 +2133,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
         if ("voiceRecordings".equals(page))
             return new String[]{"Options", voiceRecorder.isPlaying() ? "Stop" : "Play", "Back"};
+        if ("contactsNames".equals(page)) return new String[]{"Options", "Details", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
@@ -2177,7 +2178,8 @@ public class C2PhoneView extends View {
         c.drawText("Options", 6, 21, p);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(13);
-        c.drawText((optionSel + 1) + "-" + optionItems.length, 233, 20, p);
+        if (!"contactsNames".equals(page))
+            c.drawText((optionSel + 1) + "-" + optionItems.length, 233, 20, p);
 
         int visible = 6;
         int start = Math.max(0, Math.min(optionSel - (visible - 1), Math.max(0, optionItems.length - visible)));
@@ -6632,7 +6634,10 @@ public class C2PhoneView extends View {
             showNotice("DEMO: Contacts are read-only");
             return;
         }
-        if (index < 0 || index >= contacts.size()) return;
+        if (index < 0 || index >= contacts.size()) {
+            showNotice("Contact unavailable");
+            return;
+        }
         Contact c = contacts.get(index);
         if (deviceContactsActive) {
             if (!backend.deleteContact(c.contactId)) {
