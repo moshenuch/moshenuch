@@ -3779,6 +3779,10 @@ public class C2PhoneView extends View {
 
     private void go(String target) {
         if ("compose".equals(target)) editingDraftIndex = -1;
+        if (("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) &&
+                !"cameraViewfinder".equals(target) && !"videoViewfinder".equals(target) &&
+                getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).showNativeCameraPreview(false);
         history.push(new PageState(page, sel));
         page = target;
         sel = 0;
@@ -3788,6 +3792,9 @@ public class C2PhoneView extends View {
     }
 
     private void back() {
+        if (("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) &&
+                getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).showNativeCameraPreview(false);
         if ("music".equals(page)) musicEngine.pause();
         if (voiceRecorder.isRecording() && "voiceRecorder".equals(page))
             finishVoiceRecording();
@@ -4718,9 +4725,13 @@ public class C2PhoneView extends View {
     private void startCameraCapture(boolean video) {
         // First enter the in-house Nokia UI rather than directly leaving C2.
         go(video ? "videoViewfinder" : "cameraViewfinder");
+        if (getContext() instanceof MainActivity)
+            post(() -> ((MainActivity) getContext()).showNativeCameraPreview(true));
     }
 
     private void launchHardwareCapture(boolean video) {
+        if (getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).showNativeCameraPreview(false);
         if (getContext() instanceof MainActivity)
             ((MainActivity) getContext()).launchCameraCapture(video);
         else showNotice("Android camera is unavailable");
