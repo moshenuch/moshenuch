@@ -35,6 +35,17 @@ jobs:
       - name: Restore pinned Nokia Sans font faces
         run: python3 GPT-c2-from-reborn/tools/extract_nokia_fonts.py
 
+      - name: Test native SMS detail parser
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/parser-smoke
+          javac -d build/parser-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeSmsDetails.java \
+            tools/NativeSmsDetailsSmokeTest.java
+          java -cp build/parser-smoke com.moshenuch.c2reborn.NativeSmsDetailsSmokeTest
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
