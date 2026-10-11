@@ -4573,11 +4573,23 @@ public class C2PhoneView extends View {
                     "Mark as read","Mark as unread"};
         else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms target = conversationMessageAt(sel);
-            if (target != null && target.type == Telephony.Sms.MESSAGE_TYPE_INBOX)
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Use detail","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all",
-                        isSmsUnread(target) ? "Mark as read" : "Mark as unread"};
-            else
-                optionItems = new String[]{"Reply","Forward","Message details","Delete","Call","Use detail","Move","Copy as template","Go to Drafts","Conversation details","Mark","Mark all","Unmark all"};
+            ArrayList<Long> incomingTargets = receivedConversationTargets(target);
+            String[] core = new String[]{"Reply","Forward","Message details","Delete","Call",
+                    "Use detail","Move","Copy as template","Go to Drafts",
+                    "Conversation details","Mark","Mark all","Unmark all"};
+            if (incomingTargets.isEmpty()) optionItems = core;
+            else {
+                ArrayList<String> choices = new ArrayList<>(Arrays.asList(core));
+                if (!markedSmsIds.isEmpty()) {
+                    // Marked rows may mix read and unread; expose BOTH actions.
+                    // This also works if the currently highlighted row is sent.
+                    choices.add("Mark as read");
+                    choices.add("Mark as unread");
+                } else {
+                    choices.add(isSmsUnread(target) ? "Mark as read" : "Mark as unread");
+                }
+                optionItems = choices.toArray(new String[0]);
+            }
         }
         else if ("compose".equals(page))
             optionItems = new String[]{"Send","Preview","Insert","Add recipient >","Add subject","Clear field","Insert contact detail","Insert symbol","Editing options >","Writing language >","Prediction options >","Change to multim.","Save message >","Sending options >","Exit editor"};
@@ -5052,10 +5064,18 @@ public class C2PhoneView extends View {
                 showNotice(markedSmsIds.contains(m.id) ? "Marked" : "Unmarked");
             } else if ("Mark as read".equals(choice) || "Mark as unread".equals(choice)) {
                 boolean unread = "Mark as unread".equals(choice);
-                if (setSmsReadStateLocally(m, unread)) {
+                // Apply to marked incoming SMS in THIS thread, or to the
+                // highlighted incoming SMS if nothing is marked. Sent SMS
+                // must never acquire an unread envelope or get modified.
+                ArrayList<Long> targets = receivedConversationTargets(m);
+                int changed = 0;
+                for (Long id : targets)
+                    if (setSmsReadStateLocally(smsById(id), unread)) changed++;
+                if (changed > 0) {
                     persistSmsReadOverrides();
-                    showNotice(unread ? "Unread in this app" : "Read in this app");
-                } else showNotice("Select a received SMS");
+                    showNotice(changed + (changed == 1 ? " received SMS marked " :
+                            " received SMS marked ") + (unread ? "unread" : "read") + " in app");
+                } else showNotice("Select received messages to mark");
             } else if ("Mark all".equals(choice)) {
                 markedSmsIds.clear();
                 for (AndroidBackend.DeviceSms item : conversationMessages())
@@ -5875,6 +5895,25 @@ public class C2PhoneView extends View {
     private boolean hasUnreadSms() {
         for (AndroidBackend.DeviceSms m : deviceSms) if (isSmsUnread(m)) return true;
         return false;
+    }
+
+    /** IDs of received messages inside the open conversation, newest first. */
+    private ArrayList<Long> receivedConversationMessageIds() {
+        ArrayList<Long> ids = new ArrayList<>();
+        for (AndroidBackend.DeviceSms sms : conversationMessages())
+            if (sms.type == Telephony.Sms.MESSAGE_TYPE_INBOX) ids.add(sms.id);
+        return ids;
+    }
+
+    /**
+     * Use the shared CI-tested selection semantics for unread/read:
+     * marked in-thread inbox entries first; otherwise the highlighted row.
+     * Never send a read/unread operation to Android's SMS content provider.
+     */
+    private ArrayList<Long> receivedConversationTargets(AndroidBackend.DeviceSms highlighted) {
+        return NativeSmsBulkSelection.targetReceivedIds(
+                receivedConversationMessageIds(), markedSmsIds,
+                highlighted == null ? -1L : highlighted.id);
     }
 
     private ArrayList<AndroidBackend.DeviceSms> conversationMessages() {
