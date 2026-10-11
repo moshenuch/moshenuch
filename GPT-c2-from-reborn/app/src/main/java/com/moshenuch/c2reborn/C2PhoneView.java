@@ -5162,7 +5162,6 @@ public class C2PhoneView extends View {
         return isDigit(key) || "*".equals(key) || "#".equals(key);
     }
 
-    @Override
     private void cancelPendingSpeedDialHold() {
         if (pendingSpeedDialHold != null) {
             removeCallbacks(pendingSpeedDialHold);
