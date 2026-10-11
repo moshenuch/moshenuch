@@ -1,15 +1,16 @@
-GPT c2 from reborn — APK v1.5.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.7.0 / HTML reference v6.342
 
-NATIVE Android Java, no WebView. Source HTML Git blob 8966ff284125bd6fa752a78f6bc4a51fd47a03a4.
-Now aligns primary menu row ordering/count more closely to HTML v6.342:
-- Settings: all 15 original entries with source-exact icons and corrected navigation indices;
-  native About APK is accessible through Settings > Options > About APK (not a bogus HTML row).
-- Contacts: all 10 original entries, including newly extracted exact Move/Copy contacts icons.
-- Log: all 14 source menu entries; some entries are information-only pending implementation.
-- Organiser: all 9 source entries, including Dictionary with original icon.
-- Gallery: all 9 original entries and exact folder icons from v1.4.0.
-- SMS: Nokia-style conversation bubble layout/scroll and state-aware envelope icons from v1.3.0.
+Native Android Java, not a WebView. Reference HTML v6.342 is a version provenance label, not a full parity guarantee.
 
-LIMITATIONS: Many nested feature screens and Options actions remain placeholders, not a
-fully equivalent HTML port. A device screenshot parity check is still required.
-Real SMS read/delete mutations are locally simulated due to Android provider restrictions.
+Corrections after the deep code audit:
+- SMS Reply now addresses the actual sender number rather than the sender's contact display name.
+- Sent items are linked to their real Android SMS IDs and can be opened.
+- Contact edits target the exact selected Phone Data._ID and raw contact (atomic provider batch) rather than overwriting all numbers.
+- Contact Names Options can Mark/Unmark, Mark all, Unmark all, and delete explicitly selected contacts behind a confirmation.
+- App-local SMS/conversation hide operations clearly say Android's SMS provider remains unchanged.
+- Call-log Clear options no longer falsely claim that Android records were deleted.
+- SMS submission no longer claims successful delivery before Android confirms it.
+- About and home version labels are obtained from the installed Android package metadata.
+- Existing Nokia bitmap icon and conversation rendering fixes are retained.
+
+Limitations: no full screenshot-by-screenshot/device parity certification. Sent/received status callbacks, structured drafts, true Android SMS deletion/default-SMS role, full icons/options on nested screens, contact groups, and media/gallery features remain on the outstanding audit list. Real-device testing must use demo numbers and avoid destructive testing on personal data.

@@ -77,6 +77,7 @@ public class C2PhoneView extends View {
     private final HashSet<Long> hiddenSmsIds = new HashSet<>();
     private final HashSet<Long> markedThreadIds = new HashSet<>();
     private final HashSet<Long> markedSmsIds = new HashSet<>();
+    private final HashSet<Integer> markedContactIndices = new HashSet<>();
     private long activeThreadId = -1L;
     private long activeMessageId = -1L;
     private float conversationScrollY = 0f;
@@ -201,8 +202,9 @@ public class C2PhoneView extends View {
         if (!deviceContactsActive) return;
         ArrayList<AndroidBackend.DeviceContact> real = backend.loadContacts();
         contacts.clear();
+        markedContactIndices.clear();
         for (AndroidBackend.DeviceContact c : real) {
-            contacts.add(new Contact(c.name, c.number, c.contactId, c.rawContactId, true));
+            contacts.add(new Contact(c.name, c.number, c.contactId, c.rawContactId, c.phoneDataId, true));
         }
         if (contactIndex >= contacts.size()) contactIndex = Math.max(0, contacts.size() - 1);
     }
@@ -536,7 +538,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.6.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK " + installedApkVersion(), 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {
@@ -609,6 +611,12 @@ public class C2PhoneView extends View {
             else if ("media".equals(page) && idx == 4) drawVoiceRecorderIcon(c, 10, y + 8, 30, selected);
             else if ("media".equals(page) && idx == 5) drawEqualiserIcon(c, 10, y + 8, 30, selected);
 
+            if ("contactsNames".equals(page) && markedContactIndices.contains(idx)) {
+                p.setColor(textColor);
+                p.setTextSize(13);
+                p.setTextAlign(Paint.Align.RIGHT);
+                c.drawText("✓", 229, y + 24, p);
+            }
             if ("conversations".equals(page) && idx < smsThreads.size()) {
                 SmsThread t = smsThreads.get(idx);
                 Bitmap threadIcon = RebornIconAtlas.get(threadUnread(t.threadId) ? "THREAD_UNREAD" :
@@ -1491,6 +1499,15 @@ public class C2PhoneView extends View {
         }
     }
 
+    private String installedApkVersion() {
+        try {
+            return getContext().getPackageManager()
+                    .getPackageInfo(getContext().getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+            return "unknown";
+        }
+    }
+
     private String[] itemsFor(String pg) {
         switch (pg) {
             case "messaging":
@@ -1573,7 +1590,7 @@ public class C2PhoneView extends View {
             case "settings":
                 return new String[]{"Profiles","Themes","Tones","Lights","Display","Date and time","My shortcuts","Sync and backup","Connectivity","Call","Phone","Accessories","Configuration","Security","Rest. factory sett."};
             case "aboutNative":
-                return new String[]{"APK version: 1.5.0","HTML reference: v6.342","Partial native update","No WebView"};
+                return new String[]{"APK version: " + installedApkVersion(),"HTML reference: v6.342","Partial native update","No WebView"};
             case "callsettings":
                 return new String[]{"Call type setting","Call divert","Anykey answer","Automatic redial",
                 "Video-voice redial","Voice clarity","Speed dialling","Call waiting","Call duration display",
@@ -1729,6 +1746,15 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("sent".equals(page)) {
+            AndroidBackend.DeviceSms selectedSent = sentMessageAt(sel);
+            if (selectedSent != null) {
+                activeMessageId = selectedSent.id;
+                go("messageRead");
+            } else showNotice("No sent message selected");
+            return;
+        }
+
         if ("drafts".equals(page)) {
             if (!drafts.isEmpty()) {
                 messageBody = drafts.get(sel);
@@ -1826,7 +1852,7 @@ public class C2PhoneView extends View {
             if (!pool.isEmpty()) requestConfirm("removeFromFilter", "Remove " + pool.get(Math.min(sel,pool.size()-1)) + "?");
             return;
         }
-        if ("aboutNative".equals(page)) { showNotice("Native APK 1.1.0"); return; }
+        if ("aboutNative".equals(page)) { showNotice("Native APK " + installedApkVersion()); return; }
 
         if ("profiles".equals(page)) {
             profile = itemsFor(page)[sel];
@@ -2095,7 +2121,7 @@ public class C2PhoneView extends View {
                 boolean ok;
                 if (editIndex >= 0 && editIndex < contacts.size()) {
                     Contact old = contacts.get(editIndex);
-                    ok = backend.updateContact(old.contactId, old.rawContactId, name, num);
+                    ok = backend.updateContact(old.contactId, old.rawContactId, old.phoneDataId, name, num);
                 } else {
                     ok = backend.addContact(name, num);
                 }
@@ -2212,7 +2238,7 @@ public class C2PhoneView extends View {
         history.clear();
         page = "home";
         sel = 0;
-        showNotice("Message sent");
+        showNotice("SMS submitted; delivery unconfirmed");
         recipient = "";
         messageBody = "";
         postDelayed(this::refreshSmsFromPhone, 1200);
@@ -2875,7 +2901,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","Search","Add new","Memory status"};
         else if ("contactsNames".equals(page))
             optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
-              "Delete contact","Mark >","Add to blacklist","Add to whitelist"};
+              "Delete contact","Mark >","Mark all","Unmark all","Delete selected",
+              "Add to blacklist","Add to whitelist"};
         else if ("contactDetail".equals(page))
             optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >",
               "View conversations","Add image >","Use number","Set as default","Change type >",
@@ -2990,7 +3017,7 @@ public class C2PhoneView extends View {
                 go("itemDetail");
             } else if ("Delete conversation".equals(choice)) {
                 int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
-                requestConfirm("deleteThreads", "Delete " + n + (n == 1 ? " conversation?" : " conversations?"));
+                requestConfirm("deleteThreads", "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
             } else if ("Inbox view >".equals(choice)) go("inbox");
             else if ("New message >".equals(choice)) {
                 recipient = "";
@@ -3017,7 +3044,7 @@ public class C2PhoneView extends View {
                 go("compose");
             } else if ("Delete".equals(choice)) {
                 int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
-                requestConfirm("deleteSms", "Delete " + n + (n == 1 ? " message?" : " messages?"));
+                requestConfirm("deleteSms", "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
             } else if ("Call".equals(choice) && m != null) startCall(m.address);
             else if ("Go to Drafts".equals(choice)) go("drafts");
             else if ("Conversation details".equals(choice)) showNotice("Conversation details");
@@ -3027,12 +3054,12 @@ public class C2PhoneView extends View {
             } else showNotice(choice);
         } else if ("inbox".equals(page) || "messageRead".equals(page)) {
             if ("Reply".equals(choice) || "Reply as".equals(choice)) {
-                recipient = inboxName(inboxIndex);
+                recipient = activeMessageAddress();
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
             } else if ("Call".equals(choice)) startCall(activeMessageAddress());
-            else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Delete this message?");
+            else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Hide this message in the app? Phone SMS unchanged.");
             else if ("Forward".equals(choice) || "Edit".equals(choice) || "New message".equals(choice)) {
                 recipient = "";
                 messageBody = "Forwarded message";
@@ -3089,8 +3116,22 @@ public class C2PhoneView extends View {
             else if ("Delete contact".equals(choice)) {
                 requestConfirm("deleteContact", "Delete this contact?");
             } else if ("Search".equals(choice)) showNotice("Search");
-            else if ("Mark >".equals(choice)) showNotice("Mark");
-            else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
+            else if ("Mark >".equals(choice)) {
+                if (!markedContactIndices.add(contactIndex)) markedContactIndices.remove(contactIndex);
+                showNotice(markedContactIndices.contains(contactIndex) ? "Marked" : "Unmarked");
+            } else if ("Mark all".equals(choice)) {
+                markedContactIndices.clear();
+                for (int i = 0; i < contacts.size(); i++) markedContactIndices.add(i);
+                showNotice("All contacts marked");
+            } else if ("Unmark all".equals(choice)) {
+                markedContactIndices.clear();
+                showNotice("All marks cleared");
+            } else if ("Delete selected".equals(choice)) {
+                if (!markedContactIndices.isEmpty())
+                    requestConfirm("deleteMarkedContacts", "Delete " + markedContactIndices.size() +
+                            " selected contact(s) from the phone?");
+                else showNotice("Mark contacts first");
+            } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
                 addNumberToFilter("Add to blacklist".equals(choice), ct.number);
         } else if ("contactDetail".equals(page)) {
             Contact ct = contacts.get(Math.max(0, Math.min(contactIndex, contacts.size()-1)));
@@ -3111,7 +3152,7 @@ public class C2PhoneView extends View {
         } else if ("log".equals(page)) {
             if ("View".equals(choice)) openSelected();
             else if ("Call".equals(choice)) openSelected();
-            else if ("Clear lists".equals(choice)) showNotice("Call lists cleared");
+            else if ("Clear lists".equals(choice)) showNotice("Not supported: call log unchanged");
             else if ("Call timers".equals(choice)) {
                 detailTitle = "Call timers";
                 detailText = "Call duration\nPacket data counter\nPacket data timer";
@@ -3120,7 +3161,7 @@ public class C2PhoneView extends View {
         } else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page)) {
             if ("Call".equals(choice)) {
                 startCall(callNumberAt(page, sel));
-            } else if ("Clear list".equals(choice)) showNotice("List cleared");
+            } else if ("Clear list".equals(choice)) showNotice("Not supported: call log unchanged");
             else showNotice(choice);
         } else if ("settings".equals(page) || "gallery".equals(page) || "media".equals(page) || "organiser".equals(page) || "applications".equals(page) || "web".equals(page)) {
             if ("Open".equals(choice)) openSelected();
@@ -3268,7 +3309,7 @@ public class C2PhoneView extends View {
             saveLongSet("sms_hidden", hiddenSmsIds);
             refreshSmsFromPhone();
             sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
-            showNotice("Deleted");
+            showNotice("Conversation hidden in app");
         } else if ("deleteSms".equals(action)) {
             HashSet<Long> targets = new HashSet<>();
             if (!markedSmsIds.isEmpty()) targets.addAll(markedSmsIds);
@@ -3281,7 +3322,28 @@ public class C2PhoneView extends View {
             saveLongSet("sms_hidden", hiddenSmsIds);
             refreshSmsFromPhone();
             if ("messageRead".equals(page)) back();
-            showNotice("Deleted");
+            showNotice("SMS hidden in app");
+        } else if ("deleteMarkedContacts".equals(action)) {
+            ArrayList<Integer> selected = new ArrayList<>(markedContactIndices);
+            java.util.Collections.sort(selected, java.util.Collections.reverseOrder());
+            int success = 0;
+            int failures = 0;
+            for (int idx : selected) {
+                if (idx < 0 || idx >= contacts.size()) continue;
+                Contact c = contacts.get(idx);
+                if (deviceContactsActive) {
+                    if (backend.deleteContact(c.contactId)) success++;
+                    else failures++;
+                } else {
+                    contacts.remove(idx);
+                    success++;
+                }
+            }
+            if (deviceContactsActive) refreshContactsFromPhone();
+            else saveContacts();
+            markedContactIndices.clear();
+            sel = Math.min(sel, Math.max(0, contacts.size()-1));
+            showNotice(success + " deleted" + (failures > 0 ? "; " + failures + " failed" : ""));
         } else if ("deleteContact".equals(action)) {
             deleteContactAt(contactIndex);
             if ("contactDetail".equals(page)) back();
@@ -3426,6 +3488,17 @@ public class C2PhoneView extends View {
         return b.length() == 0 ? "(empty)" : b.toString().trim();
     }
 
+    private AndroidBackend.DeviceSms sentMessageAt(int index) {
+        if (index < 0) return null;
+        int seen = 0;
+        for (AndroidBackend.DeviceSms m : deviceSms) {
+            if (m.type == Telephony.Sms.MESSAGE_TYPE_SENT) {
+                if (seen++ == index) return m;
+            }
+        }
+        return null;
+    }
+
     private String[] sentSmsItems() {
         if (!deviceSmsActive) return new String[]{"Allow SMS permission"};
         ArrayList<String> out = new ArrayList<>();
@@ -3567,17 +3640,19 @@ public class C2PhoneView extends View {
         final String number;
         final long contactId;
         final long rawContactId;
+        final long phoneDataId;
         final boolean device;
 
         Contact(String name, String number) {
-            this(name, number, -1, -1, false);
+            this(name, number, -1, -1, -1, false);
         }
 
-        Contact(String name, String number, long contactId, long rawContactId, boolean device) {
+        Contact(String name, String number, long contactId, long rawContactId, long phoneDataId, boolean device) {
             this.name = name == null ? "" : name;
             this.number = number == null ? "" : number;
             this.contactId = contactId;
             this.rawContactId = rawContactId;
+            this.phoneDataId = phoneDataId;
             this.device = device;
         }
     }

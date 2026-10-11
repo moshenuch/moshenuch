@@ -23,12 +23,14 @@ public final class AndroidBackend {
     public static final class DeviceContact {
         public final long contactId;
         public final long rawContactId;
+        public final long phoneDataId;
         public final String name;
         public final String number;
 
-        DeviceContact(long contactId, long rawContactId, String name, String number) {
+        DeviceContact(long contactId, long rawContactId, long phoneDataId, String name, String number) {
             this.contactId = contactId;
             this.rawContactId = rawContactId;
+            this.phoneDataId = phoneDataId;
             this.name = name == null ? "" : name;
             this.number = number == null ? "" : number;
         }
@@ -91,7 +93,8 @@ public final class AndroidBackend {
                 ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                 ContactsContract.CommonDataKinds.Phone.RAW_CONTACT_ID,
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                ContactsContract.CommonDataKinds.Phone.NUMBER
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone._ID
         };
         Cursor c = null;
         try {
@@ -104,7 +107,7 @@ public final class AndroidBackend {
                 long contactId = c.getLong(0);
                 if (contactId == lastContact) continue;
                 lastContact = contactId;
-                out.add(new DeviceContact(contactId, c.getLong(1), c.getString(2), c.getString(3)));
+                out.add(new DeviceContact(contactId, c.getLong(1), c.getLong(4), c.getString(2), c.getString(3)));
             }
         } catch (Exception ignored) {
         } finally {
@@ -142,54 +145,63 @@ public final class AndroidBackend {
         }
     }
 
-    public boolean updateContact(long contactId, long rawContactId, String name, String number) {
-        if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
-        try {
-            ContentValues n = new ContentValues();
-            n.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name);
-            int nameRows = resolver.update(
-                    ContactsContract.Data.CONTENT_URI,
-                    n,
-                    ContactsContract.Data.CONTACT_ID + "=? AND " +
-                            ContactsContract.Data.MIMETYPE + "=?",
-                    new String[]{String.valueOf(contactId),
-                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE});
-
-            ContentValues p = new ContentValues();
-            p.put(ContactsContract.CommonDataKinds.Phone.NUMBER, number);
-            int phoneRows = resolver.update(
-                    ContactsContract.Data.CONTENT_URI,
-                    p,
-                    ContactsContract.Data.CONTACT_ID + "=? AND " +
-                            ContactsContract.Data.MIMETYPE + "=?",
-                    new String[]{String.valueOf(contactId),
-                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE});
-
-            if (nameRows == 0 && rawContactId > 0) {
-                ContentValues addName = new ContentValues();
-                addName.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
-                addName.put(ContactsContract.Data.MIMETYPE,
-                        ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
-                addName.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name);
-                resolver.insert(ContactsContract.Data.CONTENT_URI, addName);
-            }
-            if (phoneRows == 0 && rawContactId > 0) {
-                ContentValues addPhone = new ContentValues();
-                addPhone.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
-                addPhone.put(ContactsContract.Data.MIMETYPE,
-                        ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
-                addPhone.put(ContactsContract.CommonDataKinds.Phone.NUMBER, number);
-                addPhone.put(ContactsContract.CommonDataKinds.Phone.TYPE,
-                        ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE);
-                resolver.insert(ContactsContract.Data.CONTENT_URI, addPhone);
-            }
-            return true;
-        } catch (Exception e) {
+    /**
+     * Limit edits to the specifically selected phone-number data row. Contacts can
+     * aggregate multiple raw contacts and each can contain multiple numbers.
+     */
+    public boolean updateContact(long contactId, long rawContactId, long phoneDataId,
+                                 String name, String number) {
+        if (!has(Manifest.permission.WRITE_CONTACTS) || rawContactId <= 0 || phoneDataId <= 0)
             return false;
+        Cursor cursor = null;
+        try {
+            long nameId = -1;
+            cursor = resolver.query(ContactsContract.Data.CONTENT_URI,
+                    new String[]{ContactsContract.Data._ID},
+                    ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                            ContactsContract.Data.MIMETYPE + "=?",
+                    new String[]{String.valueOf(rawContactId),
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE}, null);
+            if (cursor != null && cursor.moveToFirst()) nameId = cursor.getLong(0);
+            if (cursor != null) { cursor.close(); cursor = null; }
+
+            ArrayList<android.content.ContentProviderOperation> edits = new ArrayList<>();
+            ContentValues phone = new ContentValues();
+            phone.put(ContactsContract.CommonDataKinds.Phone.NUMBER, number);
+            edits.add(android.content.ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withValues(phone)
+                    .withSelection(ContactsContract.Data._ID + "=? AND " +
+                                    ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                                    ContactsContract.Data.MIMETYPE + "=?",
+                            new String[]{String.valueOf(phoneDataId), String.valueOf(rawContactId),
+                                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE})
+                    .withExpectedCount(1).build());
+            ContentValues values = new ContentValues();
+            values.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name);
+            if (nameId > 0) {
+                edits.add(android.content.ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                        .withValues(values)
+                        .withSelection(ContactsContract.Data._ID + "=? AND " +
+                                        ContactsContract.Data.RAW_CONTACT_ID + "=?",
+                                new String[]{String.valueOf(nameId), String.valueOf(rawContactId)})
+                        .withExpectedCount(1).build());
+            } else {
+                values.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
+                values.put(ContactsContract.Data.MIMETYPE,
+                        ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
+                edits.add(android.content.ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValues(values).build());
+            }
+            resolver.applyBatch(ContactsContract.AUTHORITY, edits);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
         }
     }
 
-    public boolean deleteContact(long contactId) {
+        public boolean deleteContact(long contactId) {
         if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
         try {
             int rows = resolver.delete(
