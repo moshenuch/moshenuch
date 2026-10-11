@@ -5004,7 +5004,7 @@ public class C2PhoneView extends View {
         else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
             optionItems = new String[]{"Mark >","Mark all","Unmark all","Delete selected","Add to blacklist","Add to whitelist"};
         else if ("settings".equals(page))
-            optionItems = new String[]{"Open","Search","Help","About APK"};
+            optionItems = isDemoToolsAvailable() ? new String[]{"Open","Demo data (debug)","Search","Help","About APK"} : new String[]{"Open","Search","Help","About APK"};
         else if ("blackpool".equals(page) || "whitepool".equals(page))
             optionItems = new String[]{"Remove"};
         else if ("callsettings".equals(page) || "callfilter".equals(page))
@@ -5292,6 +5292,12 @@ public class C2PhoneView extends View {
                 inputMode = "T9";
                 go("compose");
             }
+            return;
+        }
+
+        if ("settings".equals(page) && "Demo data (debug)".equals(choice)) {
+            if (isDemoToolsAvailable()) go("demoTools");
+            else showNotice("Debug tools unavailable");
             return;
         }
 
@@ -5840,7 +5846,7 @@ public class C2PhoneView extends View {
                 return;
             } else if ("Delete selected".equals(choice)) {
                 if (markedCallKeys.isEmpty()) showNotice("Mark calls first");
-                else requestConfirm("hideMarkedCalls", "Hide selected call records in this app?");
+                else requestConfirm("hideMarkedCalls", "Delete?");
                 return;
             } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice)) {
                 if (selectedCall == null) showNotice("No call selected");
