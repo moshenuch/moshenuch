@@ -68,6 +68,18 @@ jobs:
             tools/NativeGoToShortcutsSmokeTest.java
           java -cp build/goto-smoke com.moshenuch.c2reborn.NativeGoToShortcutsSmokeTest
 
+      - name: Test isolated emulator audit fixtures
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/audit-fixtures-smoke
+          javac -d build/audit-fixtures-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeAuditFixtures.java \
+            app/src/main/java/com/moshenuch/c2reborn/NativeSmsDetails.java \
+            tools/NativeAuditFixturesSmokeTest.java
+          java -cp build/audit-fixtures-smoke com.moshenuch.c2reborn.NativeAuditFixturesSmokeTest
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
