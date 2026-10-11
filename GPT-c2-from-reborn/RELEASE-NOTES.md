@@ -1,58 +1,59 @@
-GPT c2 from reborn — APK v1.38.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.39.0 / HTML reference v6.343
 
-Native Android Java/Canvas; NOT a WebView.
+Native Android Java/Canvas (NOT a WebView).
 
-v1.38.0 — executable Settings > My shortcuts
+v1.39.0 — correct SMS Conversations icon/name overlap
 
-Previously, the My shortcuts settings displayed Left selection key, Right
-selection key, Navigation key and Home screen key, but every item opened an
-inert information page ("Shortcut assignment is simulated natively").
+Reported in the Pixel 4 / Android 11 seeded-demo audit of native
+v1.37.0: the yellow SMS envelope icon visually hid the first character
+of every sender's display name (Leah Hart rendered "eah Hart", unknown
++44 sender lost its leading "+", NOKIA sender lost "N").
 
-- All four My shortcuts items now open functional native assignment screens.
-- Left selection key and Right selection key can open distinct user-selected
-  destinations. Their on-screen Nokia softkey labels update immediately.
-- Navigation key opens four assignments: Up, Down, Left and Right. Those
-  keys work directly on Home. The original unassigned directions remain
-  the default, so existing home navigation is unchanged until configured.
-- Home screen key configures centre OK. The default remains Menu.
-- The user may select one of: Menu, Go to, Names, Messaging, Contacts,
-  Gallery, Camera, Video recorder, Organiser, Calculator, Alarm clock,
-  Settings, Profiles, None.
-- Native Camera/Video recorder actions use the existing Android capture
-  launch; other options navigate to their existing native screens.
-- The main Menu must stay accessible via at least one Home key. Attempts
-  to unassign the LAST Menu binding are rejected. To customize centre OK,
-  first assign Menu to a different Home key; then reassign centre OK.
-- Settings > My shortcuts > Options > Restore defaults presents Yes/No
-  confirmation and returns Left=Go to, Right=Names, Centre=Menu and
-  all four navigation keys=None, without touching the user's phone data.
-- All seven key bindings persist across app restarts under an app-private
-  versioned SharedPreferences key. Malformed preference data resets to
-  safe defaults. Home bindings do not modify global Android OS buttons.
-- Selecting key assignments uses the existing Nokia bitmap radio icons.
-- Debuggable builds emit fixed numeric binding arrays under the safe
-  C2HomeKeys Android logcat tag. No contact/SMS data is logged.
-- New build-side regression tests prove original default behaviour, exact
-  JSON save/reload after simulated app restart, assigned action labels,
-  navigation-slot mapping, Menu-reachability invariant, preference corruption
-  and reset. Python source-wiring audits verify live Settings screens,
-  handler dispatch and confirmation. CI publishes a separate report artifact.
+Confirmed root cause in the native Java Canvas renderer:
+- Conversation-thread icon occupied x = 3..29 pixels, but its sender
+  label started at x = 20, overlapping the bitmap by 9 pixels.
+- The shared list renderer did not constrain long conversation labels
+  before drawing a right-side unread dot or Mark/Mark all checkbox.
 
-Previously implemented functionality retained:
-- v1.37.0 correct SMS conversation Mark all/read/unread bulk semantics.
-- v1.36.0 Go to shortcut self-tests, persistence and capture diagnostics.
-- v1.35.0 debuggable 12-Contact / 12-SMS fixture seed.
-- v1.34.0 Go to Organise with safe persistent order and real capture actions.
-- v1.33.0 four main menu layouts and Menu Organise.
-- v1.32.0 SMS Use detail; v1.29.0 Nokia Contacts search.
+Corrections:
+- The sender name and SMS preview now start at x = 37, leaving 8 pixels
+  of separation from the SMS icon's right edge.
+- End-ellipsize conversation sender names and preview text to a maximum
+  of x = 218 in normal mode, stopping 4 pixels before unread-dot edge.
+- With conversation Mark/Mark all selection active, names and previews
+  end by x = 192 to preserve the checkbox starting at x = 198.
+- The envelope icon, unread red dot and checkbox retain their previous
+  positions, sizes and unread/marked state behaviour.
+- Isolated all these dimensions in production-used
+  NativeConversationRowLayout, instead of repeating scattered numbers.
+- Added pure-Java CI geometry tests for the 240px Nokia screen, and
+  fixture coverage for Leah Hart, +447700900799 and NOKIA sender.
+- A production renderer source-wiring audit now fails CI if the icon/name
+  overlap or unbounded conversation title drawing is reintroduced.
+- CI publishes a plain-text report named
+  GPT-c2-from-reborn-Conversations-layout-audit-v1.39.0.
 
-Verification/limitations:
-- Exact HTML v6.343 pixel parity and physical Android key handling are not
-  certified by Java CI or source audits. The key-assignment UI is a native,
-  functional interpretation of My shortcuts, not claimed screenshot-exact.
-- Android Back/End remain standard system/home actions. Home assignments
-  are active only while the native C2 Home screen is visible.
-- Changing centre OK from Menu is blocked until another Home key has Menu.
-- The native app still uses GitHub-hosted debug signing, which changes
-  certificate between runner builds. Installation may require uninstalling
-  the prior APK; stable signing is a separate unconfigured PR.
+Verified features from the user's v1.37.0 Pixel 4 audit remain unchanged:
+- Debug seed shows 12 Contacts and 12 fictional SMS records with DEMO tags.
+- Six Conversations and the correct three unread indicator dots.
+- Newest-first conversation items and secondary-number sender matching.
+- Use detail extraction: sender, e-mail, web URL, second number, excluding
+  six-digit verification codes and ISO dates.
+- Bulk Mark all/Mark as unread respects incoming/Sent icon state.
+- Back from Use detail returns to the conversation.
+
+Other features retained:
+- v1.38.0 actual Settings > My shortcuts home-key assignments.
+- v1.37.0 conversation bulk Mark as read/unread correction.
+- v1.36.0 Go to model and emulator audit self-tests.
+- v1.35.0 reversible demo Contacts/SMS seed.
+
+Audit and limitations:
+- Run Settings > Demo data (debug) > Seed/reset; Messaging >
+  Conversations. Check that "Leah Hart", "+447700900799" and "NOKIA"
+  show ALL their leading characters with and without Mark/Mark all.
+  Full Pixel 4 / Android 11 screenshot verification remains to be done.
+- This update addresses spacing only; it does not claim complete icon,
+  UI interaction or pixel-perfect HTML v6.343 fidelity.
+- Native debug APK signing remains ephemeral on GitHub Actions, so
+  uninstalling the previous C2 app may be necessary on package conflict.

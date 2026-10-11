@@ -1194,7 +1194,7 @@ public class C2PhoneView extends View {
             }
             int textColor = selected ? Color.BLACK : Color.WHITE;
             float textX = showIcons ? 49 : 10;
-            if ("conversations".equals(page)) textX = 20;
+            if ("conversations".equals(page)) textX = NativeConversationRowLayout.LABEL_X;
             if ("conversation".equals(page)) textX = 36;
             if ("gallerySort".equals(page)) {
                 drawFirmwareChoice(c, idx == galleryStore.sortMode(gallerySortVideos)
@@ -1246,14 +1246,17 @@ public class C2PhoneView extends View {
                 SmsThread t = smsThreads.get(idx);
                 Bitmap threadIcon = RebornIconAtlas.get(threadUnread(t.threadId) ? "THREAD_UNREAD" :
                         (isThreadLatestSent(t.threadId) ? "THREAD_SENT" : "THREAD_READ"));
-                if (threadIcon != null) c.drawBitmap(threadIcon, null, new RectF(3, y + 11, 29, y + 37), p);
+                if (threadIcon != null) c.drawBitmap(threadIcon, null,
+                        new RectF(NativeConversationRowLayout.ICON_LEFT, y + 11,
+                                NativeConversationRowLayout.ICON_RIGHT, y + 37), p);
                 if (!markedThreadIds.isEmpty()) {
                     drawFirmwareChoice(c, markedThreadIds.contains(t.threadId) ? "CHECK_ON" : "CHECK_OFF",
-                            198, y + 12, 18);
+                            NativeConversationRowLayout.MARK_CHECKBOX_LEFT, y + 12, 18);
                 }
                 if (threadUnread(t.threadId)) {
                     p.setColor(Color.rgb(220, 40, 45));
-                    c.drawCircle(226, y + 18, 4, p);
+                    c.drawCircle(NativeConversationRowLayout.UNREAD_DOT_CENTRE_X,
+                            y + 18, NativeConversationRowLayout.UNREAD_DOT_RADIUS, p);
                 }
             } else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(idx);
@@ -1272,17 +1275,32 @@ public class C2PhoneView extends View {
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(15);
             p.setTypeface(selected ? fontBold : fontRegular);
-            String rowText = "smsUseDetails".equals(page)
-                    ? android.text.TextUtils.ellipsize(items[idx],
-                            new android.text.TextPaint(p), 218f,
-                            android.text.TextUtils.TruncateAt.END).toString()
-                    : items[idx];
+            String rowText = items[idx];
+            if ("conversations".equals(page)) {
+                // Preserve the first character of names and phone numbers:
+                // the envelope ends at x=29 and text now starts at x=37.
+                // End-ellipsize long labels before their right-side unread
+                // dot or the active Mark / Mark all checkbox.
+                rowText = android.text.TextUtils.ellipsize(rowText,
+                        new android.text.TextPaint(p),
+                        NativeConversationRowLayout.labelMaxWidth(!markedThreadIds.isEmpty()),
+                        android.text.TextUtils.TruncateAt.END).toString();
+            } else if ("smsUseDetails".equals(page)) {
+                rowText = android.text.TextUtils.ellipsize(rowText,
+                        new android.text.TextPaint(p), 218f,
+                        android.text.TextUtils.TruncateAt.END).toString();
+            }
             c.drawText(rowText, textX, y + 24, p);
             p.setTypeface(fontRegular);
             String sub = subtitleFor(page, idx);
             if (!sub.isEmpty()) {
                 p.setColor(selected ? Color.DKGRAY : Color.LTGRAY);
                 p.setTextSize(11);
+                if ("conversations".equals(page))
+                    sub = android.text.TextUtils.ellipsize(sub,
+                            new android.text.TextPaint(p),
+                            NativeConversationRowLayout.labelMaxWidth(!markedThreadIds.isEmpty()),
+                            android.text.TextUtils.TruncateAt.END).toString();
                 c.drawText(sub, textX, y + 40, p);
             }
         }
