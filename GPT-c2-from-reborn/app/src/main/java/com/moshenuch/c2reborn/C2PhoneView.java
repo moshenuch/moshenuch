@@ -968,7 +968,12 @@ public class C2PhoneView extends View {
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(15);
             p.setTypeface(selected ? fontBold : fontRegular);
-            c.drawText(items[idx], textX, y + 24, p);
+            String rowText = "smsUseDetails".equals(page)
+                    ? android.text.TextUtils.ellipsize(items[idx],
+                            new android.text.TextPaint(p), 218f,
+                            android.text.TextUtils.TruncateAt.END).toString()
+                    : items[idx];
+            c.drawText(rowText, textX, y + 24, p);
             p.setTypeface(fontRegular);
             String sub = subtitleFor(page, idx);
             if (!sub.isEmpty()) {
