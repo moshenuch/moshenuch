@@ -1,3 +1,9 @@
+## APK v1.45.0 Phone follow-up
+
+v1.44.0 workflow passed and public release file is confirmed available. Native call-handling source audit revealed the global CALL-key dispatcher consumed green-key input before the per-call handler, so ringing calls were never answered by that key. v1.45.0 source fixes the priority order and exposes Answer on the centre softkey while ringing, End once active; the centre key answers a ringing call rather than disconnecting it. Android Back on an active call now shows "Press End to finish call" instead of leaving the call screen. The end call action still waits for Telecom's call removal callback before returning to C2 Home. New APK is pending CI and device-level verification.
+
+**Required tests:** grant ROLE_DIALER, incoming CALL key and centre Answer, outgoing and incoming End, caller-name resolution, system dialler handoff absence, back key, active-to-disconnected state, speaker, and unexpected call disconnect. No full functional pass claimed yet.
+
 ## APK v1.44.0 — Nokia native calling screen follow-up
 
 v1.43.0 CI and GitHub release were confirmed successful. v1.44.0 source introduces Nokia-like blue calling panel showing Telecom state (Calling., Connecting., Incoming call, In call, On hold), resolved contact name, number, connected timer, progress indicator, and handset/loudspeaker. C2InCallService has an incoming-call answer action bound to the green CALL hardware key; OK/End remains call termination. Requires emulator/on-device verification. The user must grant Android default Phone role; real calls still run through Telecom. Do not advertise that Google screens can never appear (OS controls role, emergency UI and device-level policies).
