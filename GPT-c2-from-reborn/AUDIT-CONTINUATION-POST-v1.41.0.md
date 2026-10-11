@@ -4,6 +4,12 @@
 **Source commit:** 08adce5e9372471ef9fec82d82359733a3896928.  
 **CI:** GitHub Actions run 38131421649 succeeded; this proves build/tests, not emulator-screen parity.
 
+## v1.41.0 side-by-side graphics audit (HTML v6.343)
+
+User-verified gaps: Home should show grey swirl wallpaper, Demo network, date like Sun 11-10-2026, small clock top-right, My style 1, light Nokia-font Go to/Menu/Names softkey bar. APK had near-black wallpaper, large centred time, abbreviated date, General, white text on black and intrusive build/debug footer. Status and list/menu fonts and signal/battery art do not match condensed Nokia font/reference. Go to uses large white selection rather than dark glossy highlight. Call reference displays Calling. on blue panel with contact NAME and progress bar, softkeys Options / Menu / Loudsp. (the separate report asking for centre End conflicts with this visual reference and should be reconciled explicitly). Names requires Business/Family/Friends plus Home/Voicemail rows, contact detail silhouette and blue handset glossy bar. Lock keypad Unlock -> Now press * is user-verified.
+
+**Source changes:** Home now displays compact top-right clock, Demo network, numeric day-month-year date, no visible build/debug footer, with a light softkey bar. Existing wallpaper bitmap is used without darkening overlay; **its exact swirl artwork is not yet verified**. Existing saved profile value is preserved to avoid silently rewriting user preferences; default/profile parity still pending. Remaining art, condensed font diagnostics, 3×3 selection, Go to glossy highlight, contact avatar, group rows and reference call panel remain open. Require screenshot retest; do not claim pixel parity.
+
 ## User v1.41.0 Phone/Log/SMS emulator audit (seeded data)
 
 **Defects:** call screen shows raw number rather than matching contact name; centre End did not end call despite repeated presses; stock Android white Calling screen appears above C2; Log recorded 00:11 for call observed 00:52+; contact's saved 555-5 becomes 5555 in Log.
