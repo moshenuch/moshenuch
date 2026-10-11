@@ -316,6 +316,17 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /**
+     * Called after Android's SMS provider changes while this Activity is
+     * visible. The Activity debounces provider notifications and unregisters
+     * its observer when backgrounded. The unread envelopes, conversation red
+     * dots and Nokia status envelope all derive from refreshed SMS data.
+     */
+    public void onSmsProviderChanged() {
+        refreshSmsFromPhone();
+        invalidate();
+    }
+
     private void refreshDeviceData() {
         refreshContactsFromPhone();
         refreshSmsFromPhone();
@@ -345,7 +356,18 @@ public class C2PhoneView extends View {
 
     private void refreshSmsFromPhone() {
         deviceSmsActive = backend.has(Manifest.permission.READ_SMS);
-        if (!deviceSmsActive) return;
+        if (!deviceSmsActive) {
+            // Remove cached phone SMS immediately after permission revocation.
+            // App-owned drafts and copied templates remain untouched.
+            deviceSms.clear();
+            smsInbox.clear();
+            smsThreads.clear();
+            markedThreadIds.clear();
+            markedSmsIds.clear();
+            activeMessageId = -1L;
+            activeThreadId = -1L;
+            return;
+        }
         deviceSms.clear();
         for (AndroidBackend.DeviceSms m : backend.loadSms(800)) {
             if (!hiddenSmsIds.contains(m.id)) deviceSms.add(m);
