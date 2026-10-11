@@ -51,10 +51,14 @@ public class MainActivity extends Activity {
         }
         android.app.role.RoleManager role =
                 (android.app.role.RoleManager) getSystemService(ROLE_SERVICE);
-        if (role != null && role.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER))
-            startActivityForResult(role.createRequestRoleIntent(
-                    android.app.role.RoleManager.ROLE_DIALER), 407);
-        else if (phoneView != null) phoneView.onDialerRoleUnavailable();
+        if (role != null && role.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER)) {
+            try {
+                startActivityForResult(role.createRequestRoleIntent(
+                        android.app.role.RoleManager.ROLE_DIALER), 407);
+            } catch (RuntimeException ex) {
+                requestDialerRoleLegacy();
+            }
+        } else requestDialerRoleLegacy();
     }
 
     // Observe the Android SMS provider only while this screen is visible.
@@ -102,6 +106,17 @@ public class MainActivity extends Activity {
             try { getContentResolver().unregisterContentObserver(smsObserver); }
             catch (RuntimeException ignored) { }
             smsObserver = null;
+        }
+    }
+
+    private void requestDialerRoleLegacy() {
+        try {
+            Intent intent = new Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER);
+            intent.putExtra(android.telecom.TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME,
+                    getPackageName());
+            startActivityForResult(intent, 407);
+        } catch (RuntimeException ex) {
+            if (phoneView != null) phoneView.onDialerRoleUnavailable();
         }
     }
 
