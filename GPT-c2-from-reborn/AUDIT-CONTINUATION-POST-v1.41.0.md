@@ -1,3 +1,13 @@
+## v1.49 emulator follow-up — 2026-10-11
+
+User confirms Log Delete selected functions end-to-end: mark, Delete selected, Yes, row disappears. However the marked check/tick is invisible in v1.49 (v1.51 source adds an indicator, unverified). Nokia confirm must read exactly "Delete?" not "Hide selected call records in this app?" — corrected in v1.53.0.
+
+Home centre Menu softkey remains fully broken following reinstall (6+ taps); physical OK and call centre End work. Treat as unresolved priority, not an emulator artifact. Further dedicated touch diagnostics or screenshot-coordinate testing required; do not assert fixed.
+
+Demo data toggle appears absent in v1.49 Settings though v1.42 had it. Source shows debug-gated "Demo data (debug)" final Settings row and demoTools page, but user cannot find it. v1.53 makes it also accessible under Settings > Options > Demo data (debug), only in debuggable APK. Explicit debug guard remains in place; this does not add demo tools to release builds.
+
+Settings > Phone and Configuration currently show not implemented notices, tolerated by user for now.
+
 ## v1.49.0 verified on-screen; v1.51.0 corrections
 
 User confirmed 17-item Names Options full order and six Log Options Mark/Delete/blacklist entries appear correctly in v1.49.0. Remaining defects: marked Log rows show NO visual check/tick; Home centre LCD Menu tap still does nothing after 5+ clean attempts across builds (physical OK opens menu, centre End works during call); top-level Names and Log Options centre softkey reads Details instead of Select, while nested Mark submenu correctly has Select. Treat Home as genuine application bug rather than emulator artifact.
