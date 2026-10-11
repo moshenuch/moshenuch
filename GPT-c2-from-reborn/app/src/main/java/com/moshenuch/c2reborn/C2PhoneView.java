@@ -473,21 +473,16 @@ public class C2PhoneView extends View {
     private void drawStatus(Canvas c, String title) {
         p.setColor(Color.BLACK);
         c.drawRect(0, 0, 240, 41, p);
-        p.setColor(Color.WHITE);
-        p.setStrokeWidth(1.4f);
-        for (int i = 0; i < 4; i++) {
-            float h = 3 + i * 2.3f;
-            c.drawRect(8 + i * 4, 15 - h, 10 + i * 4, 15, p);
-        }
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(1.2f);
-        c.drawRect(28, 7, 38, 14, p);
-        p.setStyle(Paint.Style.FILL);
-        c.drawRect(30, 9, 35, 12, p);
+        // Firmware-derived status glyphs; the screenshot's order is signal, battery,
+        // unread envelope. All three sit together at the left of the status clock.
+        Bitmap statusSignal = RebornIconAtlas.get("STATUS_SIGNAL");
+        if (statusSignal != null) c.drawBitmap(statusSignal, null, new RectF(8, 4, 28, 19), p);
+        Bitmap statusBattery = RebornIconAtlas.get("STATUS_BATTERY");
+        if (statusBattery != null) c.drawBitmap(statusBattery, null, new RectF(35, 5, 55, 19), p);
         if (hasUnreadSms()) {
             Bitmap statusMail = RebornIconAtlas.get("STATUS_MSG");
-            if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(174, 3, 197, 19), p);
-            else drawUnreadEnvelope(c, 176, 5, Color.WHITE);
+            if (statusMail != null) c.drawBitmap(statusMail, null, new RectF(59, 4, 78, 19), p);
+            else drawUnreadEnvelope(c, 61, 5, Color.WHITE);
         }
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTypeface(android.graphics.Typeface.DEFAULT);
@@ -541,7 +536,7 @@ public class C2PhoneView extends View {
         p.setTextSize(11);
         c.drawText("GPT c2 from reborn", 10, 281, p);
         p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("HTML 6.342 | APK 1.5.0", 230, 281, p);
+        c.drawText("HTML 6.342 | APK 1.6.0", 230, 281, p);
     }
 
     private void drawMenu(Canvas c) {

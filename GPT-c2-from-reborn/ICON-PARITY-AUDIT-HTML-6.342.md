@@ -65,3 +65,11 @@ From actual HTML `screens` arrays and `maps` ID lists:
 - Log: source 14, previously native 8. Added omitted log list names; last `Simulate missed call` lacks a distinct list-ID mapping in original `maps.log`, so the native list uses the existing Missed calls bitmap until precisely characterized.
 - Organiser: source 9, previously native 8. Added Dictionary using existing `DICT` source icon, renamed Countd. timer exactly.
 - Still unverified: nested screens, Options submenus, screen-specific icon variations, operator themes, tactile UX and final dimensions.
+
+## APK v1.6.0 — status icon alignment to HTML reference screenshot
+
+- Source catalogue (Passes 141 and 143) confirms **status glyph order**: signal, battery, conditional unread envelope. Screenshot also places these three before the right-aligned clock.
+- Native code previously drew signal and battery as handmade rectangles and placed the unread envelope next to the right-side clock; this diverged from the source screenshot.
+- Native now uses existing source-extracted `STATUS_SIGNAL` (37×28), `STATUS_BATTERY` (32×22) and `STATUS_MSG` (32×22) atlas images in the left cluster. The envelope appears only while device SMS is unread.
+- Position and scale are derived from the 2026-10-10 user screenshot; **pixel-perfect parity remains unverified**.
+- The HTML's full 3.7 MB `index.html` cannot be fetched in one chunk using the current GitHub file retrieval; the authoritative `ICON-CATALOGUE.md`, native source and screenshot support this localized correction. Remaining icon interaction/screen audits are still open.
