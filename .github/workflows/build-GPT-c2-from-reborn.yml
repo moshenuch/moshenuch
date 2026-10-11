@@ -29,6 +29,20 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Restore original C2 HTML Nokia swirl wallpaper
+        shell: bash
+        run: |
+          set -euo pipefail
+          dst="GPT-c2-from-reborn/app/src/main/res/drawable/screen_wallpaper.png"
+          mkdir -p "$(dirname "$dst")"
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://raw.githubusercontent.com/mbaiforinsticnt-dev/c2-reborn/main/ground-up/assets/themes/Nokia/background_240x320.png" \
+            --output "$dst"
+          actual="$(git hash-object "$dst")"
+          expected="32302e2a9858469521065651940d2c0bc86d32fa"
+          test "$actual" = "$expected" || { echo "Wallpaper differs from pinned HTML-repository asset"; exit 1; }
+          file "$dst"
+
       - name: Restore pinned Nokia checkbox/radio PNG assets
         run: python3 GPT-c2-from-reborn/tools/extract_selection_icons.py
 
