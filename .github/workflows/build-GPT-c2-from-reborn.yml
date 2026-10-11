@@ -42,6 +42,8 @@ jobs:
           expected="32302e2a9858469521065651940d2c0bc86d32fa"
           test "$actual" = "$expected" || { echo "Wallpaper differs from pinned HTML-repository asset"; exit 1; }
           file "$dst"
+          echo "Primary asset first bytes:"
+          od -An -tx1 -N24 "$dst"
           # Also package unscaled bytes as an Android asset. Unlike drawable
           # decoding this cannot apply density scaling or resource qualifiers.
           mkdir -p GPT-c2-from-reborn/app/src/main/assets
