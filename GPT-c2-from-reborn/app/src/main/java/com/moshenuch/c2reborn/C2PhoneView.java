@@ -231,7 +231,20 @@ public class C2PhoneView extends View {
         fontRegular = NokiaFontFaces.get(context, false);
         fontBold = NokiaFontFaces.get(context, true);
         p.setTypeface(fontRegular);
-        wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
+        // Decode the *exact* original HTML Nokia PNG from raw assets. This
+        // avoids drawable-density transformations and makes failures visible.
+        try (java.io.InputStream wallpaperFile =
+                     getContext().getAssets().open("nokia_wallpaper.png")) {
+            wallpaper = BitmapFactory.decodeStream(wallpaperFile);
+        } catch (Exception wallpaperError) {
+            android.util.Log.e("C2Wallpaper", "Unable to load original HTML wallpaper", wallpaperError);
+        }
+        if (wallpaper == null) {
+            android.util.Log.e("C2Wallpaper", "Asset PNG decode returned null; attempting drawable fallback");
+            wallpaper = BitmapFactory.decodeResource(getResources(), R.drawable.screen_wallpaper);
+        }
+        android.util.Log.i("C2Wallpaper", wallpaper == null ? "WALLPAPER MISSING"
+                : "Decoded Nokia HTML wallpaper " + wallpaper.getWidth() + "x" + wallpaper.getHeight());
         for (int i = 0; i < menuIcons.length; i++) menuIcons[i] = RebornAssets.main(i);
         String[] ids = {
                 "0595","0540","0513","0628","0715","0703","0558","0599",
