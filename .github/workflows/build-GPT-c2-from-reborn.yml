@@ -46,6 +46,17 @@ jobs:
             tools/NativeSmsDetailsSmokeTest.java
           java -cp build/parser-smoke com.moshenuch.c2reborn.NativeSmsDetailsSmokeTest
 
+      - name: Test Nokia native main menu navigation
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/menu-smoke
+          javac -d build/menu-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeMenuLayout.java \
+            tools/NativeMenuLayoutSmokeTest.java
+          java -cp build/menu-smoke com.moshenuch.c2reborn.NativeMenuLayoutSmokeTest
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
