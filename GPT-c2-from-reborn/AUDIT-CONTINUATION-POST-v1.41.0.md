@@ -1,3 +1,9 @@
+## v1.49.0 verified on-screen; v1.51.0 corrections
+
+User confirmed 17-item Names Options full order and six Log Options Mark/Delete/blacklist entries appear correctly in v1.49.0. Remaining defects: marked Log rows show NO visual check/tick; Home centre LCD Menu tap still does nothing after 5+ clean attempts across builds (physical OK opens menu, centre End works during call); top-level Names and Log Options centre softkey reads Details instead of Select, while nested Mark submenu correctly has Select. Treat Home as genuine application bug rather than emulator artifact.
+
+v1.51.0 source now draws a right-hand outlined checkbox and checkmark for marked call-log rows on All/Missed/Received/Dialled list pages; changes Options popup softkeys globally to blank/Select/Back while overlay visible; removes literal 'Menu' label matching and special branch from Home LCD centre ACTION_UP to run the same physical OK key handler for the assigned Home centre shortcut. Requires emulator on-screen verification of marking, checkbox persistence, unmark/delete, popup Select actions and repeated Home centre taps. The root cause for persistent Home touch failure is still not conclusively established; do not claim fixed without test.
+
 ## Further user-screen-verified v1.47.0 audit
 
 - Home screen centre **Menu** softkey: confirmed broken after three clean taps; physical OK opens menu. v1.49.0 direct Home LCD centre handler is committed but not tested on device; do not mark as fixed yet.
