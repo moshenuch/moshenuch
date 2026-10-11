@@ -1,3 +1,11 @@
+## v1.47.0 on-screen audit — user verified
+
+Confirmed fixed in v1.47.0: blue calling panel displays contact name; Android default-Phone role dialog successfully grants role; centre End softkey ends call and returns Home; Log shows call durations; real Android contact edit-save works; SMS compose double overlay gone; nested Names submenu titles and Select/Back correct. Preserve every one of these acceptance passes.
+
+**Still broken:** tapping the LCD centre Menu label on Home does nothing, although centre End on call works. v1.49.0 adds a Home-only touch ACTION_UP route for the centre label when it actually displays Menu, directly opening the Nokia menu grid. Physical OK and user-defined Home shortcuts still use normal routing. Must verify on screen, particularly if Home centre shortcut is remapped.
+
+**Unverified:** conversation unread dot clearing after opening a thread, authentic swirl wallpaper, all 17 Names Options, Log Options marking and deleting, Home keypad dialling. Do not count these as failed or passed without testing.
+
 ## APK v1.48.0 — Log Options six-entry implementation
 
 C2 native Log list pages (All calls, Missed, Received, Dialled) now use the six reference Options entries: Mark >; Mark all; Unmark all; Delete selected; Add to blacklist; Add to whitelist. Mark > opens Mark/Unmark submenu. Mark all marks records in the current call-log list, with keys retained across navigation; Delete selected asks for Yes confirmation and only hides those entries locally in C2, preserving the real Android call-log records. Blacklist and whitelist use existing app-local number-filter actions, not system network call blocking. Full emulator test required: exact popup styling and page applicability, marks, deletion confirmation and persistence, filter results, and empty list. Bumped to v1.48.0. Caller-name matching fixes from v1.47.0 remain awaiting the user's on-screen audit.
