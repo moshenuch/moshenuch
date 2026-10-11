@@ -1,62 +1,58 @@
-GPT c2 from reborn — APK v1.37.0 / HTML reference v6.343
+GPT c2 from reborn — APK v1.38.0 / HTML reference v6.343
 
-Native Android Java/Canvas APK (NOT a WebView wrapper).
+Native Android Java/Canvas; NOT a WebView.
 
-v1.37.0 — correct SMS Conversation bulk read/unread actions
+v1.38.0 — executable Settings > My shortcuts
 
-Audit finding from the debug-seeded SMS path:
-- In APK v1.36.0, Conversation > Options > Mark / Mark all selected SMS
-  but "Mark as read" and "Mark as unread" still applied ONLY to the
-  highlighted SMS. The marked received messages were ignored.
-- Conversation now applies Mark as read/unread to ALL marked incoming SMS
-  within that conversation; if no items are marked it applies to the
-  highlighted incoming message as before.
-- Sent/outgoing SMS are deliberately excluded from read/unread overrides,
-  even if they are part of a Mark all selection. No phantom unread envelope
-  is assigned to outgoing messages.
-- When the selected row is a SENT message but incoming messages are marked,
-  both "Mark as read" and "Mark as unread" appear and work on the marked
-  received messages. This also handles mixed existing unread/read states.
-- Marked sent-only rows or stale marks from another conversation do not
-  accidentally fall back to the highlighted received message.
-- Existing app-local Delete uses its prior mark-selection semantics.
-  Android's real SMS content provider is NOT modified by mark/read/delete.
-- The action displays the count of received SMS whose app-local read state
-  was set; the Nokia unread indicator and conversation red dot derive from
-  the same persisted local state overrides.
+Previously, the My shortcuts settings displayed Left selection key, Right
+selection key, Navigation key and Home screen key, but every item opened an
+inert information page ("Shortcut assignment is simulated natively").
 
-Regression evidence:
-- New NativeSmsBulkSelection is pure Java and is called by the actual
-  Conversation Options and action handler, not only a test-only copy.
-- Java tests consume the v1.35.0 fictional SMS fixtures and verify
-  single message, Mark all with mixed sent/received, marked selections
-  while a sent row is highlighted, mixed threads, sent-only marks,
-  unknown/empty/duplicate IDs and unread-count isolation.
-- Python source-wiring checks fail CI unless the real Conversation Options,
-  marked bulk target loop, provider-safe read-state setter and preference
-  persistence call this tested selection logic.
-- Passing tests are published to GitHub Actions Job Summary and a
-  separate artifact GPT-c2-from-reborn-SMS-bulk-audit-v1.37.0.
+- All four My shortcuts items now open functional native assignment screens.
+- Left selection key and Right selection key can open distinct user-selected
+  destinations. Their on-screen Nokia softkey labels update immediately.
+- Navigation key opens four assignments: Up, Down, Left and Right. Those
+  keys work directly on Home. The original unassigned directions remain
+  the default, so existing home navigation is unchanged until configured.
+- Home screen key configures centre OK. The default remains Menu.
+- The user may select one of: Menu, Go to, Names, Messaging, Contacts,
+  Gallery, Camera, Video recorder, Organiser, Calculator, Alarm clock,
+  Settings, Profiles, None.
+- Native Camera/Video recorder actions use the existing Android capture
+  launch; other options navigate to their existing native screens.
+- The main Menu must stay accessible via at least one Home key. Attempts
+  to unassign the LAST Menu binding are rejected. To customize centre OK,
+  first assign Menu to a different Home key; then reassign centre OK.
+- Settings > My shortcuts > Options > Restore defaults presents Yes/No
+  confirmation and returns Left=Go to, Right=Names, Centre=Menu and
+  all four navigation keys=None, without touching the user's phone data.
+- All seven key bindings persist across app restarts under an app-private
+  versioned SharedPreferences key. Malformed preference data resets to
+  safe defaults. Home bindings do not modify global Android OS buttons.
+- Selecting key assignments uses the existing Nokia bitmap radio icons.
+- Debuggable builds emit fixed numeric binding arrays under the safe
+  C2HomeKeys Android logcat tag. No contact/SMS data is logged.
+- New build-side regression tests prove original default behaviour, exact
+  JSON save/reload after simulated app restart, assigned action labels,
+  navigation-slot mapping, Menu-reachability invariant, preference corruption
+  and reset. Python source-wiring audits verify live Settings screens,
+  handler dispatch and confirmation. CI publishes a separate report artifact.
 
-Prior features retained:
-- v1.36.0 Go to shortcut persistence/dispatch self-tests and debug logcat.
-- v1.35.0 reversible debug seed: 12 Contacts, 12 SMS, six conversations.
-- v1.34.0 Go to Organise / native Camera and Video shortcuts.
-- v1.33.0 native main menu layout views and Organise.
-- v1.32.0 SMS Use detail extraction with CI tests.
-- v1.31.0 live unread SMS refresh; v1.29.0 Contacts name/number search.
+Previously implemented functionality retained:
+- v1.37.0 correct SMS conversation Mark all/read/unread bulk semantics.
+- v1.36.0 Go to shortcut self-tests, persistence and capture diagnostics.
+- v1.35.0 debuggable 12-Contact / 12-SMS fixture seed.
+- v1.34.0 Go to Organise with safe persistent order and real capture actions.
+- v1.33.0 four main menu layouts and Menu Organise.
+- v1.32.0 SMS Use detail; v1.29.0 Nokia Contacts search.
 
-Recommended Pixel 7 emulator manual check:
-Settings > Demo data (debug) > Seed/reset; Messaging > Conversations;
-open Aaron West (two received, one sent). Mark all; open Options and
-choose Mark as read, then Mark as unread; check envelope and red-dot state
-and count. Highlight the sent reply with received messages marked.
-Select individual incoming messages, test Mark/Unmark and re-seeding.
-See AUDIT-SMS-BULK-READ-APK-v1.37.0.md for detailed test cases.
-
-Limitations:
-- CI validates the Java target-selection model, app source wiring and
-  Android compilation. Touch interaction, exact Nokia icons and Android
-  SMS provider behaviour still require real-device/emulator testing.
-- Stable APK signing has not been enabled; Android may require uninstalling
-  the older debug-signed APK before installing this version.
+Verification/limitations:
+- Exact HTML v6.343 pixel parity and physical Android key handling are not
+  certified by Java CI or source audits. The key-assignment UI is a native,
+  functional interpretation of My shortcuts, not claimed screenshot-exact.
+- Android Back/End remain standard system/home actions. Home assignments
+  are active only while the native C2 Home screen is visible.
+- Changing centre OK from Menu is blocked until another Home key has Menu.
+- The native app still uses GitHub-hosted debug signing, which changes
+  certificate between runner builds. Installation may require uninstalling
+  the prior APK; stable signing is a separate unconfigured PR.

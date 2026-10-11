@@ -134,6 +134,35 @@ jobs:
           path: GPT-c2-from-reborn/build/sms-bulk-smoke/audit.txt
           if-no-files-found: error
 
+      - name: Test assignable home-screen shortcut keys and app wiring
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/home-shortcuts-smoke
+          javac -d build/home-shortcuts-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/NativeHomeShortcuts.java \
+            tools/NativeHomeShortcutsSmokeTest.java
+          {
+            echo "Native My shortcuts — v1.38.0"
+            java -cp build/home-shortcuts-smoke com.moshenuch.c2reborn.NativeHomeShortcutsSmokeTest
+            python3 tools/audit_home_shortcuts_wiring.py
+            echo "These tests verify code logic and source wiring, not emulator key presses."
+          } | tee build/home-shortcuts-smoke/audit.txt
+          {
+            echo "## Nokia My shortcuts — build-side audit"
+            echo '~~~text'
+            cat build/home-shortcuts-smoke/audit.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload home shortcut assignment audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-Home-shortcuts-audit-v1.38.0
+          path: GPT-c2-from-reborn/build/home-shortcuts-smoke/audit.txt
+          if-no-files-found: error
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug

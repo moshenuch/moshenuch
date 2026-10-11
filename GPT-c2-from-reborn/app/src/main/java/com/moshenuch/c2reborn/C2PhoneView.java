@@ -207,6 +207,10 @@ public class C2PhoneView extends View {
     private int menuMovingFrom = -1;
     // Organisable, persistent and independently visible Go to shortcuts.
     private final NativeGoToShortcuts goToShortcuts = new NativeGoToShortcuts();
+    // Assignable Nokia home-screen selection/navigation keys. Stored only in
+    // this APK and validated so at least one key always opens the main Menu.
+    private final NativeHomeShortcuts homeShortcuts = new NativeHomeShortcuts();
+    private int shortcutAssignmentSlot = NativeHomeShortcuts.LSK;
 
     private final String[] t9Words = {
             "a","am","an","and","are","as","at","be","call","can","come","day","do","for",
@@ -546,6 +550,9 @@ public class C2PhoneView extends View {
                 prefs.getString("goto_order_v1", "[]"),
                 prefs.getString("goto_visible_v1", "[]"));
         auditGoTo("load restored=" + goToRestored);
+        boolean homeKeyRestored = homeShortcuts.restore(
+                prefs.getString("home_shortcuts_v1", homeShortcuts.serialize()));
+        auditHomeShortcuts("load restored=" + homeKeyRestored);
         profile = prefs.getString("profile", "General");
         theme = prefs.getString("theme", "Dark");
         if ("Nokia".equals(theme)) theme = "Dark";
@@ -793,6 +800,16 @@ public class C2PhoneView extends View {
         android.util.Log.i("C2GoToAudit",
                 event + " order=" + goToShortcuts.serializedOrder()
                         + " shown=" + goToShortcuts.serializedEnabled());
+    }
+
+    private void auditHomeShortcuts(String event) {
+        if (isDemoToolsAvailable())
+            android.util.Log.i("C2HomeKeys", event + " keys=" + homeShortcuts.serialize());
+    }
+
+    private void saveHomeShortcuts() {
+        prefs.edit().putString("home_shortcuts_v1", homeShortcuts.serialize()).apply();
+        auditHomeShortcuts("save");
     }
 
     private void saveGoToShortcuts() {
@@ -1194,6 +1211,11 @@ public class C2PhoneView extends View {
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
+            if ("shortcutAssign".equals(page)) {
+                drawFirmwareChoice(c, idx == homeShortcuts.assigned(shortcutAssignmentSlot)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
             if ("gotoOrganise".equals(page)) {
                 int shortcutId = goToShortcuts.visualId(idx);
                 drawFirmwareChoice(c, goToShortcuts.isEnabled(shortcutId)
@@ -1555,6 +1577,14 @@ public class C2PhoneView extends View {
             if (idx == 2) return drafts.size() + " messages";
         }
         if ("settings".equals(pg) && idx == 1) return "Dark.nth";
+        if ("shortcuts".equals(pg)) {
+            if (idx == 0) return homeShortcuts.label(NativeHomeShortcuts.LSK);
+            if (idx == 1) return homeShortcuts.label(NativeHomeShortcuts.RSK);
+            if (idx == 2) return "Assign Up / Down / Left / Right";
+            if (idx == 3) return homeShortcuts.label(NativeHomeShortcuts.CENTRE);
+        }
+        if ("shortcutNavigation".equals(pg) && idx >= 0 && idx < 4)
+            return homeShortcuts.label(NativeHomeShortcuts.navigationSlot(idx));
         if ("drafts".equals(pg) && idx < drafts.size()) {
             String target = drafts.get(idx).recipient;
             return target.isEmpty() ? "Draft" : "To: " + target;
@@ -2049,7 +2079,10 @@ public class C2PhoneView extends View {
     private String[] softLabels() {
         if (confirmOpen) return new String[]{"Yes", "", "No"};
         if (locked) return new String[]{"Unlock", "", ""};
-        if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
+        if ("home".equals(page)) return new String[]{
+                homeShortcuts.label(NativeHomeShortcuts.LSK),
+                homeShortcuts.label(NativeHomeShortcuts.CENTRE),
+                homeShortcuts.label(NativeHomeShortcuts.RSK)};
         if ("menu".equals(page)) {
             if (menuOrganising)
                 return new String[]{menuMovingFrom < 0 ? "Pick" : "Move",
@@ -2058,6 +2091,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
+        if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
         if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
         if ("voiceRecorder".equals(page))
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
@@ -2332,6 +2366,8 @@ public class C2PhoneView extends View {
             case "received": return "Received calls";
             case "dialled": return "Dialled numbers";
             case "shortcuts": return "My shortcuts";
+            case "shortcutNavigation": return "Navigation key";
+            case "shortcutAssign": return "Assign shortcut";
             case "goto": return "Go to";
             case "gotoOrganise": return "Organise shortcuts";
             case "web": return "STORE";
@@ -2526,6 +2562,10 @@ public class C2PhoneView extends View {
                 return new String[]{"Bluetooth","Connect audio acc.","Paired devices","Active devices","My phone's visibility","My phone's name"};
             case "shortcuts":
                 return new String[]{"Left selection key","Right selection key","Navigation key","Home screen key"};
+            case "shortcutNavigation":
+                return new String[]{"Navigation up","Navigation down","Navigation left","Navigation right"};
+            case "shortcutAssign":
+                return NativeHomeShortcuts.ACTION_NAMES;
             case "goto": {
                 ArrayList<Integer> visible = goToShortcuts.enabledIds();
                 String[] result = new String[visible.size()];
@@ -3163,9 +3203,26 @@ public class C2PhoneView extends View {
         }
 
         if ("shortcuts".equals(page)) {
-            detailTitle = itemsFor(page)[sel];
-            detailText = "Shortcut assignment is simulated natively.";
-            go("itemDetail");
+            if (sel == 2) go("shortcutNavigation");
+            else startHomeShortcutAssignment(sel == 0 ? NativeHomeShortcuts.LSK :
+                    sel == 1 ? NativeHomeShortcuts.RSK : NativeHomeShortcuts.CENTRE);
+            return;
+        }
+        if ("shortcutNavigation".equals(page)) {
+            int slot = NativeHomeShortcuts.navigationSlot(sel);
+            if (slot >= 0) startHomeShortcutAssignment(slot);
+            else showNotice("Unknown navigation key");
+            return;
+        }
+        if ("shortcutAssign".equals(page)) {
+            if (!homeShortcuts.assign(shortcutAssignmentSlot, sel)) {
+                showNotice("Keep Menu on at least one home key");
+                return;
+            }
+            saveHomeShortcuts();
+            String actionLabel = homeShortcuts.label(shortcutAssignmentSlot);
+            back();
+            showNotice("Assigned: " + actionLabel);
             return;
         }
 
@@ -3633,9 +3690,20 @@ public class C2PhoneView extends View {
         }
 
         if ("home".equals(page)) {
-            if ("OK".equals(key)) go("menu");
-            else if ("LSK".equals(key)) go("goto");
-            else if ("RSK".equals(key)) go("contactsNames");
+            if ("OK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.CENTRE));
+            else if ("LSK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.LSK));
+            else if ("RSK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.RSK));
+            else if ("UP".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.UP));
+            else if ("DOWN".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.DOWN));
+            else if ("LEFT".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.LEFT));
+            else if ("RIGHT".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.RIGHT));
             else if (isNumberKey(key) && !"#".equals(key)) {
                 dial = "*".equals(key) ? "*" : key;
                 go("dial");
@@ -4475,6 +4543,44 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    private void startHomeShortcutAssignment(int slot) {
+        if (slot < 0 || slot >= NativeHomeShortcuts.SLOT_COUNT) {
+            showNotice("Home shortcut key unavailable");
+            return;
+        }
+        shortcutAssignmentSlot = slot;
+        go("shortcutAssign");
+        sel = homeShortcuts.assigned(slot);
+    }
+
+    /**
+     * Home-screen shortcut dispatch is deliberately app-local: Settings >
+     * My shortcuts never changes Android global buttons or launcher actions.
+     */
+    private void openAssignedHomeAction(int action) {
+        switch (action) {
+            case NativeHomeShortcuts.MENU: go("menu"); break;
+            case NativeHomeShortcuts.GO_TO: go("goto"); break;
+            case NativeHomeShortcuts.NAMES:
+                refreshContactsFromPhone();
+                go("contactsNames");
+                break;
+            case NativeHomeShortcuts.MESSAGING: go("messaging"); break;
+            case NativeHomeShortcuts.CONTACTS: go("contacts"); break;
+            case NativeHomeShortcuts.GALLERY: go("gallery"); break;
+            case NativeHomeShortcuts.CAMERA: startCameraCapture(false); break;
+            case NativeHomeShortcuts.VIDEO_RECORDER: startCameraCapture(true); break;
+            case NativeHomeShortcuts.ORGANISER: go("organiser"); break;
+            case NativeHomeShortcuts.CALCULATOR: go("calculator"); break;
+            case NativeHomeShortcuts.ALARM_CLOCK: go("alarm"); break;
+            case NativeHomeShortcuts.SETTINGS: go("settings"); break;
+            case NativeHomeShortcuts.PROFILES: go("profiles"); break;
+            case NativeHomeShortcuts.NONE: break;
+            default: showNotice("Unknown shortcut");
+        }
+        auditHomeShortcuts("action=" + action);
+    }
+
     private void openGoToShortcut(int shortcutId) {
         // Dispatch through the EXACT same router exercised by CI tests.
         // This prevents a rearranged/hidden visual row from changing its
@@ -4528,7 +4634,10 @@ public class C2PhoneView extends View {
     }
 
     private void openOptionsForPage() {
-        if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
+        if ("shortcuts".equals(page) || "shortcutNavigation".equals(page))
+            optionItems = new String[]{"Assign","Restore defaults","Help"};
+        else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
+        else if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
         else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
@@ -4911,7 +5020,22 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("demoTools".equals(page)) {
+        if ("shortcuts".equals(page) || "shortcutNavigation".equals(page)) {
+            if ("Assign".equals(choice)) openSelected();
+            else if ("Restore defaults".equals(choice))
+                requestConfirm("resetHomeShortcuts",
+                        "Restore Nokia home selection and navigation keys to defaults?");
+            else {
+                detailTitle = "My shortcuts";
+                detailText = "Assign actions to Home keys within this app."
+                        + "\nThe Menu must remain accessible on one key."
+                        + "\nDefault: Left Go to, Right Names, Centre Menu."
+                        + "\nDirectional keys default to unassigned.";
+                go("itemDetail");
+            }
+        } else if ("shortcutAssign".equals(page)) {
+            if ("Assign".equals(choice)) openSelected();
+        } else if ("demoTools".equals(page)) {
             if ("Select".equals(choice)) openSelected();
             else if ("What is included".equals(choice)) showAuditDemoDetails();
         } else if ("menu".equals(page)) {
@@ -5616,7 +5740,11 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("clearAuditDemo".equals(action)) {
+        if ("resetHomeShortcuts".equals(action)) {
+            homeShortcuts.restoreDefaults();
+            saveHomeShortcuts();
+            showNotice("Home shortcuts restored");
+        } else if ("clearAuditDemo".equals(action)) {
             changeAuditDemoMode(false);
         } else if ("restoreGoTo".equals(action)) {
             auditGoTo("restore confirmed YES");
