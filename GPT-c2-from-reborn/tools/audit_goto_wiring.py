@@ -38,6 +38,7 @@ load = body(view, "private void loadState()")
 save = body(view, "private void saveGoToShortcuts()")
 route = body(view, "private void openGoToShortcut(int shortcutId)")
 capture = body(view, "private void startCameraCapture(boolean video)")
+launch_capture = body(view, "private void launchHardwareCapture(boolean video)")
 android_camera = body(activity, "public void launchCameraCapture(boolean video)")
 result = body(activity, "protected void onActivityResult(int requestCode, int resultCode, Intent data)")
 press = body(view, "private void press(String key)")
@@ -63,8 +64,10 @@ verify("Actual view dispatch calls the Java-tested router",
        "NativeGoToRouter.launch(shortcutId" in route)
 verify("Real handler forwards video boolean to camera",
        "startCameraCapture(video);" in route)
-verify("C2 camera delegates to real MainActivity",
-       "launchCameraCapture(video);" in capture)
+verify("C2 Camera enters in-house viewfinder",
+       'go(video ? "videoViewfinder" : "cameraViewfinder")' in capture)
+verify("In-house Capture action retains real Android photo/video capture",
+       "launchCameraCapture(video);" in launch_capture)
 verify("Android Video recorder selects ACTION_VIDEO_CAPTURE",
        "MediaStore.ACTION_VIDEO_CAPTURE" in android_camera and
        "MediaStore.ACTION_IMAGE_CAPTURE" in android_camera and
