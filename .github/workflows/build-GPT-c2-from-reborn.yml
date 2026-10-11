@@ -42,6 +42,18 @@ jobs:
           expected="32302e2a9858469521065651940d2c0bc86d32fa"
           test "$actual" = "$expected" || { echo "Wallpaper differs from pinned HTML-repository asset"; exit 1; }
           file "$dst"
+          # Also package unscaled bytes as an Android asset. Unlike drawable
+          # decoding this cannot apply density scaling or resource qualifiers.
+          mkdir -p GPT-c2-from-reborn/app/src/main/assets
+          cp "$dst" GPT-c2-from-reborn/app/src/main/assets/nokia_wallpaper.png
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          data=Path("GPT-c2-from-reborn/app/src/main/assets/nokia_wallpaper.png").read_bytes()
+          assert data[:8] == b"\\x89PNG\\r\\n\\x1a\\n", "Wallpaper is not PNG"
+          assert struct.unpack(">II", data[16:24]) == (240,320), "Wallpaper dimensions wrong"
+          print("Original Nokia wallpaper PNG packaged as raw Android asset:",len(data),"bytes")
+          PY
 
       - name: Restore pinned Nokia checkbox/radio PNG assets
         run: python3 GPT-c2-from-reborn/tools/extract_selection_icons.py
