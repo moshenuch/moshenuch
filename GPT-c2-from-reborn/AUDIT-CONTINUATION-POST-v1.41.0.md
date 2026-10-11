@@ -1,3 +1,11 @@
+## Further user-screen-verified v1.47.0 audit
+
+- Home screen centre **Menu** softkey: confirmed broken after three clean taps; physical OK opens menu. v1.49.0 direct Home LCD centre handler is committed but not tested on device; do not mark as fixed yet.
+- Home physical keypad dialling: verified end-to-end, enters C2 Dial, stays in-house during call, red End key terminates, returns Home; number-only calls show no contact name, correctly.
+- Log Options in *v1.47.0* show old View/Call/Send message/Save to contacts/Delete/Clear list menu; the requested six-entry Mark suite was committed only for v1.48.0 onwards and remains unverified.
+- Empty Log: left Options key did nothing. Root cause in generic key dispatcher: LSK only handled when itemsFor(page) was non-empty. v1.50.0 explicitly displays "No options" when Log list empty. Needs device test.
+- Wallpaper remains plain black/dark-blue glow, **not** original grey swirl. This is still a confirmed visual mismatch; do not claim fixed.
+
 ## v1.47.0 on-screen audit — user verified
 
 Confirmed fixed in v1.47.0: blue calling panel displays contact name; Android default-Phone role dialog successfully grants role; centre End softkey ends call and returns Home; Log shows call durations; real Android contact edit-save works; SMS compose double overlay gone; nested Names submenu titles and Select/Back correct. Preserve every one of these acceptance passes.
