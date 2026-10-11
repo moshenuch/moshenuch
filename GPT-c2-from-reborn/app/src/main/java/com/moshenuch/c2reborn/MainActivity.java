@@ -4,7 +4,11 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
+import android.database.ContentObserver;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Telephony;
 import android.provider.MediaStore;
 import java.util.ArrayList;
 import android.content.pm.PackageManager;
@@ -25,6 +29,54 @@ public class MainActivity extends Activity {
     private Uri pendingCameraOutput;
     private boolean pendingCameraVideo;
     private C2PhoneView phoneView;
+
+    // Observe the Android SMS provider only while this screen is visible.
+    // Coalescing provider notifications avoids repeatedly querying the
+    // 800-message snapshot when one SMS creates several database changes.
+    private final Handler smsRefreshHandler = new Handler(Looper.getMainLooper());
+    private ContentObserver smsObserver;
+    private final Runnable smsRefreshRunnable = () -> {
+        if (phoneView != null && hasSmsReadPermission())
+            phoneView.onSmsProviderChanged();
+    };
+
+    private boolean hasSmsReadPermission() {
+        return Build.VERSION.SDK_INT < 23 ||
+                checkSelfPermission(Manifest.permission.READ_SMS)
+                        == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void observeSmsWhileVisible() {
+        stopSmsObservation();
+        if (!hasSmsReadPermission()) return;
+        smsObserver = new ContentObserver(smsRefreshHandler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                smsRefreshHandler.removeCallbacks(smsRefreshRunnable);
+                smsRefreshHandler.postDelayed(smsRefreshRunnable, 300L);
+            }
+
+            @Override
+            public void onChange(boolean selfChange, Uri changedUri) {
+                onChange(selfChange);
+            }
+        };
+        try {
+            getContentResolver().registerContentObserver(
+                    Telephony.Sms.CONTENT_URI, true, smsObserver);
+        } catch (RuntimeException ex) {
+            smsObserver = null; // Permission/provider unavailable: app still opens.
+        }
+    }
+
+    private void stopSmsObservation() {
+        smsRefreshHandler.removeCallbacks(smsRefreshRunnable);
+        if (smsObserver != null) {
+            try { getContentResolver().unregisterContentObserver(smsObserver); }
+            catch (RuntimeException ignored) { }
+            smsObserver = null;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,7 +121,10 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == REQ_PHONE_DATA && phoneView != null) phoneView.onPermissionsChanged();
+        if (requestCode == REQ_PHONE_DATA && phoneView != null) {
+            phoneView.onPermissionsChanged();
+            observeSmsWhileVisible();
+        }
         if (requestCode == REQ_MICROPHONE && phoneView != null)
             phoneView.onMicrophonePermissionResult(results.length > 0 &&
                     results[0] == PackageManager.PERMISSION_GRANTED);
@@ -209,12 +264,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
         super.onDestroy();
     }
@@ -224,6 +281,7 @@ public class MainActivity extends Activity {
         super.onResume();
         hideSystemUi();
         if (phoneView != null) phoneView.onPermissionsChanged();
+        observeSmsWhileVisible();
     }
 
     private void hideSystemUi() {
