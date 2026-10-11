@@ -7047,7 +7047,16 @@ public class C2PhoneView extends View {
             boolean consumed = touchLongConsumed;
             boolean sameKey = java.util.Objects.equals(key, hitKey(x, y));
             cancelKeypadTouch();
-            if (!consumed && sameKey && key != null) press(key);
+            if (!consumed && sameKey && key != null) {
+                // Home's on-screen centre Menu label must activate the grid.
+                // The hardware OK button still honours remapped shortcuts.
+                if ("home".equals(page) && "OK".equals(key) &&
+                        "Menu".equals(homeShortcuts.label(NativeHomeShortcuts.CENTRE)) &&
+                        touchStartY >= SY + SH * 286f / 320f &&
+                        touchStartY <= SY + SH) {
+                    go("menu");
+                } else press(key);
+            }
             return true;
         }
         return true;
