@@ -29,3 +29,8 @@ selects source regular/bold faces and writes assets at build time.
   redistribution outside this project's existing release pipeline.
 
 This is not a claim of pixel-perfect parity or a completed route audit.
+
+## APK v1.14.1 font-selection correction
+- Inspected completed GitHub Actions log for APK v1.14.0; its first-pass heuristic erroneously picked `nokia-sans-condensed-medium.ttf` and `nokia-sans-bold-italic.ttf`.
+- Updated the extractor to identify **exact** archive entries `nokia-sans-regular.ttf` and `nokia-sans-bold.ttf` and fail on missing or ambiguous input.
+- Compilation and publication for v1.14.1 must be verified separately; no pixel-by-pixel test yet.

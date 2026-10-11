@@ -1,4 +1,4 @@
-GPT c2 from reborn — APK v1.14.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.14.1 / HTML reference v6.342
 
 Native Java/Canvas Android app. Not a WebView. Still a partial port.
 
@@ -20,3 +20,6 @@ different firmware fallback faces not yet ported.
 
 All other remaining work (nested Options, Gallery/Media, Android SMS roles and
 full screenshot comparison) is still outstanding.
+
+- Font extraction verification caught a mapping error in v1.14.0 (Condensed Medium and Bold Italic were chosen).
+- v1.14.1 pins exact upstream `nokia-sans-regular.ttf` and `nokia-sans-bold.ttf` faces from the documented family bundle.

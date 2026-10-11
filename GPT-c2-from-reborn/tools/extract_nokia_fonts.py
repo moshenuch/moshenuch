@@ -76,10 +76,18 @@ with zipfile.ZipFile(io.BytesIO(archive)) as z:
 if not candidate:
     raise RuntimeError("No usable Nokia Sans font in the pinned upstream zip")
 
-r = max(candidate, key=lambda x: x[0])
-b = max(candidate, key=lambda x: x[1])
-if r[0] < 20 or b[1] < 30:
-    raise RuntimeError("Unable to identify matching Nokia regular/bold faces")
+# Verified archive entries from CI: the broad name-table score incorrectly
+# preferred Condensed Medium and Bold Italic. Pin the actual face filenames.
+regular_path = "nokia-sans-regular.ttf"
+bold_path = "nokia-sans-bold.ttf"
+regular = [item for item in candidate
+           if Path(item[2]).name.lower() == regular_path]
+bold = [item for item in candidate
+        if Path(item[2]).name.lower() == bold_path]
+if len(regular) != 1 or len(bold) != 1:
+    raise RuntimeError("Missing or ambiguous Nokia Sans regular/bold source faces")
+r = regular[0]
+b = bold[0]
 (TARGET / "regular.ttf").write_bytes(r[3])
 (TARGET / "bold.ttf").write_bytes(b[3])
 print("NOKIA FONT SELECTION: regular =", r[2], "bold =", b[2])
