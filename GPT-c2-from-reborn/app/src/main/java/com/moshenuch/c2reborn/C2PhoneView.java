@@ -1211,6 +1211,11 @@ public class C2PhoneView extends View {
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
+            if ("shortcutAssign".equals(page)) {
+                drawFirmwareChoice(c, idx == homeShortcuts.assigned(shortcutAssignmentSlot)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
             if ("gotoOrganise".equals(page)) {
                 int shortcutId = goToShortcuts.visualId(idx);
                 drawFirmwareChoice(c, goToShortcuts.isEnabled(shortcutId)
@@ -1572,6 +1577,14 @@ public class C2PhoneView extends View {
             if (idx == 2) return drafts.size() + " messages";
         }
         if ("settings".equals(pg) && idx == 1) return "Dark.nth";
+        if ("shortcuts".equals(pg)) {
+            if (idx == 0) return homeShortcuts.label(NativeHomeShortcuts.LSK);
+            if (idx == 1) return homeShortcuts.label(NativeHomeShortcuts.RSK);
+            if (idx == 2) return "Assign Up / Down / Left / Right";
+            if (idx == 3) return homeShortcuts.label(NativeHomeShortcuts.CENTRE);
+        }
+        if ("shortcutNavigation".equals(pg) && idx >= 0 && idx < 4)
+            return homeShortcuts.label(NativeHomeShortcuts.navigationSlot(idx));
         if ("drafts".equals(pg) && idx < drafts.size()) {
             String target = drafts.get(idx).recipient;
             return target.isEmpty() ? "Draft" : "To: " + target;
@@ -2066,7 +2079,10 @@ public class C2PhoneView extends View {
     private String[] softLabels() {
         if (confirmOpen) return new String[]{"Yes", "", "No"};
         if (locked) return new String[]{"Unlock", "", ""};
-        if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
+        if ("home".equals(page)) return new String[]{
+                homeShortcuts.label(NativeHomeShortcuts.LSK),
+                homeShortcuts.label(NativeHomeShortcuts.CENTRE),
+                homeShortcuts.label(NativeHomeShortcuts.RSK)};
         if ("menu".equals(page)) {
             if (menuOrganising)
                 return new String[]{menuMovingFrom < 0 ? "Pick" : "Move",
@@ -2075,6 +2091,7 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
+        if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
         if ("gotoOrganise".equals(page)) return new String[]{"Options", "Toggle", "Done"};
         if ("voiceRecorder".equals(page))
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
@@ -2349,6 +2366,8 @@ public class C2PhoneView extends View {
             case "received": return "Received calls";
             case "dialled": return "Dialled numbers";
             case "shortcuts": return "My shortcuts";
+            case "shortcutNavigation": return "Navigation key";
+            case "shortcutAssign": return "Assign shortcut";
             case "goto": return "Go to";
             case "gotoOrganise": return "Organise shortcuts";
             case "web": return "STORE";
@@ -2543,6 +2562,10 @@ public class C2PhoneView extends View {
                 return new String[]{"Bluetooth","Connect audio acc.","Paired devices","Active devices","My phone's visibility","My phone's name"};
             case "shortcuts":
                 return new String[]{"Left selection key","Right selection key","Navigation key","Home screen key"};
+            case "shortcutNavigation":
+                return new String[]{"Navigation up","Navigation down","Navigation left","Navigation right"};
+            case "shortcutAssign":
+                return NativeHomeShortcuts.ACTION_NAMES;
             case "goto": {
                 ArrayList<Integer> visible = goToShortcuts.enabledIds();
                 String[] result = new String[visible.size()];
