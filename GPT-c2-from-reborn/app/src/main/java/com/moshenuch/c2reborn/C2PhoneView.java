@@ -3203,9 +3203,26 @@ public class C2PhoneView extends View {
         }
 
         if ("shortcuts".equals(page)) {
-            detailTitle = itemsFor(page)[sel];
-            detailText = "Shortcut assignment is simulated natively.";
-            go("itemDetail");
+            if (sel == 2) go("shortcutNavigation");
+            else startHomeShortcutAssignment(sel == 0 ? NativeHomeShortcuts.LSK :
+                    sel == 1 ? NativeHomeShortcuts.RSK : NativeHomeShortcuts.CENTRE);
+            return;
+        }
+        if ("shortcutNavigation".equals(page)) {
+            int slot = NativeHomeShortcuts.navigationSlot(sel);
+            if (slot >= 0) startHomeShortcutAssignment(slot);
+            else showNotice("Unknown navigation key");
+            return;
+        }
+        if ("shortcutAssign".equals(page)) {
+            if (!homeShortcuts.assign(shortcutAssignmentSlot, sel)) {
+                showNotice("Keep Menu on at least one home key");
+                return;
+            }
+            saveHomeShortcuts();
+            String actionLabel = homeShortcuts.label(shortcutAssignmentSlot);
+            back();
+            showNotice("Assigned: " + actionLabel);
             return;
         }
 
@@ -3673,9 +3690,20 @@ public class C2PhoneView extends View {
         }
 
         if ("home".equals(page)) {
-            if ("OK".equals(key)) go("menu");
-            else if ("LSK".equals(key)) go("goto");
-            else if ("RSK".equals(key)) go("contactsNames");
+            if ("OK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.CENTRE));
+            else if ("LSK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.LSK));
+            else if ("RSK".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.RSK));
+            else if ("UP".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.UP));
+            else if ("DOWN".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.DOWN));
+            else if ("LEFT".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.LEFT));
+            else if ("RIGHT".equals(key)) openAssignedHomeAction(
+                    homeShortcuts.assigned(NativeHomeShortcuts.RIGHT));
             else if (isNumberKey(key) && !"#".equals(key)) {
                 dial = "*".equals(key) ? "*" : key;
                 go("dial");
@@ -4513,6 +4541,44 @@ public class C2PhoneView extends View {
             } else showNotice("Position unchanged");
         }
         invalidate();
+    }
+
+    private void startHomeShortcutAssignment(int slot) {
+        if (slot < 0 || slot >= NativeHomeShortcuts.SLOT_COUNT) {
+            showNotice("Home shortcut key unavailable");
+            return;
+        }
+        shortcutAssignmentSlot = slot;
+        go("shortcutAssign");
+        sel = homeShortcuts.assigned(slot);
+    }
+
+    /**
+     * Home-screen shortcut dispatch is deliberately app-local: Settings >
+     * My shortcuts never changes Android global buttons or launcher actions.
+     */
+    private void openAssignedHomeAction(int action) {
+        switch (action) {
+            case NativeHomeShortcuts.MENU: go("menu"); break;
+            case NativeHomeShortcuts.GO_TO: go("goto"); break;
+            case NativeHomeShortcuts.NAMES:
+                refreshContactsFromPhone();
+                go("contactsNames");
+                break;
+            case NativeHomeShortcuts.MESSAGING: go("messaging"); break;
+            case NativeHomeShortcuts.CONTACTS: go("contacts"); break;
+            case NativeHomeShortcuts.GALLERY: go("gallery"); break;
+            case NativeHomeShortcuts.CAMERA: startCameraCapture(false); break;
+            case NativeHomeShortcuts.VIDEO_RECORDER: startCameraCapture(true); break;
+            case NativeHomeShortcuts.ORGANISER: go("organiser"); break;
+            case NativeHomeShortcuts.CALCULATOR: go("calculator"); break;
+            case NativeHomeShortcuts.ALARM_CLOCK: go("alarm"); break;
+            case NativeHomeShortcuts.SETTINGS: go("settings"); break;
+            case NativeHomeShortcuts.PROFILES: go("profiles"); break;
+            case NativeHomeShortcuts.NONE: break;
+            default: showNotice("Unknown shortcut");
+        }
+        auditHomeShortcuts("action=" + action);
     }
 
     private void openGoToShortcut(int shortcutId) {
