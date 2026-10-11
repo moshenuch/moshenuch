@@ -97,6 +97,8 @@ final class NativeSmsDetails {
         if (Entry.PHONE.equals(kind)) {
             String phoneDigits = digits(value);
             if (phoneDigits.length() < 7 || phoneDigits.length() > 15) return;
+            // ISO-style dates (for example 2026-10-11) are not telephone numbers.
+            if (value.matches("(?:19|20)\\\\d{2}[-.]\\\\d{1,2}[-.]\\\\d{1,2}")) return;
             key = "p:" + (phoneDigits.startsWith("00") ? phoneDigits.substring(2) : phoneDigits);
         } else {
             if (Entry.WEB.equals(kind) && value.length() > 250) return;
