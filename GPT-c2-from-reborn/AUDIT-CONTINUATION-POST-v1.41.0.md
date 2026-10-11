@@ -1,3 +1,9 @@
+## v1.59.0 Camera Options overlay audit / v1.61 source correction
+
+Moti emulator verification of v1.59.0: **FAIL** Camera > Options: live Android SurfaceView preview covers the Options popup; only the top sliver of "Capture" remains visible. **PASS** Back: Options popup to viewfinder, then Media list. **PASS** Video recorder opens a native C2 Video recorder screen with live preview and Capture label. **UNTESTED** Video Capture; do not infer success.
+
+v1.61 fixes popup z-order by hiding the native preview while Options is open and restoring it on dismissal / item selection using the same Android MainActivity preview lifecycle. Review with emulator to verify all popup rows are visible and scrolling/selecting works, preview returns after dismiss, Back remains correct, and Camera/Video parity survives. No on-screen verification yet. Preserve prior v1.59 Camera photo capture success and v1.56 Home Menu/swirl PASS.
+
 ## v1.59.0 on-screen Camera acceptance / v1.60.0 corrections
 
 Moti verified in v1.59.0: live viewfinder, in-house Capture and native Photo result screen work; **stock Android camera never opens**; Back is correct. Mark this Camera photo sequence PASS; retain as regression requirement. Outstanding from same audit: Photo result missing Save/Delete/Send; photos stored only in private files/camera_photos rather than shared DCIM/Pictures.
