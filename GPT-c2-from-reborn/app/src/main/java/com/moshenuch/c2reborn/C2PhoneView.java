@@ -127,6 +127,7 @@ public class C2PhoneView extends View {
     private Runnable pendingSpeedDialHold;
     // Call records are hidden within this app; the Android call log stays untouched.
     private final HashSet<String> hiddenCallKeys = new HashSet<>();
+    private final HashSet<String> markedCallKeys = new HashSet<>();
     private long activeThreadId = -1L;
     private long activeMessageId = -1L;
     private float conversationScrollY = 0f;
@@ -4976,7 +4977,7 @@ public class C2PhoneView extends View {
         else if ("log".equals(page))
             optionItems = new String[]{"View","Call","Clear lists","Restore hidden calls","Call timers"};
         else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page))
-            optionItems = new String[]{"View","Call","Send message","Save to contacts","Delete","Clear list"};
+            optionItems = new String[]{"Mark >","Mark all","Unmark all","Delete selected","Add to blacklist","Add to whitelist"};
         else if ("settings".equals(page))
             optionItems = new String[]{"Open","Search","Help","About APK"};
         else if ("blackpool".equals(page) || "whitepool".equals(page))
@@ -5786,6 +5787,41 @@ public class C2PhoneView extends View {
             } else showNotice("Not implemented: " + choice);
         } else if ("missed".equals(page) || "received".equals(page) || "dialled".equals(page) || "calllog".equals(page)) {
             AndroidBackend.DeviceCall selectedCall = callRecordForPage(page, sel);
+            if ("Mark >".equals(choice)) {
+                optionSubmenuTitle = "Mark";
+                optionItems = new String[]{"Mark", "Unmark"};
+                optionSel = 0;
+                optionsOpen = true;
+                return;
+            } else if ("Mark".equals(choice) || "Unmark".equals(choice)) {
+                if (selectedCall == null) showNotice("No call selected");
+                else {
+                    String id = callRecordKey(selectedCall);
+                    if ("Mark".equals(choice)) markedCallKeys.add(id);
+                    else markedCallKeys.remove(id);
+                    showNotice("Mark".equals(choice) ? "Marked" : "Unmarked");
+                }
+                return;
+            } else if ("Mark all".equals(choice)) {
+                for (int j = 0; j < callItemsFor(callFilterForPage(page)).length; j++) {
+                    AndroidBackend.DeviceCall row = callRecordForPage(page, j);
+                    if (row != null) markedCallKeys.add(callRecordKey(row));
+                }
+                showNotice("All marked");
+                return;
+            } else if ("Unmark all".equals(choice)) {
+                markedCallKeys.clear();
+                showNotice("Marks cleared");
+                return;
+            } else if ("Delete selected".equals(choice)) {
+                if (markedCallKeys.isEmpty()) showNotice("Mark calls first");
+                else requestConfirm("hideMarkedCalls", "Hide selected call records in this app?");
+                return;
+            } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice)) {
+                if (selectedCall == null) showNotice("No call selected");
+                else addNumberToFilter("Add to blacklist".equals(choice), selectedCall.number);
+                return;
+            }
             if ("View".equals(choice)) showCallDetails(page, sel);
             else if ("Call".equals(choice)) {
                 if (selectedCall != null) startCall(selectedCall.number);
@@ -6047,7 +6083,14 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("resetHomeShortcuts".equals(action)) {
+        if ("hideMarkedCalls".equals(action)) {
+            hiddenCallKeys.addAll(markedCallKeys);
+            markedCallKeys.clear();
+            prefs.edit().putStringSet("call_hidden_v1", new HashSet<>(hiddenCallKeys)).apply();
+            refreshCallsFromPhone();
+            sel = 0;
+            showNotice("Selected calls hidden in C2");
+        } else if ("resetHomeShortcuts".equals(action)) {
             homeShortcuts.restoreDefaults();
             saveHomeShortcuts();
             showNotice("Home shortcuts restored");
