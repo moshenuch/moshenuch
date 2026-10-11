@@ -207,6 +207,10 @@ public class C2PhoneView extends View {
     private int menuMovingFrom = -1;
     // Organisable, persistent and independently visible Go to shortcuts.
     private final NativeGoToShortcuts goToShortcuts = new NativeGoToShortcuts();
+    // Assignable Nokia home-screen selection/navigation keys. Stored only in
+    // this APK and validated so at least one key always opens the main Menu.
+    private final NativeHomeShortcuts homeShortcuts = new NativeHomeShortcuts();
+    private int shortcutAssignmentSlot = NativeHomeShortcuts.LSK;
 
     private final String[] t9Words = {
             "a","am","an","and","are","as","at","be","call","can","come","day","do","for",
@@ -546,6 +550,9 @@ public class C2PhoneView extends View {
                 prefs.getString("goto_order_v1", "[]"),
                 prefs.getString("goto_visible_v1", "[]"));
         auditGoTo("load restored=" + goToRestored);
+        boolean homeKeyRestored = homeShortcuts.restore(
+                prefs.getString("home_shortcuts_v1", homeShortcuts.serialize()));
+        auditHomeShortcuts("load restored=" + homeKeyRestored);
         profile = prefs.getString("profile", "General");
         theme = prefs.getString("theme", "Dark");
         if ("Nokia".equals(theme)) theme = "Dark";
@@ -793,6 +800,16 @@ public class C2PhoneView extends View {
         android.util.Log.i("C2GoToAudit",
                 event + " order=" + goToShortcuts.serializedOrder()
                         + " shown=" + goToShortcuts.serializedEnabled());
+    }
+
+    private void auditHomeShortcuts(String event) {
+        if (isDemoToolsAvailable())
+            android.util.Log.i("C2HomeKeys", event + " keys=" + homeShortcuts.serialize());
+    }
+
+    private void saveHomeShortcuts() {
+        prefs.edit().putString("home_shortcuts_v1", homeShortcuts.serialize()).apply();
+        auditHomeShortcuts("save");
     }
 
     private void saveGoToShortcuts() {
