@@ -3588,6 +3588,9 @@ public class C2PhoneView extends View {
         if (!C2InCallService.hasCall()) return;
         String number = C2InCallService.number();
         if (!number.isEmpty()) activeCall = number;
+        // Telecom may supply a normalized number that differs from the dial
+        // string; refresh provider-backed contacts before rendering caller ID.
+        if (backend.has(Manifest.permission.READ_CONTACTS)) refreshContactsFromPhone();
         if (!"call".equals(page)) go("call");
         invalidate();
     }
@@ -6966,10 +6969,15 @@ public class C2PhoneView extends View {
     private String hitKey(float x, float y) {
         // Touch-screen representation of the centre Nokia softkey shares
         // the Home Menu binding with the physical OK button.
-        if ("home".equals(page) &&
-                x >= SX + SW / 3f && x <= SX + 2f * SW / 3f &&
-                y >= SY + SH * 286f / 320f && y <= SY + SH)
+        // The LCD softkey labels are touch targets on EVERY page.
+        // Previously only Home's centre label was mapped, leaving End,
+        // Details, Select and other centre softkeys inert.
+        if (x >= SX && x <= SX + SW &&
+                y >= SY + SH * 286f / 320f && y <= SY + SH) {
+            if (x < SX + SW / 3f) return "LSK";
+            if (x > SX + 2f * SW / 3f) return "RSK";
             return "OK";
+        }
         if (new RectF(55, 402, 125, 430).contains(x,y)) return "LSK";
         if (new RectF(235, 402, 305, 430).contains(x,y)) return "RSK";
         if (new RectF(55, 448, 137, 497).contains(x,y)) return "CALL";
