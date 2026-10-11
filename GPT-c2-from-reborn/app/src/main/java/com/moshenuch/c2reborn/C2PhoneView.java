@@ -90,6 +90,10 @@ public class C2PhoneView extends View {
     private long contactSearchLastAt = 0L;
     // Android contact IDs map to all their numbers; one phonebook row per ID.
     private final HashMap<Long, ArrayList<String>> contactNumbersById = new HashMap<>();
+    private final HashMap<Long, ArrayList<Long>> contactNumberRawIds = new HashMap<>();
+    private final HashMap<Long, ArrayList<Long>> contactNumberDataIds = new HashMap<>();
+    private long editTargetRawId = -1L, editTargetDataId = -1L;
+    private String editTargetNumber = "";
     private final NativeContactGroups contactGroups;
     private String activeContactGroupId = "";
     private String pendingGroupMemberNumber = "";
@@ -453,6 +457,8 @@ public class C2PhoneView extends View {
         }
         deviceContactsActive = backend.has(Manifest.permission.READ_CONTACTS);
         contactNumbersById.clear();
+        contactNumberRawIds.clear();
+        contactNumberDataIds.clear();
         if (!deviceContactsActive) {
             // Clear formerly visible provider contacts if permission was revoked.
             for (int i = contacts.size() - 1; i >= 0; i--)
@@ -467,6 +473,8 @@ public class C2PhoneView extends View {
         for (AndroidBackend.DeviceContact c : real) {
             contacts.add(new Contact(c.name, c.number, c.contactId, c.rawContactId, c.phoneDataId, true));
             contactNumbersById.put(c.contactId, new ArrayList<>(c.numbers));
+            contactNumberRawIds.put(c.contactId, new ArrayList<>(c.numberRawIds));
+            contactNumberDataIds.put(c.contactId, new ArrayList<>(c.numberDataIds));
         }
         contactIndex = Math.min(contactIndex, Math.max(0, contacts.size() - 1));
     }
@@ -1827,7 +1835,8 @@ public class C2PhoneView extends View {
             String name = parts.length > 0 ? parts[0] : "";
             String num = parts.length > 1 ? parts[1] : "";
             drawEditorField(c, "Name", name, 48, editField == 0);
-            drawEditorField(c, "Number", num, 112, editField == 1);
+            drawEditorField(c, editIndex >= 0 ? "Selected number" : "Number",
+                    num, 112, editField == 1);
         } else {
             p.setColor("Dark".equals(theme) ? Color.rgb(49,55,58) : Color.WHITE);
             c.drawRect(6, 27, 234, 274, p);
@@ -3378,12 +3387,35 @@ public class C2PhoneView extends View {
     private void beginContactEdit(int index) {
         editKind = "contact";
         editIndex = index;
+        editTargetRawId = -1L;
+        editTargetDataId = -1L;
+        editTargetNumber = "";
         if (index >= 0 && index < contacts.size()) {
             Contact ct = contacts.get(index);
-            editBuffer = ct.name + "\n" + ct.number;
-        } else editBuffer = "\n";
+            String chosenNumber = "contactDetail".equals(page) ?
+                    selectedContactNumber() : ct.number;
+            if (chosenNumber == null) chosenNumber = ct.number;
+            editTargetNumber = chosenNumber;
+            ArrayList<String> nums = contactNumbersById.get(ct.contactId);
+            ArrayList<Long> raws = contactNumberRawIds.get(ct.contactId);
+            ArrayList<Long> ids = contactNumberDataIds.get(ct.contactId);
+            if (nums != null && raws != null && ids != null) {
+                for (int j = 0; j < nums.size() && j < raws.size() && j < ids.size(); j++) {
+                    if (nums.get(j).equals(chosenNumber)) {
+                        editTargetRawId = raws.get(j);
+                        editTargetDataId = ids.get(j);
+                        break;
+                    }
+                }
+            }
+            if (editTargetDataId <= 0 && chosenNumber.equals(ct.number)) {
+                editTargetRawId = ct.rawContactId;
+                editTargetDataId = ct.phoneDataId;
+            }
+            editBuffer = ct.name + "\\n" + chosenNumber;
+        } else editBuffer = "\\n";
         editField = 0;
-        inputMode = "abc";
+        inputMode = "Abc";
         go("edit");
     }
 
@@ -3424,7 +3456,12 @@ public class C2PhoneView extends View {
                 boolean ok;
                 if (editIndex >= 0 && editIndex < contacts.size()) {
                     Contact old = contacts.get(editIndex);
-                    ok = backend.updateContact(old.contactId, old.rawContactId, old.phoneDataId, name, num);
+                    if (editTargetRawId <= 0 || editTargetDataId <= 0) {
+                        showNotice("Selected number cannot be edited");
+                        return;
+                    }
+                    ok = backend.updateContact(old.contactId,
+                            editTargetRawId, editTargetDataId, name, num);
                 } else {
                     ok = backend.addContact(name, num);
                 }
@@ -3438,7 +3475,10 @@ public class C2PhoneView extends View {
                 else contacts.add(0, new Contact(name, num));
                 saveContacts();
             }
-            backTo("contactsNames");
+            if (editIndex >= 0 && editIndex < contacts.size()) {
+                backTo("contactDetail");
+                selectContactNumber(num);
+            } else backTo("contactsNames");
             showNotice("Contact saved");
             return;
         }
