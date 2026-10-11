@@ -1185,6 +1185,22 @@ public class C2PhoneView extends View {
             }
             int textColor = selected ? Color.BLACK : Color.WHITE;
             float textX = showIcons ? 49 : 10;
+            boolean callList = "calllog".equals(page) || "missed".equals(page) ||
+                    "received".equals(page) || "dialled".equals(page);
+            if (callList) {
+                AndroidBackend.DeviceCall record = callRecordForPage(page, idx);
+                if (record != null && markedCallKeys.contains(callRecordKey(record))) {
+                    p.setColor(selected ? Color.BLACK : Color.WHITE);
+                    p.setStyle(Paint.Style.STROKE);
+                    p.setStrokeWidth(1.6f);
+                    c.drawRect(209, y + 11, 225, y + 27, p);
+                    p.setStyle(Paint.Style.FILL);
+                    p.setTextSize(16);
+                    p.setTypeface(fontBold);
+                    c.drawText("✓", 211, y + 25, p);
+                    p.setTypeface(fontRegular);
+                }
+            }
             if ("conversations".equals(page)) textX = NativeConversationRowLayout.LABEL_X;
             if ("conversation".equals(page)) textX = 36;
             if ("gallerySort".equals(page)) {
@@ -2166,7 +2182,7 @@ public class C2PhoneView extends View {
 
     private String[] softLabels() {
         if (confirmOpen) return new String[]{"Yes", "", "No"};
-        if (optionsOpen && !optionSubmenuTitle.isEmpty()) return new String[]{"", "Select", "Back"};
+        if (optionsOpen) return new String[]{"", "Select", "Back"};
         if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{
                 homeShortcuts.label(NativeHomeShortcuts.LSK),
@@ -7058,12 +7074,10 @@ public class C2PhoneView extends View {
             if (!consumed && sameKey && key != null) {
                 // Home's on-screen centre Menu label must activate the grid.
                 // The hardware OK button still honours remapped shortcuts.
-                if ("home".equals(page) && "OK".equals(key) &&
-                        "Menu".equals(homeShortcuts.label(NativeHomeShortcuts.CENTRE)) &&
-                        touchStartY >= SY + SH * 286f / 320f &&
-                        touchStartY <= SY + SH) {
-                    go("menu");
-                } else press(key);
+                // A centre LCD softkey tap routes through the same Home
+                // assignment as hardware OK. Do not require a literal "Menu"
+                // label: assigned labels may differ from firmware defaults.
+                press(key);
             }
             return true;
         }
