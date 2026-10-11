@@ -1,3 +1,11 @@
+## User-verified v1.44.0 Phone success and v1.46.0 follow-ups
+
+**Confirmed on emulator, demo off:** C2 fully owns ordinary outgoing call UI with blue Nokia panel, Calling/In call status, timer and progress bar; Google Dialer never appeared; OK/red-key termination returns to C2 Home; call-log entry appears and shows contact name, date and time. Duration is unverified. User reports v1.43 direct release link returned 404; v1.44 is the actual audited build. Do not regress this major acceptance pass.
+
+**Reported remaining bugs:** Call panel shows raw number despite Log resolving name; Android request to set as default Phone app did not apply via the dialog's Set as default button (emulator system tools required); centre LCD softkey touch unresponsive across builds even though hardware OK works; Names nested submenu erroneously inherits Options title and Options/Details/Back labels. New source v1.46.0 broadens the LCD softkey hitboxes across pages; refreshes contacts on Telecom call update, uses PhoneNumberUtils to compare cached call-log names; labels submenu with its own title and Select/Back softkeys; adds fallback Telecom default-dialler role request if RoleManager request unavailable/throws. These are unverified until emulator retest; particularly the role dialog's non-applying Set path may be OS/emulator configuration and fallback does not guarantee granting permission.
+
+**User-confirmed working:** My shortcuts No cancel, manual add/sort; Log name/date/time; full Names Options list with submenus (apart from chrome).
+
 ## APK v1.45.0 Phone follow-up
 
 v1.44.0 workflow passed and public release file is confirmed available. Native call-handling source audit revealed the global CALL-key dispatcher consumed green-key input before the per-call handler, so ringing calls were never answered by that key. v1.45.0 source fixes the priority order and exposes Answer on the centre softkey while ringing, End once active; the centre key answers a ringing call rather than disconnecting it. Android Back on an active call now shows "Press End to finish call" instead of leaving the call screen. The end call action still waits for Telecom's call removal callback before returning to C2 Home. New APK is pending CI and device-level verification.
