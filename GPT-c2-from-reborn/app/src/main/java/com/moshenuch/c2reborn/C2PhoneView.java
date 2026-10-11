@@ -1842,8 +1842,8 @@ public class C2PhoneView extends View {
             String[] parts = editBuffer.split("\\n", -1);
             String name = parts.length > 0 ? parts[0] : "";
             String num = parts.length > 1 ? parts[1] : "";
-            drawEditorField(c, "Name", name, 28, editField == 0);
-            drawEditorField(c, "Number", num, 92, editField == 1);
+            drawEditorField(c, "Name", name, 48, editField == 0);
+            drawEditorField(c, "Number", num, 112, editField == 1);
         } else {
             p.setColor("Dark".equals(theme) ? Color.rgb(49,55,58) : Color.WHITE);
             c.drawRect(6, 27, 234, 274, p);
@@ -3328,7 +3328,7 @@ public class C2PhoneView extends View {
         editIndex = index;
         editBuffer = text == null ? "" : text;
         editField = 0;
-        inputMode = "abc";
+        inputMode = "Abc";
         go("edit");
     }
 
@@ -4076,7 +4076,7 @@ public class C2PhoneView extends View {
                         "jkl5", "mno6", "pqrs7", "tuv8", "wxyz9"};
                 String values = maps[digit];
                 long now = SystemClock.uptimeMillis();
-                if (digit == contactSearchLastKey && now - contactSearchLastAt < 1050
+                if (digit != 0 && digit == contactSearchLastKey && now - contactSearchLastAt < 1050
                         && !contactSearchQuery.isEmpty()) {
                     contactSearchTapCycle = (contactSearchTapCycle + 1) % values.length();
                     contactSearchQuery = contactSearchQuery.substring(0, contactSearchQuery.length() - 1)
@@ -4140,9 +4140,10 @@ public class C2PhoneView extends View {
             else if (!editBuffer.isEmpty()) editBuffer = editBuffer.substring(0, editBuffer.length() - 1);
             else back();
         } else if ("#".equals(key)) {
-            if ("abc".equals(inputMode)) inputMode = "ABC";
+            if ("Abc".equals(inputMode)) inputMode = "abc";
+            else if ("abc".equals(inputMode)) inputMode = "ABC";
             else if ("ABC".equals(inputMode)) inputMode = "123";
-            else inputMode = "abc";
+            else inputMode = "Abc";
             resetTap();
         } else if ("*".equals(key)) {
             appendToEditor(" ");
@@ -4214,7 +4215,10 @@ public class C2PhoneView extends View {
     private String multiTap(String target, int digit) {
         String[] maps = {" ",".,?!1","abc2","def3","ghi4","jkl5","mno6","pqrs7","tuv8","wxyz9"};
         String set = maps[Math.max(0, Math.min(9, digit))];
-        if ("ABC".equals(inputMode)) set = set.toUpperCase(Locale.UK);
+        if ("ABC".equals(inputMode) || ("Abc".equals(inputMode) &&
+                ("contact".equals(editKind) && editField == 0) &&
+                (target.isEmpty() || target.charAt(target.length() - 1) == ' ')))
+            set = set.toUpperCase(Locale.UK);
 
         long now = SystemClock.uptimeMillis();
         if (digit == lastTapKey && now - lastTapAt < 1300 && !target.isEmpty()) {
