@@ -1197,6 +1197,7 @@ public class C2PhoneView extends View {
                     p.setStyle(Paint.Style.FILL);
                     p.setTextSize(16);
                     p.setTypeface(fontBold);
+                    p.setTextAlign(Paint.Align.LEFT);
                     c.drawText("✓", 211, y + 25, p);
                     p.setTypeface(fontRegular);
                 }
