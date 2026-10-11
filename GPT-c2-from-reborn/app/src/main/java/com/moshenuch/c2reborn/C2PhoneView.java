@@ -82,6 +82,11 @@ public class C2PhoneView extends View {
     private final ArrayList<String> whitelistNumbers = new ArrayList<>();
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    private final NativeContactGroups contactGroups;
+    private String activeContactGroupId = "";
+    private String pendingGroupMemberNumber = "";
+    private String groupConfirmId = "";
+    private String groupConfirmNumber = "";
     private final ArrayList<AndroidBackend.DeviceSms> deviceSms = new ArrayList<>();
     private final ArrayList<AndroidBackend.DeviceSms> smsInbox = new ArrayList<>();
     private final ArrayList<SmsThread> smsThreads = new ArrayList<>();
@@ -199,6 +204,7 @@ public class C2PhoneView extends View {
         setFocusableInTouchMode(true);
         backend = new AndroidBackend(context);
         prefs = context.getSharedPreferences("c2_state", Context.MODE_PRIVATE);
+        contactGroups = new NativeContactGroups(prefs);
         galleryStore = new NativeGalleryStore(context, prefs);
         voiceRecorder = new NativeVoiceRecorder(context);
         musicEngine = new NativeMusicPlayer(context, prefs);
@@ -1312,6 +1318,8 @@ public class C2PhoneView extends View {
         if ("todo".equals(editKind)) ttl = "To-do note";
         if ("calendar".equals(editKind)) ttl = "Calendar note";
         if ("contact".equals(editKind)) ttl = editIndex >= 0 ? "Edit contact" : "New contact";
+        if ("groupNew".equals(editKind)) ttl = "New group";
+        if ("groupRename".equals(editKind)) ttl = "Rename group";
         drawStatus(c, ttl);
 
         if ("contact".equals(editKind)) {
@@ -1791,6 +1799,13 @@ public class C2PhoneView extends View {
             case "emojiPicker": return "Emoticons";
             case "contacts": return "Contacts";
             case "contactsNames": return "Names";
+            case "contactGroups": return "Groups";
+            case "groupMembers": {
+                NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+                return group == null ? "Group" : group.name;
+            }
+            case "groupContactPicker": return "Add group member";
+            case "groupContactAssign": return "Choose group";
             case "speedDials": return "Speed dials";
             case "speedDialPicker": return "Choose contact";
             case "speedDialAssign": return "Select speed dial";
@@ -1923,6 +1938,37 @@ public class C2PhoneView extends View {
                 String[] a = new String[contacts.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
                 return a;
+            }
+            case "contactGroups": {
+                if (contactGroups.groups.isEmpty())
+                    return new String[]{"(Create a group)"};
+                String[] labels = new String[contactGroups.groups.size()];
+                for (int i = 0; i < labels.length; i++) {
+                    NativeContactGroups.Group group = contactGroups.groups.get(i);
+                    labels[i] = group.name + " (" + group.numbers.size() + ")";
+                }
+                return labels;
+            }
+            case "groupMembers": {
+                NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+                if (group == null || group.numbers.isEmpty())
+                    return new String[]{"(No members — Add member)"};
+                String[] labels = new String[group.numbers.size()];
+                for (int i = 0; i < labels.length; i++)
+                    labels[i] = contactNameFor(group.numbers.get(i));
+                return labels;
+            }
+            case "groupContactPicker": {
+                if (contacts.isEmpty()) return new String[]{"(No contacts)"};
+                String[] labels = new String[contacts.size()];
+                for (int i = 0; i < labels.length; i++) labels[i] = contacts.get(i).name;
+                return labels;
+            }
+            case "groupContactAssign": {
+                if (contactGroups.groups.isEmpty()) return new String[]{"(Create a group)"};
+                String[] labels = new String[contactGroups.groups.size()];
+                for (int i = 0; i < labels.length; i++) labels[i] = contactGroups.groups.get(i).name;
+                return labels;
             }
             case "speedDials":
             case "speedDialAssign":
@@ -2169,14 +2215,68 @@ public class C2PhoneView extends View {
                         : "Android Contacts permission unavailable; no cloud sync");
             } else if (sel == 5) {
                 go("speedDials");
+            } else if (sel == 4) {
+                go("contactGroups");
             } else {
                 detailTitle = itemsFor(page)[sel];
-                if (sel == 4) detailText = "Contact groups are not yet implemented in this APK.";
-                else if (sel == 6) detailText = "SIM service numbers are not available from this APK.";
+                if (sel == 6) detailText = "SIM service numbers are not available from this APK.";
                 else if (sel == 7) detailText = "Delete all contacts is not implemented.\nNo contacts changed.";
                 else detailText = "This contact option is not yet implemented.\nNo data changed.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("contactGroups".equals(page)) {
+            NativeContactGroups.Group group = contactGroups.at(sel);
+            if (group == null) beginGroupEdit(false);
+            else {
+                activeContactGroupId = group.id;
+                go("groupMembers");
+            }
+            return;
+        }
+        if ("groupMembers".equals(page)) {
+            NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+            if (group == null) {
+                showNotice("Group unavailable");
+            } else if (sel >= group.numbers.size()) {
+                openGroupMemberPicker();
+            } else {
+                String number = group.numbers.get(sel);
+                detailTitle = "Group member";
+                detailText = "Name: " + contactNameFor(number) +
+                        "\nNumber: " + number +
+                        "\nMembership stored in this app only";
+                go("itemDetail");
+            }
+            return;
+        }
+        if ("groupContactPicker".equals(page)) {
+            if (sel >= 0 && sel < contacts.size()) {
+                NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+                if (group == null) {
+                    showNotice("Group unavailable");
+                } else {
+                    String number = contacts.get(sel).number;
+                    if (contactGroups.addMember(group.id, number)) {
+                        back();
+                        if ("groupMembers".equals(page))
+                            sel = group.numbers.size() - 1;
+                        showNotice("Member added in app");
+                    } else showNotice("Already assigned, invalid or group full");
+                }
+            } else showNotice("No contacts to add");
+            return;
+        }
+        if ("groupContactAssign".equals(page)) {
+            NativeContactGroups.Group group = contactGroups.at(sel);
+            if (group == null) {
+                showNotice("Create a group first");
+            } else if (contactGroups.addMember(group.id, pendingGroupMemberNumber)) {
+                back();
+                showNotice("Added to " + group.name + " in app");
+            } else showNotice("Already a member, invalid or group full");
             return;
         }
 
@@ -2551,6 +2651,50 @@ public class C2PhoneView extends View {
         go("edit");
     }
 
+    private void beginGroupEdit(boolean rename) {
+        NativeContactGroups.Group group =
+                rename ? contactGroups.byId(activeContactGroupId) : null;
+        if (rename && group == null) {
+            showNotice("Group unavailable");
+            return;
+        }
+        editKind = rename ? "groupRename" : "groupNew";
+        editIndex = -1;
+        editField = 0;
+        editBuffer = rename ? group.name : "";
+        inputMode = "abc";
+        go("edit");
+    }
+
+    private void openGroupMemberPicker() {
+        refreshContactsFromPhone();
+        if (contacts.isEmpty()) {
+            showNotice("No contacts to add");
+            return;
+        }
+        go("groupContactPicker");
+    }
+
+    private String selectedGroupMemberNumber() {
+        NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+        return group == null || sel < 0 || sel >= group.numbers.size()
+                ? null : group.numbers.get(sel);
+    }
+
+    private void showGroupDetails() {
+        NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+        if (group == null) {
+            showNotice("Group unavailable");
+            return;
+        }
+        detailTitle = "Group details";
+        detailText = "Name: " + group.name
+                + "\nMembers: " + group.numbers.size()
+                + "\nStored in this APK only"
+                + "\nAndroid Contacts groups unchanged";
+        go("itemDetail");
+    }
+
     private void beginContactEdit(int index) {
         editKind = "contact";
         editIndex = index;
@@ -2617,6 +2761,28 @@ public class C2PhoneView extends View {
 
         if (txt.isEmpty()) {
             showNotice("Enter text");
+            return;
+        }
+
+        if ("groupNew".equals(editKind)) {
+            NativeContactGroups.Group group = contactGroups.create(txt);
+            if (group == null) {
+                showNotice("Name invalid/duplicate or group limit reached (30)");
+                return;
+            }
+            activeContactGroupId = group.id;
+            backTo("contactGroups");
+            sel = Math.max(0, contactGroups.indexOf(group.id));
+            showNotice("Group created in app");
+            return;
+        }
+        if ("groupRename".equals(editKind)) {
+            if (!contactGroups.rename(activeContactGroupId, txt)) {
+                showNotice("Name invalid or already used");
+                return;
+            }
+            backTo("groupMembers");
+            showNotice("Group renamed in app");
             return;
         }
 
@@ -2854,6 +3020,10 @@ public class C2PhoneView extends View {
                 String number = speedDialNumbers.get(sel + 2);
                 if (number != null) startCall(number);
                 else showNotice("No speed dial assigned");
+            } else if ("groupMembers".equals(page)) {
+                String number = selectedGroupMemberNumber();
+                if (number != null) startCall(number);
+                else showNotice("Select a group member first");
             }
             else if ("conversation".equals(page)) {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
@@ -3592,6 +3762,13 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Search","Call >","Send message >","Add new >","Edit >",
               "Delete contact","Mark >","Mark all","Unmark all","Delete selected",
               "Add to blacklist","Add to whitelist"};
+        else if ("contactGroups".equals(page))
+            optionItems = new String[]{"Open","Create group","Rename group","Delete group","Group details","Memory status"};
+        else if ("groupMembers".equals(page))
+            optionItems = new String[]{"Details","Call","Send message","Add member","Remove member",
+                    "Rename group","Delete group","Group details"};
+        else if ("groupContactPicker".equals(page) || "groupContactAssign".equals(page))
+            optionItems = new String[]{"Select"};
         else if ("speedDials".equals(page))
             optionItems = new String[]{"Details","Call","Assign / Change","Remove","Memory status"};
         else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page))
@@ -3857,6 +4034,67 @@ public class C2PhoneView extends View {
                         + "\nSIM and cloud capacity unavailable";
                 go("itemDetail");
             } else showNotice("Not implemented: " + choice);
+        } else if ("contactGroups".equals(page)) {
+            NativeContactGroups.Group group = contactGroups.at(sel);
+            if ("Open".equals(choice)) openSelected();
+            else if ("Create group".equals(choice)) beginGroupEdit(false);
+            else if ("Memory status".equals(choice)) {
+                int total = 0;
+                for (NativeContactGroups.Group entry : contactGroups.groups)
+                    total += entry.numbers.size();
+                detailTitle = "Groups memory";
+                detailText = "Groups: " + contactGroups.groups.size()
+                        + "\nMemberships: " + total
+                        + "\nLocal app storage; Android contacts unchanged";
+                go("itemDetail");
+            } else if (group == null) showNotice("Create a group first");
+            else if ("Rename group".equals(choice)) {
+                activeContactGroupId = group.id;
+                go("groupMembers");
+                beginGroupEdit(true);
+            } else if ("Delete group".equals(choice)) {
+                groupConfirmId = group.id;
+                requestConfirm("deleteContactGroup", "Delete group '" + group.name
+                        + "' from this app? Contacts remain unchanged.");
+            } else if ("Group details".equals(choice)) {
+                activeContactGroupId = group.id;
+                showGroupDetails();
+            }
+        } else if ("groupMembers".equals(page)) {
+            NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
+            String memberNumber = selectedGroupMemberNumber();
+            if (group == null) showNotice("Group unavailable");
+            else if ("Details".equals(choice)) {
+                if (memberNumber == null) showGroupDetails();
+                else openSelected();
+            } else if ("Add member".equals(choice)) openGroupMemberPicker();
+            else if ("Call".equals(choice)) {
+                if (memberNumber == null) showNotice("Select a member first");
+                else startCall(memberNumber);
+            } else if ("Send message".equals(choice)) {
+                if (memberNumber == null) showNotice("Select a member first");
+                else {
+                    recipient = memberNumber;
+                    messageBody = "";
+                    composeFocus = 1;
+                    go("compose");
+                }
+            } else if ("Remove member".equals(choice)) {
+                if (memberNumber == null) showNotice("Select a member first");
+                else {
+                    groupConfirmId = group.id;
+                    groupConfirmNumber = memberNumber;
+                    requestConfirm("removeGroupMember",
+                            "Remove this member from the app group? Contact unchanged.");
+                }
+            } else if ("Rename group".equals(choice)) beginGroupEdit(true);
+            else if ("Delete group".equals(choice)) {
+                groupConfirmId = group.id;
+                requestConfirm("deleteContactGroup", "Delete group '" + group.name
+                        + "' from this app? Contacts remain unchanged.");
+            } else if ("Group details".equals(choice)) showGroupDetails();
+        } else if ("groupContactPicker".equals(page) || "groupContactAssign".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
         } else if ("speedDials".equals(page)) {
             int slot = sel + 2;
             String number = speedDialNumbers.get(slot);
@@ -3934,7 +4172,13 @@ public class C2PhoneView extends View {
                 dial = ct.number;
                 go("dial");
             } else if ("Copy number".equals(choice)) copyNumberToClipboard(ct.number);
-            else if ("Speed dial".equals(choice)) {
+            else if ("Add to group".equals(choice)) {
+                if (contactGroups.groups.isEmpty()) showNotice("Create a group under Contacts first");
+                else {
+                    pendingGroupMemberNumber = ct.number;
+                    go("groupContactAssign");
+                }
+            } else if ("Speed dial".equals(choice)) {
                 speedDialAssignment = ct.number;
                 go("speedDialAssign");
             } else if ("Add to blacklist".equals(choice) || "Add to whitelist".equals(choice))
@@ -4222,7 +4466,24 @@ public class C2PhoneView extends View {
         confirmAction = "";
         confirmText = "";
 
-        if ("removeSpeedDial".equals(action)) {
+        if ("deleteContactGroup".equals(action)) {
+            String id = groupConfirmId;
+            groupConfirmId = "";
+            if (contactGroups.delete(id)) {
+                if ("groupMembers".equals(page)) back();
+                sel = Math.max(0, Math.min(sel, contactGroups.groups.size() - 1));
+                showNotice("App group deleted; contacts kept");
+            } else showNotice("Group no longer available");
+        } else if ("removeGroupMember".equals(action)) {
+            String id = groupConfirmId, number = groupConfirmNumber;
+            groupConfirmId = "";
+            groupConfirmNumber = "";
+            if (contactGroups.removeMember(id, number)) {
+                NativeContactGroups.Group group = contactGroups.byId(id);
+                sel = Math.max(0, Math.min(sel, group == null ? 0 : group.numbers.size()-1));
+                showNotice("Removed from app group; contact kept");
+            } else showNotice("Group member unavailable");
+        } else if ("removeSpeedDial".equals(action)) {
             int slot = sel + 2;
             if (speedDialNumbers.remove(slot) != null) {
                 saveSpeedDialSettings();

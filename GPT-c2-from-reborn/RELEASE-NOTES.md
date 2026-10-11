@@ -1,42 +1,35 @@
-GPT c2 from reborn — APK v1.21.0 / HTML reference v6.342
+GPT c2 from reborn — APK v1.22.0 / HTML reference v6.342
 
-Native Android Java/Canvas (no WebView). Still a partial Nokia C2-01 recreation.
+Native Android Java/Canvas application. NOT a WebView; partial Nokia C2-01 port.
 
-Contacts / Speed dials native audit and implementation:
-- Contacts > Speed dials is now a functional list of slots 2–9.
-- Each slot shows the saved app-local contact name or number. An empty
-  slot opens a contact selection list; choosing a contact assigns its number.
-- A contact's Options > Speed dial opens the native slot selection screen,
-  so numbers can also be assigned directly from contact details.
-- Speed dials > Options provides working Details, Call, Assign / Change,
-  Remove (with Yes/No confirmation) and local Memory status.
-- The Call hardware-style key also starts a call to the currently assigned
-  slot when on the Speed dials list. No call happens during assignment.
-- Slot-to-number mappings persist in app SharedPreferences JSON; refreshes
-  of the Android Contacts list do not invalidate mappings by list index.
-- Speed dials are APP-LOCAL and never modify Android's system speed-dial
-  database or contacts provider. Removing a slot never deletes a contact.
-- Contact Options > Use number fills the Nokia-style dialling screen with
-  the selected number without placing a call.
-- Contact Options > Copy number now writes the number into Android's
-  clipboard, instead of only showing a transient toast.
-- Contacts > Synchronise all no longer claims a cloud sync succeeded.
-  It refreshes the readable Android contacts and explicitly says cloud
-  synchronisation was not performed; if permission is unavailable, it
-  reports that clearly.
-- Contacts > Memory status reports actual visible contact count/source
-  and app speed dial assignments, without invented phone/SIM capacity.
-- Unimplemented Groups, SIM service-number, mass deletion and settings
-  screens now state their limitations without claiming work was done.
+Contacts > Groups native actions:
+- Replaced the static "No groups defined" placeholder with an app-local
+  groups screen. Users can create up to 30 named groups and rename groups.
+- Open a group to browse its members, with names dynamically resolved from
+  the currently visible Android or app-local Contacts list.
+- From group Options > Add member choose a contact. The same membership
+  action is available from Contact details > Options > Add to group.
+- Selected group members have executable Details, Call and Send message.
+  Send message opens the native SMS composer prefilled with that member's
+  number; it does NOT automatically send a text to the whole group.
+- Remove member and Delete group use the Nokia-style Yes/No confirmation.
+  Both operations affect ONLY the APK's local group membership data and
+  never delete or alter system Android contacts or actual Contacts groups.
+- Group details show actual saved name and member count; memory status
+  shows real app-local group and membership counts.
+- Group IDs are stable UUIDs and memberships are stored as phone numbers,
+  not mutable Contacts list indexes. Persisted JSON survives APK relaunch
+  and Android Contacts name/reordering changes.
+- Duplicate membership and duplicate group names are rejected.
+- Unsupported SIM/cloud group synchronisation is NOT claimed.
 
-Features retained: v1.20 playback audio focus/repeat/shuffle,
-v1.19 real audio library/Equaliser, Gallery, Voice Recorder, Camera,
-SMS drafts/marking and original Nokia font/icon assets.
+Retains v1.21.0 Contacts speed dials, call-log/options, real media and
+Gallery functions, source Nokia fonts/icons and SMS features.
 
-LIMITATIONS:
-- Nokia press-and-hold digit dialling, group memberships, cloud account
-  synchronisation, Android system speed-dial integration and many nested
-  Contacts options remain incomplete.
-- Android call placement requires system permission and compatible device.
-- No Android emulator or physical-device screenshot tests in this pass;
-  successful Java compilation alone does not establish UI/HTML parity.
+KNOWN LIMITS:
+- Groups are app-local; Android's system Contacts group provider is NOT
+  modified. Deleting a real contact leaves that number in app-local groups
+  until the member is explicitly removed (shown as a number).
+- No group-wide SMS/mass calling, custom ringtones, group icons,
+  SIM contact-group sync or deep original HTML screenshot parity.
+- Real-device Contacts/phone permission testing remains outstanding.
