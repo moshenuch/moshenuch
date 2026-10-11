@@ -1638,9 +1638,9 @@ public class C2PhoneView extends View {
             case "outbox":
                 return new String[]{"(empty)"};
             case "savedmessages":
-                return new String[]{"Saved message 1","Saved message 2","Saved message 3"};
+                return new String[0]; // No fabricated saved messages.
             case "reports":
-                return new String[]{"Alex Morgan  Delivered","Demo contact  Delivered","Nokia service  Sent"};
+                return new String[]{"No verified delivery receipts"};
             case "email":
                 return new String[]{"Mailboxes","Create e-mail","E-mail settings"};
             case "ims":
@@ -1828,14 +1828,20 @@ public class C2PhoneView extends View {
 
         if (Arrays.asList("outbox","savedmessages","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
             detailTitle = itemsFor(page)[sel];
-            if ("outbox".equals(page)) detailText = "No messages waiting to be sent.";
-            else if ("reports".equals(page)) detailText = "Delivery information for this message.";
+            if ("outbox".equals(page)) detailText = "Outbox records loaded: "
+                    + countSmsType(Telephony.Sms.MESSAGE_TYPE_OUTBOX)
+                    + "\nActual sending status not verified.";
+            else if ("reports".equals(page)) detailText =
+                    "Carrier delivery receipts are not tracked by this app.\n"
+                    + "A Sent item does not prove delivery.\n"
+                    + "No verified delivery reports available.";
             else if ("email".equals(page)) detailText = "E-mail account is not configured.";
             else if ("ims".equals(page)) detailText = "Instant messaging service is offline.";
             else if ("voicemessages".equals(page)) detailText = "Voice mailbox service.";
             else if ("infomessages".equals(page)) detailText = "Network information message settings.";
             else if ("servicecommands".equals(page)) detailText = "Enter a service command for the network.";
-            else if ("deletemessages".equals(page)) detailText = "Delete selected message group.";
+            else if ("deletemessages".equals(page)) detailText =
+                    "Bulk system SMS deletion is not implemented.\nPhone SMS records are unchanged.";
             else if ("messagesettings".equals(page)) detailText = "Messaging configuration.";
             else detailText = "Saved message.";
             go("itemDetail");
@@ -1892,10 +1898,11 @@ public class C2PhoneView extends View {
 
         if ("log".equals(page)) {
             String[] routes = {"calllog","missed","received","dialled"};
-            if (sel < 4) go(routes[sel]);
+            if (sel >= 0 && sel < 4) go(routes[sel]);
+            else if (sel == 10) showSmsMessageLog();
             else {
-                detailTitle = itemsFor(page)[sel];
-                detailText = "No data.";
+                detailTitle = itemsFor(page)[Math.max(0, Math.min(sel, itemsFor(page).length - 1))];
+                detailText = "Not implemented in this native APK.";
                 go("itemDetail");
             }
             return;
@@ -3111,20 +3118,20 @@ public class C2PhoneView extends View {
                 go("compose");
             } else if ("Inbox view".equals(choice)) go("inbox");
             else if ("Message log".equals(choice)) {
-                detailTitle = "Message log";
-                detailText = "Sent messages\nReceived messages\nDraft messages";
-                go("itemDetail");
+                showSmsMessageLog();
             } else if ("SIM messages".equals(choice)) {
                 detailTitle = "SIM messages";
-                detailText = "No SIM messages";
+                detailText = "SIM-stored SMS are not accessible through this app.\n"
+                        + "Whether SIM messages exist is unknown.";
                 go("itemDetail");
             } else if ("Memory status".equals(choice)) {
-                detailTitle = "Memory status";
-                detailText = "Phone\nMemory card";
-                go("itemDetail");
-            } else if ("Folder details".equals(choice)) showNotice("Folder details");
+                showSmsMemoryStatus();
+            } else if ("Folder details".equals(choice)) {
+                showSmsFolderDetails();
+            }
             else if ("Add mailbox".equals(choice) || "New e-mail".equals(choice)) showNotice("E-mail not configured");
             else if ("IM messages".equals(choice)) go("ims");
+            else showNotice("Not implemented: " + choice);
         } else if ("conversations".equals(page)) {
             if ("Call".equals(choice)) {
                 if (sel < smsThreads.size()) startCall(smsThreads.get(sel).address);
@@ -3229,6 +3236,7 @@ public class C2PhoneView extends View {
             else showNotice("Not implemented: " + choice);
         } else if ("compose".equals(page)) {
             if ("Send".equals(choice)) sendMessage();
+            else if ("Preview".equals(choice)) showComposePreview();
             else if ("Add recipient >".equals(choice)) go("recipientPicker");
             else if ("Insert symbol".equals(choice) || "Insert".equals(choice)) go("symbolPicker");
             else if ("Clear field".equals(choice)) messageBody = "";
@@ -3239,7 +3247,7 @@ public class C2PhoneView extends View {
                 inputMode = "T9".equals(inputMode) ? "abc" : "T9";
                 showNotice("Prediction " + ("T9".equals(inputMode) ? "on" : "off"));
             } else if ("Exit editor".equals(choice)) back();
-            else showNotice(choice.replace(" >",""));
+            else showNotice("Not implemented: " + choice.replace(" >",""));
         } else if ("contacts".equals(page)) {
             if ("Open".equals(choice)) openSelected();
             else if ("Add new".equals(choice)) beginContactEdit(-1);
@@ -3764,6 +3772,105 @@ public class C2PhoneView extends View {
                 + "\nUnread in app: " + unread
                 + "\nLast: " + new SimpleDateFormat("dd MMM yyyy HH:mm", Locale.UK)
                         .format(new Date(latest));
+        go("itemDetail");
+    }
+
+    private int countSmsType(int targetType) {
+        int count = 0;
+        for (AndroidBackend.DeviceSms message : deviceSms)
+            if (message.type == targetType) count++;
+        return count;
+    }
+
+    /** Counts refer to the loaded provider snapshot, not to all SMS on the phone. */
+    private void showSmsMessageLog() {
+        detailTitle = "Message log";
+        if (!deviceSmsActive) {
+            detailText = "SMS permission not granted.\nNo SMS were loaded.";
+        } else {
+            int received = 0, unread = 0, outgoing = 0, waiting = 0;
+            for (AndroidBackend.DeviceSms m : deviceSms) {
+                if (m.type == Telephony.Sms.MESSAGE_TYPE_INBOX) {
+                    received++;
+                    if (isSmsUnread(m)) unread++;
+                } else {
+                    outgoing++;
+                    if (m.type == Telephony.Sms.MESSAGE_TYPE_QUEUED ||
+                            m.type == Telephony.Sms.MESSAGE_TYPE_OUTBOX) waiting++;
+                }
+            }
+            detailText = "SMS loaded: " + deviceSms.size()
+                    + "\nReceived: " + received
+                    + "\nUnread in app: " + unread
+                    + "\nOther/outgoing: " + outgoing
+                    + "\nQueue/outbox: " + waiting
+                    + "\nConversations: " + smsThreads.size()
+                    + "\nApp drafts: " + drafts.size()
+                    + "\nQuery limit: 800 SMS"
+                    + "\nLocally hidden SMS excluded."
+                    + "\nDelivery not verified.";
+        }
+        go("itemDetail");
+    }
+
+    private void showSmsMemoryStatus() {
+        detailTitle = "SMS memory status";
+        detailText = "App drafts: " + drafts.size()
+                + "\nLocally hidden: " + hiddenSmsIds.size()
+                + (deviceSmsActive ? "\nSMS loaded: " + deviceSms.size()
+                       + "\nQuery limit: 800" : "\nSMS permission missing")
+                + "\nPhone storage capacity unknown."
+                + "\nSIM capacity unknown.";
+        go("itemDetail");
+    }
+
+    private void showSmsFolderDetails() {
+        String folder = "messaging".equals(page)
+                ? (sel >= 0 && sel < itemsFor(page).length
+                        ? itemsFor(page)[sel] : "Messaging")
+                : titleFor(page);
+        int count;
+        String note;
+        switch (folder) {
+            case "Drafts":
+                count = drafts.size();
+                note = "App-saved structured drafts";
+                break;
+            case "Sent items":
+                count = countSmsType(Telephony.Sms.MESSAGE_TYPE_SENT);
+                note = "Provider sent records; delivery unconfirmed";
+                break;
+            case "Outbox":
+                count = countSmsType(Telephony.Sms.MESSAGE_TYPE_OUTBOX);
+                note = "Provider outbox snapshot";
+                break;
+            case "Saved items":
+                count = 0;
+                note = "Saved-message folder not implemented";
+                break;
+            case "Conversations":
+                count = smsThreads.size();
+                note = "App-visible threads";
+                break;
+            default:
+                count = deviceSms.size();
+                note = "App-visible message snapshot";
+        }
+        detailTitle = "Folder details";
+        if (!deviceSmsActive && !"Drafts".equals(folder) && !"Saved items".equals(folder)) {
+            detailText = "Folder: " + folder + "\nSMS permission required.";
+        } else {
+            detailText = "Folder: " + folder + "\nLoaded entries: " + count
+                    + "\n" + note + "\nNot full storage totals.";
+        }
+        go("itemDetail");
+    }
+
+    private void showComposePreview() {
+        detailTitle = "Message preview";
+        detailText = "To: " + (recipient.trim().isEmpty() ? "(not entered)" : recipient)
+                + "\nCharacters: " + messageBody.length()
+                + "\n\n" + (messageBody.isEmpty() ? "(empty message)" : messageBody);
         go("itemDetail");
     }
 
