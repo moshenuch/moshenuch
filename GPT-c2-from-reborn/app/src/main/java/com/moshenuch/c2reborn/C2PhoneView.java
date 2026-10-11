@@ -1033,6 +1033,11 @@ public class C2PhoneView extends View {
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
                 textX = 46;
             }
+            if ("menuViewPicker".equals(page)) {
+                drawFirmwareChoice(c, idx == NativeMenuLayout.modeIndex(menuView)
+                        ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
+                textX = 46;
+            }
             if ("musicEqualiser".equals(page)) {
                 drawFirmwareChoice(c, idx == musicEngine.selectedPresetRow()
                         ? "RADIO_ON" : "RADIO_OFF", 11, y + 9, 24);
@@ -1883,7 +1888,14 @@ public class C2PhoneView extends View {
         if (confirmOpen) return new String[]{"Yes", "", "No"};
         if (locked) return new String[]{"Unlock", "", ""};
         if ("home".equals(page)) return new String[]{"Go to", "Menu", "Names"};
-        if ("menu".equals(page)) return new String[]{"Options", "Select", "Exit"};
+        if ("menu".equals(page)) {
+            if (menuOrganising)
+                return new String[]{menuMovingFrom < 0 ? "Pick" : "Move",
+                        menuMovingFrom < 0 ? "Pick" : "Place",
+                        menuMovingFrom < 0 ? "Done" : "Cancel"};
+            return new String[]{"Options", "Select", "Exit"};
+        }
+        if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("voiceRecorder".equals(page))
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
         if ("voiceRecordings".equals(page))
@@ -2103,6 +2115,7 @@ public class C2PhoneView extends View {
             case "recipientPicker": return "Select contact";
             case "symbolPicker": return "Symbols";
             case "emojiPicker": return "Emoticons";
+            case "menuViewPicker": return "Main menu view";
             case "contacts": return "Contacts";
             case "contactsNames": return "Names";
             case "contactSearch": return "Search names";
@@ -2252,6 +2265,8 @@ public class C2PhoneView extends View {
                 return new String[]{".",",","?","!","@","#","%","&","(",")","-","+","/",";",":","'"};
             case "emojiPicker":
                 return new String[]{"☺","☹","♥","★","♪","✓","☀","☕"};
+            case "menuViewPicker":
+                return NativeMenuLayout.MODES;
             case "contacts":
                 return new String[]{"Names","Add new","Synchronise all","Settings","Groups","Speed dials","Service numbers","Del. all contacts","Move contacts","Copy contacts"};
             case "contactsNames": {
@@ -2399,11 +2414,27 @@ public class C2PhoneView extends View {
 
     private void openSelected() {
         if ("menu".equals(page)) {
+            if (menuOrganising) {
+                moveMainMenuSelection();
+                return;
+            }
             String[] routes = {"contacts","organiser","media","gallery","messaging","applications","log","settings","web"};
-            if (sel == 0) refreshContactsFromPhone();
-            if (sel == 4) refreshSmsFromPhone();
-            if (sel == 6) refreshCallsFromPhone();
-            go(routes[Math.max(0, Math.min(sel, routes.length - 1))]);
+            int destination = NativeMenuLayout.destination(menuOrder, sel);
+            if (destination < 0 || destination >= routes.length) {
+                showNotice("Menu item unavailable");
+                return;
+            }
+            if (destination == 0) refreshContactsFromPhone();
+            if (destination == 4) refreshSmsFromPhone();
+            if (destination == 6) refreshCallsFromPhone();
+            go(routes[destination]);
+            return;
+        }
+        if ("menuViewPicker".equals(page)) {
+            menuView = NativeMenuLayout.MODES[Math.max(0, Math.min(sel, NativeMenuLayout.MODES.length - 1))];
+            saveMenuPreferences();
+            back();
+            showNotice(menuView);
             return;
         }
 
@@ -3306,6 +3337,12 @@ public class C2PhoneView extends View {
     }
 
     public boolean handleAndroidBack() {
+        if ("menu".equals(page) && menuOrganising) {
+            if (menuMovingFrom >= 0) menuMovingFrom = -1;
+            else menuOrganising = false;
+            invalidate();
+            return true;
+        }
         if (optionsOpen) {
             optionsOpen = false;
             invalidate();
@@ -3368,6 +3405,8 @@ public class C2PhoneView extends View {
                 history.clear();
                 page = "home";
                 sel = 0;
+                menuOrganising = false;
+                menuMovingFrom = -1;
                 dial = "";
                 invalidate();
             }
@@ -3414,16 +3453,28 @@ public class C2PhoneView extends View {
         }
 
         if ("menu".equals(page)) {
-            if ("UP".equals(key)) sel = (sel + 6) % 9;
-            else if ("DOWN".equals(key)) sel = (sel + 3) % 9;
-            else if ("LEFT".equals(key)) sel = sel % 3 == 0 ? sel + 2 : sel - 1;
-            else if ("RIGHT".equals(key)) sel = sel % 3 == 2 ? sel - 2 : sel + 1;
+            if ("UP".equals(key) || "DOWN".equals(key) ||
+                    "LEFT".equals(key) || "RIGHT".equals(key))
+                sel = NativeMenuLayout.navigate(sel, key, menuView);
             else if ("OK".equals(key)) openSelected();
             else if ("RSK".equals(key)) {
-                history.clear();
-                page = "home";
-                sel = 0;
-            } else if ("LSK".equals(key)) openOptionsForPage();
+                if (menuOrganising) {
+                    if (menuMovingFrom >= 0) {
+                        menuMovingFrom = -1;
+                        showNotice("Move cancelled");
+                    } else {
+                        menuOrganising = false;
+                        showNotice("Menu organised");
+                    }
+                } else {
+                    history.clear();
+                    page = "home";
+                    sel = 0;
+                }
+            } else if ("LSK".equals(key)) {
+                if (menuOrganising) moveMainMenuSelection();
+                else openOptionsForPage();
+            }
             invalidate();
             return;
         }
@@ -4217,8 +4268,25 @@ public class C2PhoneView extends View {
         galleryPreviewIndex = -1;
     }
 
+    private void moveMainMenuSelection() {
+        if (!menuOrganising || !"menu".equals(page)) return;
+        if (menuMovingFrom < 0) {
+            menuMovingFrom = sel;
+            showNotice("Choose destination");
+        } else {
+            int previous = menuMovingFrom;
+            menuMovingFrom = -1;
+            if (NativeMenuLayout.move(menuOrder, previous, sel)) {
+                saveMenuPreferences();
+                showNotice("Item moved");
+            } else showNotice("Position unchanged");
+        }
+        invalidate();
+    }
+
     private void openOptionsForPage() {
-        if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
+        if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
+        else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
         else if ("messaging".equals(page)) {
             if (sel == 1) optionItems = new String[]{"New message","Inbox view","Message log","SIM messages","Memory status"};
             else if (sel == 2) optionItems = new String[]{"New message","Inbox view","Folder details","Message log","SIM messages","Memory status"};
@@ -4586,9 +4654,16 @@ public class C2PhoneView extends View {
         }
 
         if ("menu".equals(page)) {
-            if ("Main menu view".equals(choice)) showNotice("Grid with labels");
-            else if ("Organise".equals(choice)) showNotice("Organise menu");
-            else showNotice("Help");
+            if ("Main menu view".equals(choice)) {
+                go("menuViewPicker");
+                sel = NativeMenuLayout.modeIndex(menuView);
+            } else if ("Organise".equals(choice)) {
+                menuOrganising = true;
+                menuMovingFrom = -1;
+                showNotice("Choose an icon to move");
+            } else showNotice("Use directional keys and Select");
+        } else if ("menuViewPicker".equals(page)) {
+            if ("Select".equals(choice)) openSelected();
         } else if ("goto".equals(page)) {
             if ("Select".equals(choice)) openSelected();
             else if ("Organise".equals(choice)) showNotice("Organise shortcuts");
