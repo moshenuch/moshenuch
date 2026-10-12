@@ -893,28 +893,43 @@ public class MainActivity extends Activity {
             overlay.setBackgroundColor(android.graphics.Color.rgb(12, 19, 29));
             android.widget.LinearLayout column = new android.widget.LinearLayout(this);
             column.setOrientation(android.widget.LinearLayout.VERTICAL);
+            // Match the existing 240x320 Nokia LCD in C2PhoneView, rather than
+            // covering the entire 360x780 handset body or Android window.
+            // Width=214 units at x=73; height=214*320/240 at y=96.
+            float scale = Math.min(phoneView.getWidth() / 360f,
+                    phoneView.getHeight() / 780f);
+            if (scale <= 0f) return false;
+            float ox = (phoneView.getWidth() - 360f * scale) / 2f;
+            float oy = (phoneView.getHeight() - 780f * scale) / 2f;
+            int lcdWidth = Math.max(1, Math.round(214f * scale));
+            int lcdHeight = Math.max(1, Math.round(214f * 320f / 240f * scale));
+            android.widget.FrameLayout.LayoutParams lcdBounds =
+                    new android.widget.FrameLayout.LayoutParams(lcdWidth, lcdHeight);
+            lcdBounds.leftMargin = Math.round(ox + 73f * scale);
+            lcdBounds.topMargin = Math.round(oy + 96f * scale);
             overlay.addView(column, new android.widget.FrameLayout.LayoutParams(-1, -1));
             android.widget.TextView title = videoPlayerLabel("Video clip", true);
             title.setBackgroundColor(android.graphics.Color.BLACK);
-            column.addView(title, new android.widget.LinearLayout.LayoutParams(-1, 45));
+            column.addView(title, new android.widget.LinearLayout.LayoutParams(-1, Math.max(1, Math.round(42f / 320f * lcdHeight))));
             android.widget.VideoView player = new android.widget.VideoView(this);
             player.setBackgroundColor(android.graphics.Color.BLACK);
             column.addView(player, new android.widget.LinearLayout.LayoutParams(
                     -1, 0, 1));
             android.widget.TextView status = videoPlayerLabel("Loading video...", false);
-            column.addView(status, new android.widget.LinearLayout.LayoutParams(-1, 37));
+            column.addView(status, new android.widget.LinearLayout.LayoutParams(-1, Math.max(1, Math.round(36f / 320f * lcdHeight))));
             android.widget.LinearLayout controls = new android.widget.LinearLayout(this);
             controls.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             controls.setBackgroundColor(android.graphics.Color.rgb(22, 40, 69));
             android.widget.TextView play = videoPlayerLabel("Pause / Play", true);
             android.widget.TextView back = videoPlayerLabel("Back", true);
-            controls.addView(play, new android.widget.LinearLayout.LayoutParams(0, 48, 1));
-            controls.addView(back, new android.widget.LinearLayout.LayoutParams(0, 48, 1));
+            int keyHeight = Math.max(1, Math.round(42f / 320f * lcdHeight));
+            controls.addView(play, new android.widget.LinearLayout.LayoutParams(0, keyHeight, 1));
+            controls.addView(back, new android.widget.LinearLayout.LayoutParams(0, keyHeight, 1));
             column.addView(controls);
             videoPlayerOverlay = overlay;
             videoPlayerView = player;
             videoPlayerState = status;
-            phoneFrame.addView(overlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            phoneFrame.addView(overlay, lcdBounds);
             // The handset's centre key and Back/End work without Android
             // playback controls; touch controls remain available as fallback.
             overlay.setFocusableInTouchMode(true);
