@@ -83,6 +83,21 @@ else
   echo "Look for VIDEO_STOP/VIDEO_VALIDATE/VIDEO_SAVE in video-camera-log.txt" >> "$result"
   exit 1
 fi
+# Independently inspect the *actual downloaded file* for moov/mdat atoms,
+# stream codecs, duration and decodability. C2's own VIDEO_VALIDATE log
+# alone is not sufficient to prove the saved file can be opened.
+if ! adb pull "$found" "$report_dir/emulator-recorded.mp4" >/dev/null; then
+  echo "FAIL unable to pull recorded MP4 for independent verification" | tee -a "$result"
+  exit 1
+fi
+if python3 GPT-c2-from-reborn/tools/check_recorded_mp4.py \
+    "$report_dir/emulator-recorded.mp4" >"$report_dir/video-mp4-validation.txt" 2>&1; then
+  cat "$report_dir/video-mp4-validation.txt" | tee -a "$result"
+else
+  cat "$report_dir/video-mp4-validation.txt" | tee -a "$result"
+  echo "FAIL recorded file is incomplete, missing streams, or cannot decode" | tee -a "$result"
+  exit 1
+fi
 if grep -q 'VIDEO_VALIDATE result=true' "$report_dir/video-camera-log.txt"; then
   echo "PASS recorded MP4 duration and dimensions validated by C2" | tee -a "$result"
 else
