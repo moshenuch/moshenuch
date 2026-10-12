@@ -10,6 +10,7 @@ android {
         applicationId "com.moshenuch.c2reborn"
         minSdk 23
         targetSdk 34
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         versionCode 18300
         versionName "1.83.0"
     }
@@ -31,4 +32,6 @@ android {
 
 dependencies {
     implementation 'androidx.exifinterface:exifinterface:1.3.7'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
 }
