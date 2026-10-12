@@ -52,6 +52,20 @@ checks = {
         "if (camera != null && started && !recording && !stopping)" in preview
         and "if (recording || stopping)" in preview
     ),
+    "Video preview size matches supported CamcorderProfile before unlock": (
+        "params.setPreviewSize(profile.videoFrameWidth, profile.videoFrameHeight)" in preview
+        and "camera.setParameters(params);" in preview
+        and preview.index("params.setPreviewSize(") < preview.index("camera.unlock();")
+    ),
+    "Recorder does not replace the camera-owned preview surface": (
+        "camera.setPreviewDisplay(getHolder());" in preview
+        and "recorder.setPreviewDisplay(" not in preview
+    ),
+    "Blocked finaliser does not permit camera reuse": (
+        "if (recording || stopping || camera == null" in preview
+        and "videoStopWorkerRunning = true;" in activity
+        and "if (cameraPreview == null || videoFinalising || videoStopWorkerRunning) return;" in activity
+    ),
     "video microphone permission declared": "android.permission.RECORD_AUDIO" in manifest,
     "video microphone runtime request": "REQ_VIDEO_MIC" in activity,
     "native record and stop actions": "host.toggleNativeVideoCapture();" in phone,
