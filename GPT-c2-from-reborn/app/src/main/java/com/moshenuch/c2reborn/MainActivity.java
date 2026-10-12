@@ -186,6 +186,22 @@ public class MainActivity extends Activity {
             pendingCameraVideo = savedInstanceState.getBoolean("pendingCameraVideo", false);
         }
         requestPhonePermissions();
+        // Emulator acceptance fixture. Debug-build only and only accessible
+        // through this app's PRIVATE preferences (not an exported intent).
+        // This exercises Nokia Report without depending on a camera failure.
+        if (BuildConfig.DEBUG && getSharedPreferences("c2_ci_video_report", MODE_PRIVATE)
+                .getBoolean("synthetic_error_once", false)) {
+            getSharedPreferences("c2_ci_video_report", MODE_PRIVATE).edit()
+                    .remove("synthetic_error_once").apply();
+            lastVideoFailureStage = "recorder.stop";
+            lastVideoDiagnostic = formatVideoDiagnostic(
+                    "CI synthetic MediaRecorder.stop failure (no media recorded)",
+                    "recorder.stop", "IllegalStateException",
+                    new StackTraceElement[]{new StackTraceElement(
+                            "com.moshenuch.c2reborn.C2CameraPreview", "stopRecording",
+                            "C2CameraPreview.java", 123)});
+            phoneView.showCiVideoReportFixture();
+        }
     }
 
     void showNativeCameraPreview(boolean show) {
