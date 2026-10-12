@@ -70,9 +70,11 @@ checks = {
         and "phoneFrame.post(() ->" in activity
         and "showNativeCameraPreview(true);" in activity
     ),
-    "Private photo and video retained when publishing fails": (
+    "Private photo and video retained when shared publishing fails": (
         "shared != null ? shared : result" in activity
-        and "shared != null ? shared : saved" in activity
+        and "saved = privateCopy; // Keep the usable recording." in activity
+        and "if (sharedPublished)" in activity
+        and "deleteCapturedPhoto(privateCopy);" in activity
     ),
 }
 
