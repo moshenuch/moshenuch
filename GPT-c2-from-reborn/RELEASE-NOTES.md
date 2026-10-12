@@ -1,3 +1,22 @@
+GPT c2 from reborn — native APK source v1.73.0 / HTML reference v6.343
+
+v1.73.0 — Explicit MediaRecorder.stop exception type on Nokia failure screen
+
+- Preserve v1.72.0 full VIDEO_STOP_THROW stack trace, 12-second
+  VIDEO_STOP_WORKER_STACK timeout diagnostics and in-house Retry/Back screen.
+- If MediaRecorder.stop() throws RuntimeException, remember its actual
+  exception class and display "Encoder stop error: <exception type>" in
+  the Nokia Video failure screen. The complete Java exception, including
+  stack and message, is emitted to Android logcat with tag C2Camera.
+- Distinguish an immediate stop() exception from a blocked native stop()
+  that never returns (VIDEO_STOP_TIMEOUT and worker stack).
+- Do not share or claim a corrupt/missing-moov temporary file as playable.
+- v1.73.0 requires a fresh Android APK build and independent Appetize/Oppo
+  reproduction; do not treat source changes as a proven media fix.
+- This version is separate from already published v1.72.0 binary.
+
+---
+
 GPT c2 from reborn — native APK source v1.72.0 / HTML reference v6.343
 
 v1.72.0 — Record/Stop exception tracing and Nokia failure/retry screen
