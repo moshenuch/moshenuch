@@ -2295,20 +2295,28 @@ public class C2PhoneView extends View {
     }
 
     private void drawConfirm(Canvas c) {
-        p.setColor(Color.rgb(235,235,235));
-        c.drawRoundRect(new RectF(20, 92, 220, 190), 5, 5, p);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(2);
-        p.setColor(Color.rgb(60,60,60));
-        c.drawRoundRect(new RectF(20, 92, 220, 190), 5, 5, p);
+        // Nokia-style Canvas overlay: no Android AlertDialog or stock
+        // "Confirm" heading. The normal C2 softkey bar supplies Yes/No.
+        p.setShader(null);
         p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.BLACK);
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setTextSize(16);
-        c.drawText("Confirm", 120, 118, p);
+        p.setColor(Color.rgb(7, 15, 25));
+        c.drawRect(11, 93, 229, 208, p);
+        p.setColor(Color.rgb(197, 211, 225));
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1f);
+        c.drawRect(11.5f, 93.5f, 228.5f, 207.5f, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.rgb(38, 59, 81));
+        c.drawRect(13, 96, 227, 119, p);
+        p.setColor(Color.WHITE);
+        p.setTypeface(fontBold);
         p.setTextAlign(Paint.Align.LEFT);
-        p.setTextSize(13);
-        drawWrappedText(c, confirmText, 35, 145, 170, 17, 3);
+        p.setTextSize(14);
+        c.drawText("Question", 21, 113, p);
+        p.setTypeface(fontRegular);
+        p.setTextSize(15);
+        p.setColor(Color.WHITE);
+        drawWrappedText(c, confirmText, 22, 145, 194, 18, 3);
     }
 
     private void drawNotice(Canvas c) {
