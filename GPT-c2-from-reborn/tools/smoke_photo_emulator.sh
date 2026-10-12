@@ -126,7 +126,7 @@ try:
         text = item.attrib.get("text", "") + " " + item.attrib.get("content-desc", "")
         if "C2 Share Probe" in text:
             b = item.attrib.get("bounds", "")
-            match = re.match(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]", b)
+            match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", b)
             if match:
                 x1,y1,x2,y2 = map(int, match.groups())
                 print(f"{(x1+x2)//2} {(y1+y2)//2}")
