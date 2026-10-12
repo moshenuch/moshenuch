@@ -1,3 +1,15 @@
+Oppo video acceptance procedure (v1.85.0; no code change):
+
+- Prerequisite: use the v1.85.0 APK and grant Camera and Microphone permissions when requested. Launch Media > Video recorder.
+- Record approximately 10 seconds while speaking audibly, press Stop once, and allow the Nokia Saving video screen to resolve. Do not force-stop the app during saving.
+- Success: video completes, appears in Gallery > Video clips and in shared Movies/C2 Reborn; open it and verify picture, speech audio, upright playback and roughly the expected duration.
+- If the app shows Recording failed, use Report to share the diagnostic text and note the Stage. Retry and Back should remain accessible. If Saving lasts beyond roughly 12 seconds, note the timeout wording, whether saving subsequently completes, and whether the recording appears in shared storage. Never assume a timeout means an MP4 was lost.
+- Also note any permission prompt, app freeze/crash, whether the microphone works, and whether the clip can be played by a second Android video app.
+- Scope after acceptance: video playback/controls, Gallery user interface and Nokia parity can be audited. Do not modify MediaRecorder.stop() based solely on earlier virtual-camera hangs.
+- Outstanding photo action: camera Photo > Options > Delete > Yes should remove the saved image itself (not just Gallery's index); camera Delete > No and Gallery Remove from gallery Yes/No were confirmed by independent v1.85.0 Android 11 device audit. Camera preview restoration after Home/Recents, including delayed permission grant, was also confirmed.
+
+---
+
 GPT c2 from reborn — native APK source v1.85.0 / HTML reference v6.343
 
 v1.85.0 — Restore camera preview after Home/Recents resume
