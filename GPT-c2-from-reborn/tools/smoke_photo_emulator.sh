@@ -43,7 +43,14 @@ tap() {
   read -r px py <<< "${points[$2]}"
   echo "TAP $name: $px,$py" >> "$result"
   adb shell input tap "$px" "$py"
-  sleep 0.8
+  sleep 1
+  # Preserve the actual Nokia screen at each navigation step. Without these
+  # frames a missed navigation tap looks identical to a failed camera save.
+  local safe_name
+  safe_name="$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-')"
+  adb shell screencap -p "/sdcard/c2-step-${safe_name}.png" >/dev/null 2>&1 || true
+  adb pull "/sdcard/c2-step-${safe_name}.png" "$report_dir/step-${safe_name}.png" >/dev/null 2>&1 || true
+  adb shell rm -f "/sdcard/c2-step-${safe_name}.png" >/dev/null 2>&1 || true
 }
 adb shell pm grant "$package" android.permission.CAMERA >/dev/null 2>&1 || true
 adb shell am force-stop "$package"
