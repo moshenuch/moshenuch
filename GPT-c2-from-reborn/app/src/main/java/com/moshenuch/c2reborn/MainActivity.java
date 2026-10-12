@@ -528,12 +528,46 @@ public class MainActivity extends Activity {
             published.put(MediaStore.Images.Media.IS_PENDING, 0);
             if (getContentResolver().update(uri, published, null, null) <= 0)
                 throw new java.io.IOException("Photo publication failed");
+            if (!isSharedPhotoIndexed(uri))
+                throw new java.io.IOException("Photo not discoverable in MediaStore");
             return uri;
         } catch (Exception ex) {
             android.util.Log.e("C2Camera", "Unable to publish photo to Pictures", ex);
             if (uri != null) try { getContentResolver().delete(uri, null, null); }
             catch (Exception ignored) { }
             return null;
+        }
+    }
+
+    /**
+     * MediaStore publication is not sufficient if a device's media database
+     * leaves a photo pending or its row is not readable. Query our own image
+     * and preserve the private copy when public indexing has failed.
+     * This does not guarantee that every OEM Gallery UI has refreshed.
+     */
+    private boolean isSharedPhotoIndexed(Uri uri) {
+        if (Build.VERSION.SDK_INT < 29 || uri == null) return false;
+        try (android.database.Cursor cursor = getContentResolver().query(uri,
+                new String[]{
+                        MediaStore.Images.Media.IS_PENDING,
+                        MediaStore.Images.Media.SIZE,
+                        MediaStore.Images.Media.MIME_TYPE
+                }, null, null, null)) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                android.util.Log.w("C2Camera", "PHOTO_INDEX missing MediaStore row");
+                return false;
+            }
+            int pending = cursor.getInt(0);
+            long size = cursor.getLong(1);
+            String mime = cursor.getString(2);
+            boolean indexed = pending == 0 && size > 128 &&
+                    "image/jpeg".equals(mime);
+            android.util.Log.i("C2Camera", "PHOTO_INDEX indexed=" + indexed +
+                    " pending=" + pending + " bytes=" + size);
+            return indexed;
+        } catch (Exception ex) {
+            android.util.Log.w("C2Camera", "PHOTO_INDEX query failed", ex);
+            return false;
         }
     }
 
@@ -556,10 +590,22 @@ public class MainActivity extends Activity {
         android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
         send.setType("image/jpeg");
         send.putExtra(android.content.Intent.EXTRA_STREAM, uri);
+        // Attach the exact same URI to ClipData. Android can propagate
+        // temporary read grants to the app chosen in the Sharesheet,
+        // including for C2's otherwise-private ContentProvider URIs.
+        android.content.ClipData clip = android.content.ClipData.newRawUri(
+                "C2 photo", uri);
+        send.setClipData(clip);
         send.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        android.content.Intent chooser =
+                android.content.Intent.createChooser(send, "Send photo");
+        chooser.setClipData(clip);
+        chooser.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
-            startActivity(android.content.Intent.createChooser(send, "Send photo"));
+            startActivity(chooser);
+            android.util.Log.i("C2Camera", "PHOTO_SEND chooser launched with read grant");
         } catch (Exception ex) {
+            android.util.Log.e("C2Camera", "PHOTO_SEND share chooser unavailable", ex);
             if (phoneView != null) phoneView.onCameraCaptureFailed("No sharing app available");
         }
     }
