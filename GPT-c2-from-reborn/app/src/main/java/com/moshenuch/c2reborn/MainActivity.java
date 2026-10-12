@@ -952,8 +952,27 @@ public class MainActivity extends Activity {
         if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
         if (phoneView != null) phoneView.onPermissionsChanged();
         observeSmsWhileVisible();
-        if (phoneView != null && phoneView.isInCameraViewfinder())
+        if (phoneView != null && phoneView.isInCameraViewfinder()) {
             showNativeCameraPreview(true);
+            // On some devices Camera.open() races SurfaceView reattachment on
+            // returning from Home/Recents. A valid permission is not a reason
+            // to show a permission warning: retry camera acquisition after the
+            // window/surface settles, but never interfere with video finalising.
+            for (int delayMs : new int[]{350, 1000, 2200}) {
+                phoneFrame.postDelayed(() -> {
+                    if (!cameraActivityResumed || phoneView == null ||
+                            !phoneView.isInCameraViewfinder() ||
+                            cameraPreview == null || cameraPreview.isPreviewRunning() ||
+                            videoFinalising || videoStopWorkerRunning ||
+                            isNativeVideoRecording()) return;
+                    if (Build.VERSION.SDK_INT >= 23 &&
+                            checkSelfPermission(Manifest.permission.CAMERA)
+                                    != PackageManager.PERMISSION_GRANTED) return;
+                    Log.i("C2Camera", "RESUME_PREVIEW_RETRY");
+                    showNativeCameraPreview(true);
+                }, delayMs);
+            }
+        }
     }
 
     @Override protected void onNewIntent(Intent intent) {
