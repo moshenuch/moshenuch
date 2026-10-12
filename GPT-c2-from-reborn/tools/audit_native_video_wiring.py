@@ -50,6 +50,11 @@ checks = {
         and 'lastStopFailure = ex.getClass().getSimpleName();' in preview
         and '"Encoder stop error: " + stopError' in activity
     ),
+    "Nokia error screen displays failed stage without adb": (
+        'String lastNativeVideoFailureStage()' in activity
+        and 'lastVideoFailureStage = videoFinaliseStage;' in activity
+        and 'c.drawText("Stage: " + failedStage' in phone
+    ),
     "Retry cannot overlap a still-stalled encoder": (
         "isNativeVideoStopWorkerRunning()" in activity
         and "host.isNativeVideoStopWorkerRunning()" in phone
