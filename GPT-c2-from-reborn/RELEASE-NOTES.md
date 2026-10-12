@@ -15,6 +15,12 @@ v1.69.0 — MP4 integrity checks and slow-save diagnostics
   is still in progress without freezing C2 or deleting the pending recording.
   Clear the delayed warning on completion or Activity destruction.
 - Update CI source checks to enforce video validation and the slow-save path.
+- APK CI now builds, validates, publishes and downloads/verifies both
+  release assets BEFORE running its Android 11 emulator startup check.
+  This keeps the APK accessible for Appetize testing if the post-release
+  emulator runner fails or times out, while recording that failed smoke
+  step and preserving its diagnostic artifact. The workflow can therefore
+  report failure even if both release assets were published successfully.
 
 On-device tests still required:
 - Video recorder Record ~10 seconds > Stop: check no ANR, confirm playable
