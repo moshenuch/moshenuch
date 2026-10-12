@@ -26,6 +26,22 @@ public final class ShareReceiverActivity extends Activity {
         try {
             if (send == null || !Intent.ACTION_SEND.equals(send.getAction()))
                 throw new IllegalArgumentException("Not an ACTION_SEND");
+            // The text branch is used only for the synthetic debug
+            // Video recorder failure; never logs the user's report body.
+            if ("text/plain".equals(send.getType())) {
+                String report = send.getStringExtra(Intent.EXTRA_TEXT);
+                if (report == null ||
+                        !report.startsWith("C2 Reborn native video diagnostic\n") ||
+                        !report.contains("Stage: recorder.stop\n") ||
+                        !report.contains("Exception type: IllegalStateException\n") ||
+                        !report.contains("C2CameraPreview.stopRecording") ||
+                        report.contains("content://") ||
+                        report.contains("/sdcard/")) {
+                    throw new IllegalArgumentException("Video diagnostic content malformed");
+                }
+                message = "PASS received C2 video diagnostic text from separate app";
+                Log.i(TAG, message);
+            } else if ("image/jpeg".equals(send.getType())) {
             Uri stream = send.getParcelableExtra(Intent.EXTRA_STREAM);
             ClipData clips = send.getClipData();
             Uri clip = clips != null && clips.getItemCount() > 0
@@ -55,6 +71,9 @@ public final class ShareReceiverActivity extends Activity {
             message = "PASS opened C2 JPEG from separate application (" +
                     content.length + " bytes)";
             Log.i(TAG, message);
+            } else {
+                throw new IllegalArgumentException("Unexpected SEND content type");
+            }
         } catch (Exception ex) {
             message = "FAIL receiver unable to read shared JPEG: " +
                     ex.getClass().getSimpleName();
