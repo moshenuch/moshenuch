@@ -1,3 +1,24 @@
+GPT c2 from reborn — native APK source v1.67.0 / HTML reference v6.343
+
+v1.67.0 — Android 11 install/launch verification in APK CI
+
+- Before publishing, the GitHub Actions build now boots an Android 11
+  (API 30) x86_64 emulator using the documented Android emulator runner.
+- Installs the exact Gradle-produced APK with adb; checks that the package
+  exists, starts the native MainActivity and confirms the app process survives.
+- Captures launch output, installation output, a PNG screenshot and Android
+  logcat in an uploadable CI audit artifact.
+- APK publication is blocked if this emulator install/launch smoke step fails,
+  in addition to the existing ZIP/manifest/DEX/signature/version/zipalign
+  checks and release-download byte comparison.
+- The CI emulator launch verifies installation and basic startup, not Camera
+  viewfinder operation, video recording, audio, photo orientation, Save/Send,
+  external Android Gallery visibility or the third-party upload interface.
+- GitHub workflow run result and downloadable APK must still be checked.
+  Do not infer a successful build or live release from source commits alone.
+
+---
+
 GPT c2 from reborn — native APK source v1.66.0 / HTML reference v6.343
 
 v1.66.0 — Independent v1.63 camera-audit follow-up
