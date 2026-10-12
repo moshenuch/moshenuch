@@ -34,6 +34,22 @@ checks = {
         and "!((MainActivity) getContext()).capturedPhotoExists(capturedPhotoUri)" in view
         and "if (!capturedPhotoExists(uri))" in activity
     ),
+    "Shared Pictures are indexed before private photo is removed": (
+        "private boolean isSharedPhotoIndexed(Uri uri)" in activity
+        and "MediaStore.Images.Media.IS_PENDING" in activity
+        and "MediaStore.Images.Media.SIZE" in activity
+        and 'if (!isSharedPhotoIndexed(uri))' in activity
+        and "if (shared != null) deleteCapturedPhoto(result);" in activity
+    ),
+    "Share chooser grants attachment read access via ClipData": (
+        "android.content.Intent.ACTION_SEND" in activity
+        and "android.content.Intent.EXTRA_STREAM" in activity
+        and 'android.content.ClipData.newRawUri(' in activity
+        and "send.setClipData(clip);" in activity
+        and "chooser.setClipData(clip);" in activity
+        and 'chooser.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)' in activity
+    ),
+
     "Private media delete is implemented": (
         'if (!"image".equals(category) && !"video".equals(category)) return 0;' in provider
         and 'file.isFile() && file.delete() ? 1 : 0' in provider
