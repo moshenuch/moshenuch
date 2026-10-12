@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-apk="$(find apk-validation -type f -name '*.apk' -print -quit)"
+apk="$(find apk-validation -type f -name 'app-debug.apk' -print -quit)"
 if [[ -z "$apk" ]]; then
   echo "Validation APK artifact missing"
   find apk-validation -maxdepth 3 -type f || true
@@ -8,7 +8,9 @@ if [[ -z "$apk" ]]; then
 fi
 api="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
 echo "Testing native APK launch on API ${api}"
+echo "Installing application APK: $apk"
 adb install -r "$apk"
+adb shell pm path com.moshenuch.c2reborn
 adb shell am start -n com.moshenuch.c2reborn/.MainActivity
 sleep 5
 adb shell pidof com.moshenuch.c2reborn
