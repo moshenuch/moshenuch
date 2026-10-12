@@ -16,3 +16,9 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_photo_emulator.sh "$results"; then
   echo "::warning::Native photo or Gallery-index probe failed; inspect photo-results.txt and photo-camera-log.txt"
 fi
+
+# Stress the native 150-row Gallery cap using 153 synthetic legacy index
+# entries plus a genuine emulator JPEG. This does not simulate 153 captures.
+if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
+  echo "::warning::Gallery index-capacity fixture failed; see gallery-capacity-results.txt and gallery-capacity-log.txt"
+fi
