@@ -382,11 +382,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back emulated -camera-front emulated
-          script: |
-            bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk GPT-c2-from-reborn/build/emulator-smoke
-            if ! bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh GPT-c2-from-reborn/build/emulator-smoke; then
-              echo "::warning::Emulated Video recorder Record/Stop or Movies publication failed - see artifact video-results.txt and video-camera-log.txt"
-            fi
+          script: bash GPT-c2-from-reborn/tools/run_emulator_smoke_suite.sh
 
       - name: Upload Android 11 install/launch diagnostics
         if: always()
