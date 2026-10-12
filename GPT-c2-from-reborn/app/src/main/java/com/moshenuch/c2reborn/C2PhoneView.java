@@ -5154,6 +5154,12 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /** Refresh videos added by another app while C2 was in the background. */
+    public void refreshVisibleVideoLibrary() {
+        if ("galleryVideos".equals(page) || "galleryVideoBrowser".equals(page))
+            refreshDeviceVideos();
+    }
+
     private void openGalleryFolder(boolean video) {
         go(video ? "galleryVideos" : "galleryImages");
         if (video) refreshDeviceVideos();
