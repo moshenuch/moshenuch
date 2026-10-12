@@ -1,3 +1,45 @@
+GPT c2 from reborn — native APK source v1.68.0 / HTML reference v6.343
+
+v1.68.0 — Fix reported video Stop ANR and Nokia Video Options
+
+Independent Appetize audit of v1.67.0 confirmed:
+- Still photo result upright, matching the in-house viewfinder.
+- Nokia-styled dark Question/Delete? confirmation works.
+- Delete > Yes removes captured media from shared storage.
+- Photos remain in Pictures/C2 Reborn after pressing Save.
+
+Reported blocker in v1.67.0:
+- Video recorder > Record works, but pressing Stop makes the app stop
+  responding (ANR), and no MP4 appears in Movies/C2 Reborn.
+
+Changes in v1.68.0 source:
+- Video Stop now schedules MediaRecorder.stop(), MP4 finalisation,
+  private-file completion and Android MediaStore publication on a worker
+  thread. The Nokia UI is not blocked by MP4 encoder shutdown or copying.
+- Android Camera1 ownership remains on the main thread. Its release waits
+  until MediaRecorder is stopped and released; surface destruction and
+  Activity.onPause cannot synchronously stop the recorder or race the worker.
+- While saving, the softbar displays Saving... and repeated Stop, Back,
+  End and Record actions are blocked. Failed finalisation reports an error.
+- Successful recordings publish to Movies/C2 Reborn on Android 10+ and
+  are added to C2 Gallery; if publishing fails, the private copy is kept.
+- Video recorder Options is now Record / Switch to camera / Video clips /
+  Help. Camera keeps separate Capture / Switch mode / Help.
+- Add structured non-sensitive C2Camera logcat markers VIDEO_STOP and
+  VIDEO_SAVE (outcome and elapsed time, never media bytes or URI).
+- CI camera and video wiring audits now assert asynchronous finalisation
+  and video-specific Options rather than the former synchronous Stop path.
+
+Outstanding:
+- Whether v1.68.0 eliminates the ANR, writes an MP4 to Movies/C2 Reborn,
+  records audio and plays video MUST be tested on Appetize/handset.
+- Android 6-9 shared Movies publishing is not implemented; such files are
+  retained privately. Gallery visibility and photo Send remain unverified.
+- Source commits do not prove Gradle build, release publication, or APK
+  download status.
+
+---
+
 GPT c2 from reborn — native APK source v1.67.0 / HTML reference v6.343
 
 v1.67.0 — Android 11 install/launch verification in APK CI
