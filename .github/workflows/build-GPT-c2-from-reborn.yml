@@ -337,5 +337,25 @@ jobs:
               echo "::error::Release ${tag} missing the expected APK or its size is invalid"
               exit 1
             }
-            echo "Verified published APK on ${tag}: ${apk} (${bytes} bytes)"
+            echo "Listed release asset on ${tag}: ${apk} (${bytes} bytes)"
+            dir="$(mktemp -d)"
+            verified=false
+            for attempt in 1 2 3 4; do
+              rm -f "${dir}/${apk}"
+              if gh release download "${tag}" --repo "${GITHUB_REPOSITORY}" \
+                  --pattern "${apk}" --dir "${dir}" &&
+                  cmp -s "${apk}" "${dir}/${apk}"; then
+                verified=true
+                break
+              fi
+              sleep 3
+            done
+            rm -rf "${dir}"
+            if [[ "${verified}" != true ]]; then
+              echo "::error::APK could not be downloaded byte-for-byte from release ${tag}"
+              exit 1
+            fi
+            checksum="$(sha256sum "${apk}" | cut -d' ' -f1)"
+            echo "Verified downloadable APK ${apk} from release ${tag} (SHA-256: ${checksum})"
+            echo "Download verified for ${tag}: ${apk} (SHA-256 ${checksum})" >> "$GITHUB_STEP_SUMMARY"
           done
