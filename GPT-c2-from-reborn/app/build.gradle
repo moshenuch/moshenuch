@@ -10,8 +10,8 @@ android {
         applicationId "com.moshenuch.c2reborn"
         minSdk 23
         targetSdk 34
-        versionCode 16600
-        versionName "1.66.0"
+        versionCode 16700
+        versionName "1.67.0"
     }
 
     buildTypes {
