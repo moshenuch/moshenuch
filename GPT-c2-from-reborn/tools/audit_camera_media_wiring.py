@@ -30,7 +30,7 @@ checks = {
     ),
     "Photo result respects EXIF orientation": (
         "orientCapturedPhotoPreview(uri, capturedPhotoPreview)" in view
-        and "android.media.ExifInterface.TAG_ORIENTATION" in view
+        and "androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION" in view
         and "Bitmap.createBitmap(" in view
     ),
     "Delete confirmation uses Nokia Canvas rather than stock grey dialog": (
