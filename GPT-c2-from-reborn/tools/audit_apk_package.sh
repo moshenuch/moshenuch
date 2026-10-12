@@ -11,8 +11,8 @@ expected_version="$(awk -F'"' '/versionName/ { print $2; exit }' "$version_file"
 bytes="$(stat -c%s "$apk")"
 [[ "$bytes" -gt 100000 ]] || { echo "APK unexpectedly small: $bytes bytes"; exit 1; }
 unzip -tqq "$apk"
-unzip -Z1 "$apk" | grep -qx 'AndroidManifest.xml'
-unzip -Z1 "$apk" | grep -qx 'classes.dex'
+unzip -Z1 "$apk" | grep -Fx 'AndroidManifest.xml' >/dev/null
+unzip -Z1 "$apk" | grep -Fx 'classes.dex' >/dev/null
 
 sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 [[ -n "$sdk_root" && -d "$sdk_root/build-tools" ]] || {
@@ -23,7 +23,7 @@ build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | so
   echo "aapt, zipalign or apksigner unavailable in $build_tools"; exit 1;
 }
 badging="$("$build_tools/aapt" dump badging "$apk")"
-package_line="$(printf '%s\n' "$badging" | grep -m 1 '^package: ')"
+package_line="$(grep '^package: ' <<< "$badging")"
 [[ "$package_line" == *"name='com.moshenuch.c2reborn'"* ]] || {
   echo "Unexpected APK package: $package_line"; exit 1;
 }
