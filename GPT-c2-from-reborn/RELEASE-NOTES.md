@@ -1,3 +1,44 @@
+GPT c2 from reborn — native APK source v1.74.0 / HTML reference v6.343
+
+v1.74.0 — Independent MP4 playback checks and no-PC video failure stage
+
+- The published v1.73.0 APK has two completed GitHub Android 11
+  emulator runs which passed in-house Record > Stop, MP4 duration/dimension
+  checks, and shared Movies/C2 Reborn publication.
+- This evidence does not establish that Appetize or an Oppo can finalise
+  video; an independent v1.70.0 Appetize audit found stalled Stop and a
+  partial MP4 missing its moov atom.
+- Post-release emulator smoke now pulls the saved MP4 from shared storage,
+  checks its ISO BMFF top-level ftyp, mdat, and moov atoms, and uses ffprobe
+  (when available) to require video AND audio tracks plus duration.
+  Where ffmpeg is available it decodes a video frame and audio sample.
+  Emulator audio may be silent, so this is track/decodability evidence,
+  not proof of a working physical microphone.
+- Add script syntax checks for the video probe and MP4 validator before
+  building so test-harness mistakes are identified early.
+- Capture the last failed video-save stage in MainActivity and display
+  it directly on the in-house Nokia Recording failed screen as
+  'Stage: recorder.stop', 'Stage: private-copy', etc. This allows
+  first-pass evidence to be collected using only an Oppo screenshot.
+- Preserve the v1.73 full Java exception stack, 12-second Stop worker
+  stack trace, Nokia Retry/Back recovery, and working photo handling.
+- User/device acceptance still requires a full video clip that saves to
+  Movies/C2 Reborn, appears in Gallery, plays with moving picture,
+  and contains audible spoken words. Send and external photo Gallery
+  discovery remain unverified.
+
+Oppo first-pass acceptance (no PC):
+1. Install the exact v1.74.0 APK from its versioned GitHub release.
+2. Open C2 > Media > Video camera, allow camera and microphone.
+3. Record ~10 seconds while speaking; press Stop once.
+4. Check that saving finishes and Nokia buttons respond within 15 seconds.
+5. If 'Recording failed' appears, photograph the full screen,
+   including 'Stage:' and any 'Encoder stop error:' text.
+6. Check Gallery, then Files > Internal storage > Movies > C2 Reborn;
+   play the MP4 and check picture movement plus audible words.
+
+---
+
 GPT c2 from reborn — native APK source v1.73.0 / HTML reference v6.343
 
 v1.73.0 — Explicit MediaRecorder.stop exception type on Nokia failure screen
