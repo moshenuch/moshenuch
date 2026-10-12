@@ -225,28 +225,28 @@ public class MainActivity extends Activity {
             if (info.versionName != null) version = info.versionName;
         } catch (Exception ignored) { }
         StringBuilder report = new StringBuilder();
-        report.append("C2 Reborn native video diagnostic\\n")
-                .append("APK version: ").append(version).append('\\n')
+        report.append("C2 Reborn native video diagnostic\n")
+                .append("APK version: ").append(version).append('\n')
                 .append("Device: ").append(Build.MANUFACTURER).append(' ')
-                .append(Build.MODEL).append('\\n')
+                .append(Build.MODEL).append('\n')
                 .append("Android: ").append(Build.VERSION.RELEASE)
-                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\\n")
-                .append("Outcome: ").append(outcome).append('\\n')
-                .append("Stage: ").append(stage).append('\\n')
+                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
+                .append("Outcome: ").append(outcome).append('\n')
+                .append("Stage: ").append(stage).append('\n')
                 .append("Exception type: ")
                 .append(exceptionType == null || exceptionType.isEmpty() ?
                         "none captured (may be blocked native call)" : exceptionType)
-                .append('\\n')
+                .append('\n')
                 .append("Stop worker still running: ").append(videoStopWorkerRunning)
-                .append('\\n');
+                .append('\n');
         if (stack != null && stack.length > 0) {
-            report.append("Java stack (up to 30 frames):\\n");
+            report.append("Java stack (up to 30 frames):\n");
             for (int i = 0; i < Math.min(stack.length, 30); i++)
-                report.append("  at ").append(stack[i]).append('\\n');
+                report.append("  at ").append(stack[i]).append('\n');
         } else {
-            report.append("Java stack: unavailable\\n");
+            report.append("Java stack: unavailable\n");
         }
-        report.append("No recorded media, contacts, messages or private file URIs attached.\\n");
+        report.append("No recorded media, contacts, messages or private file URIs attached.\n");
         return report.toString();
     }
 
