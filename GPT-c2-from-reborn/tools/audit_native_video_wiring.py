@@ -24,6 +24,11 @@ checks = {
         and "METADATA_KEY_DURATION" in activity
         and "!isPlayableNativeVideo(privateCopy)" in activity
     ),
+    "Slow video save reports progress without discarding media": (
+        "videoSaveHandler.postDelayed(videoSaveSlowNotice, 15_000L)" in activity
+        and 'VIDEO_SAVE slow: finalisation exceeded 15 seconds' in activity
+        and "videoSaveHandler.removeCallbacks(videoSaveSlowNotice);" in activity
+    ),
 
     "Recorder stop and publication run off Android UI thread": (
         "Thread worker = new Thread(() ->" in activity
