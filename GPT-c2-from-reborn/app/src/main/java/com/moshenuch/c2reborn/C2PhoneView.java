@@ -5243,6 +5243,15 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /** Restore the exact video folder after native player dismissal. */
+    public void onNativeVideoViewerClosed() {
+        if (!"galleryVideos".equals(page)) {
+            page = "galleryVideos";
+            sel = Math.max(0, Math.min(sel, galleryStore.entries(true).size() - 1));
+        }
+        invalidate();
+    }
+
     private void openSelectedGalleryEntry() {
         boolean video = "galleryVideos".equals(page);
         NativeGalleryStore.Entry item = galleryStore.at(video, sel);
