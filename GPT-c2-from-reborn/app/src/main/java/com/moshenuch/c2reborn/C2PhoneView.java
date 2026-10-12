@@ -4799,6 +4799,29 @@ public class C2PhoneView extends View {
         invalidate();
     }
 
+    /**
+     * Stop's native encoder may remain blocked without producing a moov atom.
+     * Leave the Video recorder rather than trapping every Nokia key on Saving.
+     * Camera reuse is prevented in MainActivity until the worker returns.
+     */
+    public void onNativeVideoFinalisationTimedOut() {
+        if ("videoViewfinder".equals(page)) {
+            optionsOpen = false;
+            go("media");
+        }
+        showNotice("Video encoder stalled - reopen C2 to retry");
+        invalidate();
+    }
+
+    /** If an overdue stop eventually succeeds, index it without hijacking UI. */
+    public void onNativeVideoSavedAfterTimeout(Uri uri) {
+        int added = galleryStore.add(true,
+                java.util.Collections.singletonList(uri));
+        showNotice(added > 0 ? "Video saved to Gallery" :
+                "Video saved, but Gallery index unchanged");
+        invalidate();
+    }
+
     public boolean isInCameraViewfinder() {
         return "cameraViewfinder".equals(page) || "videoViewfinder".equals(page);
     }
