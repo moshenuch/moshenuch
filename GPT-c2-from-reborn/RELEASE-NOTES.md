@@ -1,3 +1,23 @@
+GPT c2 from reborn — native APK source v1.65.0 / HTML reference v6.343
+
+v1.65.0 — Captured-photo Gallery consistency and camera retry reliability
+
+- Deleting a captured photo removes its exact URI from the persistent C2
+  Gallery index after the Android media provider confirms deletion, preventing
+  a stale/broken entry on the next launch. No unrelated media is removed.
+- Photo result Save now reports whether a photo was actually published to
+  Android Pictures or retained privately following a shared-storage failure.
+- After failed photo/video capture, the live camera preview can restart
+  on the same screen. Restarts are deferred and prevented while the activity
+  is paused to avoid fighting SurfaceView teardown.
+- Add build-side static regression checks for native camera, Gallery deletion,
+  shared/private media fallback, and recording finalisation.
+- Camera/video encoding, real audio, device permissions, camera rotation and
+  Gallery playback must still be tested on an actual Android device.
+- Source version alone does not verify a built or downloadable APK.
+
+---
+
 GPT c2 from reborn — APK source v1.64.0 / HTML reference v6.343
 
 v1.64.0 — Embedded video recording (source implementation, device audit pending)
