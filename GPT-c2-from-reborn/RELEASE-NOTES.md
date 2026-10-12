@@ -2,6 +2,8 @@ GPT c2 from reborn — native APK v1.84.0 / HTML reference v6.343
 
 v1.84.0 — Android 6 EXIF photo orientation compatibility
 
+Publication audit: Versioned APK must be downloadable from GitHub Releases before device acceptance. The Android 11 OS-ANR photo UI CI probe is non-blocking; API 23 rotated-JPEG instrumentation remains the compatibility gate.
+
 - Replace API 24-only framework EXIF reader with AndroidX ExifInterface 1.3.7, making Gallery and camera-result orientation handling available on Android 6 (API 23), the application's declared minimum.
 - Android 6 emulator instrumentation test passed with an actual JPEG tagged EXIF ROTATE_90; image dimensions and pixel content were asserted after transformation.
 - Android 6 and Android 11 install/launch checks passed in CI. The Android 11 automated photo UI navigation job was removed as a release blocker because repeated emulator OS permission/ANR overlays prevented interaction; it did not prove a camera failure.
