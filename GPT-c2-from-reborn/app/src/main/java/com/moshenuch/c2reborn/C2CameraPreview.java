@@ -15,6 +15,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     private Camera camera;
     private int cameraId = -1;
     private int sensorOrientation = 90;
+    private int jpegOrientation = 90;
     private MediaRecorder recorder;
     private boolean recording;
     private boolean started;
@@ -52,6 +53,12 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             camera = Camera.open(cameraId);
             sensorOrientation = info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT
                     ? (360 - info.orientation) % 360 : info.orientation;
+            // Preview orientation changes ONLY the SurfaceView, not JPEG bytes.
+            // Capture orientation must also be supplied to Camera.Parameters.
+            jpegOrientation = info.orientation;
+            Camera.Parameters photoParameters = camera.getParameters();
+            photoParameters.setRotation(jpegOrientation);
+            camera.setParameters(photoParameters);
             camera.setDisplayOrientation(sensorOrientation);
             camera.setPreviewDisplay(getHolder());
             camera.startPreview();
