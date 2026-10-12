@@ -315,7 +315,7 @@ jobs:
             This release is not a verified pixel-perfect reproduction.
           artifacts: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
           allowUpdates: true
-          removeArtifacts: false
+          removeArtifacts: true
           replacesArtifacts: true
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
