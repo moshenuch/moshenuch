@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "C2RebornNative"
-include(":app")
+include(":app", ":shareprobe")
