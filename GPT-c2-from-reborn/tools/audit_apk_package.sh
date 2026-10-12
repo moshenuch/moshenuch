@@ -11,6 +11,26 @@ expected_version="$(awk -F'"' '/versionName/ { print $2; exit }' "$version_file"
 bytes="$(stat -c%s "$apk")"
 [[ "$bytes" -gt 100000 ]] || { echo "APK unexpectedly small: $bytes bytes"; exit 1; }
 unzip -tqq "$apk"
+# Android APK ZIP entries must use conventional ZIP methods. Report contents
+# instead of trying to repack a build whose uploader previously rejected it.
+python3 - "$apk" <<'PY'
+import sys, zipfile
+apk = sys.argv[1]
+with zipfile.ZipFile(apk) as z:
+    infos = z.infolist()
+    names = [e.filename for e in infos]
+    if len(names) != len(set(names)):
+        raise SystemExit("FAIL: duplicate APK ZIP member names")
+    unexpected = sorted({e.compress_type for e in infos} - {
+        zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
+    if unexpected:
+        raise SystemExit("FAIL: unsupported ZIP compression methods: " + str(unexpected))
+    if "AndroidManifest.xml" not in names or "classes.dex" not in names:
+        raise SystemExit("FAIL: required APK members missing")
+    print("PASS ZIP methods: stored/deflated; members:", len(names))
+    print("ZIP compressed:", sum(e.compress_size for e in infos),
+          "uncompressed:", sum(e.file_size for e in infos))
+PY
 unzip -Z1 "$apk" | grep -Fx 'AndroidManifest.xml' >/dev/null
 unzip -Z1 "$apk" | grep -Fx 'classes.dex' >/dev/null
 
