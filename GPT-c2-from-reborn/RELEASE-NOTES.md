@@ -1,3 +1,15 @@
+GPT c2 from reborn — native APK source v1.85.0 / HTML reference v6.343
+
+v1.85.0 — Restore camera preview after Home/Recents resume
+
+- Android 11 device audit accepted v1.84 capture, upright result, Save toast, Gallery listing/upright view, and Send share sheet. Delete confirmation was not rechecked on v1.84.
+- Observation: returning via Recents could leave "Live preview unavailable / Check camera permission" even with previously granted CAMERA permission. This may be a test-site quirk; treat it as a lifecycle robustness fix, not as proof of an Android permissions regression.
+- C2CameraPreview exposes whether the camera has actually started. MainActivity.onResume requests preview immediately and retries at bounded delays if camera acquisition fails or races SurfaceView restoration, only while activity is resumed, camera viewfinder still active, permission remains granted and video recording/finalisation is idle.
+- No permission regrant or forced permission dialog on retry. No changes to Video MediaRecorder.stop() logic.
+- The Home/Recents recovery and Nokia Delete confirmation still need independent device verification; the next video acceptance gate is the short record/Stop/playback test on the real Oppo.
+
+---
+
 GPT c2 from reborn — native APK v1.84.0 / HTML reference v6.343
 
 v1.84.0 — Android 6 EXIF photo orientation compatibility
