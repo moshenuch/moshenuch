@@ -47,6 +47,9 @@ public class MainActivity extends Activity {
         videoSaveTimedOut = true;
         videoFinalising = false;
         android.util.Log.e("C2Camera", "VIDEO_STOP_TIMEOUT after 12 seconds");
+        // Hide the SurfaceView without synchronously touching the camera.
+        // An abandoned preview must not paint over the restored Nokia menu.
+        if (cameraPreview != null) cameraPreview.setVisibility(View.GONE);
         if (phoneView != null && !isFinishing() && !isDestroyed())
             phoneView.onNativeVideoFinalisationTimedOut();
     };
