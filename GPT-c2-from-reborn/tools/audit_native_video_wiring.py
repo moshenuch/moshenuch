@@ -18,6 +18,13 @@ checks = {
         and "MEDIA_RECORDER_INFO_MAX_DURATION_REACHED" in preview),
     "record/stop lifecycle": "boolean startRecording(File output)" in preview
         and "boolean stopRecording()" in preview,
+    "MP4 video metadata checked before Movies publication": (
+        "private boolean isPlayableNativeVideo(Uri privateUri)" in activity
+        and "METADATA_KEY_VIDEO_WIDTH" in activity
+        and "METADATA_KEY_DURATION" in activity
+        and "!isPlayableNativeVideo(privateCopy)" in activity
+    ),
+
     "Recorder stop and publication run off Android UI thread": (
         "Thread worker = new Thread(() ->" in activity
         and "valid = cameraPreview.stopRecording();" in activity
