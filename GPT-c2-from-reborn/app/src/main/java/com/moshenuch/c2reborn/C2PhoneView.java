@@ -4868,11 +4868,62 @@ public class C2PhoneView extends View {
                 opts.inSampleSize = 4;
                 capturedPhotoPreview = BitmapFactory.decodeStream(input, null, opts);
             }
+            capturedPhotoPreview = orientCapturedPhotoPreview(uri, capturedPhotoPreview);
         } catch (Exception error) {
             android.util.Log.w("C2Camera", "Unable to render captured photo", error);
         }
         go("cameraResult");
         showNotice("Photo saved");
+    }
+
+    /** BitmapFactory does not apply EXIF orientation on Android.
+     * Rotate/flip only the small sampled preview; leave the saved JPEG's
+     * hardware orientation metadata intact for external Gallery apps.
+     */
+    private Bitmap orientCapturedPhotoPreview(Uri uri, Bitmap source) {
+        if (source == null || android.os.Build.VERSION.SDK_INT < 24) return source;
+        int orientation = android.media.ExifInterface.ORIENTATION_NORMAL;
+        try (java.io.InputStream input =
+                     getContext().getContentResolver().openInputStream(uri)) {
+            if (input == null) return source;
+            android.media.ExifInterface exif = new android.media.ExifInterface(input);
+            orientation = exif.getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL);
+        } catch (Exception ex) {
+            android.util.Log.w("C2Camera", "Photo EXIF orientation unreadable", ex);
+            return source;
+        }
+        android.graphics.Matrix transform = new android.graphics.Matrix();
+        switch (orientation) {
+            case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                transform.setScale(-1f, 1f); break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_180:
+                transform.setRotate(180f); break;
+            case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                transform.setScale(1f, -1f); break;
+            case android.media.ExifInterface.ORIENTATION_TRANSPOSE:
+                transform.setRotate(90f);
+                transform.postScale(-1f, 1f); break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_90:
+                transform.setRotate(90f); break;
+            case android.media.ExifInterface.ORIENTATION_TRANSVERSE:
+                transform.setRotate(270f);
+                transform.postScale(-1f, 1f); break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_270:
+                transform.setRotate(270f); break;
+            default:
+                return source;
+        }
+        try {
+            Bitmap rotated = Bitmap.createBitmap(
+                    source, 0, 0, source.getWidth(), source.getHeight(), transform, true);
+            if (rotated != source) source.recycle();
+            return rotated;
+        } catch (RuntimeException ex) {
+            android.util.Log.w("C2Camera", "Photo orientation transform failed", ex);
+            return source;
+        }
     }
 
     private void drawCameraResult(Canvas c) {
