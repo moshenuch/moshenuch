@@ -1,3 +1,41 @@
+GPT c2 from reborn — native APK source v1.77.0 / HTML reference v6.343
+
+v1.77.0 — Full-Gallery capture and independent Android share-recipient audit
+
+- Preserve successful v1.76.0 Android 11 recording/MP4/JPEG/MediaStore
+  tests, Camera1 video and photo orientation, and Nokia Video Options.
+- Correct a capture bug when C2's private Gallery index reached its
+  150-entry limit. A new photo could be saved on Android but fail to
+  display its Nokia Photo result screen or appear in C2 Gallery.
+- For NEW camera captures, the Gallery now rotates out its oldest
+  INDEX entry when full, keeps the newly captured file indexed, and
+  never deletes device media merely to make index room. Duplicate
+  capture URIs are treated as already indexed.
+- Always display Photo result (Options > Save/Delete/Send) after a
+  successful photo save, even if Gallery indexing failed. A warning
+  is shown rather than losing the user's photo-result screen.
+- Late-completing video recordings use the same bounded capture index,
+  avoiding the 150-entry failure.
+- Add separate CI-only shareprobe Android APK with its own package
+  com.moshenuch.c2shareprobe (NOT embedded in the production C2 APK).
+  It registers as an image/jpeg ACTION_SEND receiver and attempts to
+  open EXTRA_STREAM from C2 using the propagated temporary URI grant.
+  It verifies JPEG SOI/EOI markers and logs PASS/FAIL without saving
+  or printing photo bytes.
+- Extend Android 11 photo smoke: after capture and public image
+  verification, open C2 Photo > Options > Send, select the independent
+  receiver from the system chooser, and assert recipient file access.
+  Retain share-ui.xml and share-receiver-log.txt diagnostics.
+- The recipient/emulator smoke remains a nonblocking post-publication
+  diagnostic. A chooser layout difference can produce an inconclusive
+  failure; results and screenshots must be examined before treating
+  it as an actual Android URI-permission failure.
+- External Oppo Gallery presentation and Send delivery remain
+  unverified on physical hardware. Camera video finalisation still
+  needs an independent Oppo/Appetize test.
+
+---
+
 GPT c2 from reborn — native APK source v1.76.0 / HTML reference v6.343
 
 v1.76.0 — Photo Send grants, public Gallery index verification and real JPEG smoke
