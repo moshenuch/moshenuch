@@ -19,6 +19,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The old v1.78.0 run remained stuck in apt-get, blocking subsequent
+    # release builds through the concurrency group. Bound the whole job too.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
