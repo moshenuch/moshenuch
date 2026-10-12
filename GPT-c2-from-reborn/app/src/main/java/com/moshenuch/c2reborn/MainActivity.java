@@ -354,8 +354,22 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Validate that the previously committed MediaStore/private photo is still readable. */
+    boolean capturedPhotoExists(Uri uri) {
+        if (uri == null) return false;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            return in != null && in.read() != -1;
+        } catch (Exception error) {
+            android.util.Log.w("C2Camera", "Captured photo no longer readable", error);
+            return false;
+        }
+    }
+
     void shareCapturedPhoto(Uri uri) {
-        if (uri == null) return;
+        if (!capturedPhotoExists(uri)) {
+            if (phoneView != null) phoneView.onCameraCaptureFailed("Photo missing from storage");
+            return;
+        }
         android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
         send.setType("image/jpeg");
         send.putExtra(android.content.Intent.EXTRA_STREAM, uri);
