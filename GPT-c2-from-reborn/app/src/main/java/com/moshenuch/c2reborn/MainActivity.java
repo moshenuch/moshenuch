@@ -220,6 +220,8 @@ public class MainActivity extends Activity {
     void finishNativeVideoCapture() {
         if (videoFinalising || cameraPreview == null || !cameraPreview.isRecording()) return;
         videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
+        final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
+        android.util.Log.i("C2Camera", "VIDEO_STOP queued on worker");
         final Uri pending = pendingNativeVideo;
         pendingNativeVideo = null;
         if (phoneView != null) phoneView.onNativeVideoSaving();
@@ -231,6 +233,9 @@ public class MainActivity extends Activity {
             } catch (Exception ex) {
                 android.util.Log.e("C2Camera", "MP4 finalisation failed", ex);
             }
+
+            android.util.Log.i("C2Camera", "VIDEO_STOP encoder finalised valid=" + valid
+                    + " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - finaliseStarted));
 
             // Camera1 camera ownership remains on the UI thread. MediaRecorder
             // must have stopped and released before we release the camera.
@@ -268,6 +273,9 @@ public class MainActivity extends Activity {
                 }
             }
 
+            android.util.Log.i("C2Camera", "VIDEO_SAVE result=" +
+                    (saved == null ? "failed" : (sharedPublished ? "shared" : "private")) +
+                    " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - finaliseStarted));
             final Uri finishedUri = saved;
             final boolean publishedToMovies = sharedPublished;
             final String error = failure;
