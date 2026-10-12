@@ -36,6 +36,8 @@ jobs:
           ! grep -q 'SDK_INT < 24) return source' "$src"
           grep -q "minSdk 23" GPT-c2-from-reborn/app/build.gradle
           grep -q "androidx.exifinterface:exifinterface:1.3.7" GPT-c2-from-reborn/app/build.gradle
+      - name: Audit camera and Gallery EXIF call sites
+        run: python3 GPT-c2-from-reborn/tools/audit_api23_exif_wiring.py
       - name: Upload draft APK for validation only
         uses: actions/upload-artifact@v4
         with:
