@@ -50,6 +50,24 @@ checks = {
         and 'chooser.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)' in activity
     ),
 
+    "Captured media rotates bounded C2 Gallery without deleting source file": (
+        "boolean addCaptured(boolean video, Uri uri)" in gallery
+        and "list.remove(oldest);" in gallery
+        and "return add(video, Collections.singletonList(uri)) > 0;" in gallery
+        and "boolean indexed = galleryStore.addCaptured(video, uri);" in view
+        and "showCapturedPhoto(uri);" in view
+        and "if (!indexed) showNotice(" in view
+    ),
+    "Late finalized video can be indexed after Gallery reaches capacity": (
+        "galleryStore.addCaptured(true, uri)" in view
+    ),
+    "Independent share receiver opens granted JPEG in separate package": (
+        (root / "shareprobe/src/main/java/com/moshenuch/c2shareprobe/ShareReceiverActivity.java").exists()
+        and "getContentResolver().openInputStream(stream)" in
+            (root / "shareprobe/src/main/java/com/moshenuch/c2shareprobe/ShareReceiverActivity.java").read_text(encoding="utf-8")
+        and "smoke_photo_emulator.sh" in
+            (root / "tools/run_emulator_smoke_suite.sh").read_text(encoding="utf-8")
+    ),
     "Private media delete is implemented": (
         'if (!"image".equals(category) && !"video".equals(category)) return 0;' in provider
         and 'file.isFile() && file.delete() ? 1 : 0' in provider
