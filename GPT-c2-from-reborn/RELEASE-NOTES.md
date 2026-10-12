@@ -1,3 +1,28 @@
+GPT c2 from reborn — native APK source v1.80.0 / HTML reference v6.343
+
+v1.80.0 — Repair Galaxy/Android emulator Gallery capacity fixture path
+
+- The v1.79.0 Android 11 run passed real C2 video Record > Stop,
+  MP4 H.264/audio decoding, native JPEG photo saving and independent
+  recipient-side Photo > Send. The 153-entry Gallery index regression
+  fixture failed BEFORE app launch: Android's run-as shell did not start
+  in the app-private data directory and could not create the relative
+  shared_prefs/c2_state.xml path.
+- Use the explicit app-owned path
+  /data/data/com.moshenuch.c2reborn/shared_prefs/c2_state.xml for
+  directory creation, fixture injection and readback. This affects
+  disposable CI emulator preferences only, never user data.
+- Test still seeds 153 synthetic legacy index entries, captures one
+  actual JPEG, checks exact 150-item Gallery index and oldest four
+  evictions, and verifies Nokia Photo result navigation.
+- Preserve the v1.78.0 full/over-capacity Gallery source fix and v1.79.0
+  bounded package-install and overall workflow timeouts.
+- The application camera/recorder/share behaviour is unchanged.
+- Do not claim the Gallery stress test passed until v1.80.0 emulator
+  logs confirm all assertions. Oppo/Appetize hardware checks remain open.
+
+---
+
 GPT c2 from reborn — native APK source v1.79.0 / HTML reference v6.343
 
 v1.79.0 — Bound Android emulator dependency installation
