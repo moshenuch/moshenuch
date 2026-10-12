@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private boolean videoSaveTimedOut;
     private volatile Thread videoFinaliserThread;
     private volatile String videoFinaliseStage = "idle";
+    private volatile String lastVideoFailureStage = "";
     private final Handler videoSaveHandler = new Handler(Looper.getMainLooper());
     // A hung native encoder cannot safely be forcibly released on the UI
     // thread. Recover Nokia navigation after 12s while keeping the worker
@@ -47,6 +48,7 @@ public class MainActivity extends Activity {
     private final Runnable videoStopTimeout = () -> {
         if (!videoStopWorkerRunning) return;
         videoSaveTimedOut = true;
+        lastVideoFailureStage = videoFinaliseStage;
         videoFinalising = false;
         android.util.Log.e("C2Camera", "VIDEO_STOP_TIMEOUT after 12 seconds stage=" +
                 videoFinaliseStage + " workerAlive=" +
@@ -207,6 +209,8 @@ public class MainActivity extends Activity {
 
     boolean isNativeVideoStopWorkerRunning() { return videoStopWorkerRunning; }
 
+    String lastNativeVideoFailureStage() { return lastVideoFailureStage; }
+
     void toggleNativeVideoCapture() {
         if (videoFinalising || videoStopWorkerRunning) {
             if (phoneView != null) phoneView.onCameraCaptureFailed(
@@ -258,6 +262,7 @@ public class MainActivity extends Activity {
         videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
         videoStopWorkerRunning = true;
         videoSaveTimedOut = false;
+        lastVideoFailureStage = "";
         videoFinaliseStage = "recorder.stop";
         videoSaveHandler.postDelayed(videoStopTimeout, 12_000L);
         final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
@@ -332,6 +337,7 @@ public class MainActivity extends Activity {
             final Uri finishedUri = saved;
             final boolean publishedToMovies = sharedPublished;
             final String error = failure;
+            final String failedAtStage = valid ? videoFinaliseStage : "recorder.stop";
             runOnUiThread(() -> {
                 videoSaveHandler.removeCallbacks(videoStopTimeout);
                 boolean recoveredFromTimeout = videoSaveTimedOut;
@@ -342,6 +348,7 @@ public class MainActivity extends Activity {
                 videoFinaliserThread = null;
                 if (phoneView == null || isFinishing() || isDestroyed()) return;
                 if (finishedUri == null) {
+                    if (!recoveredFromTimeout) lastVideoFailureStage = failedAtStage;
                     phoneView.onNativeVideoFinalisationFailed(
                             error == null ? "Video save failed" : error);
                 } else if (recoveredFromTimeout) {
@@ -355,6 +362,7 @@ public class MainActivity extends Activity {
         }, "C2-video-finalise");
         videoFinaliserThread = worker;
         worker.setUncaughtExceptionHandler((thread, error) -> {
+            lastVideoFailureStage = videoFinaliseStage;
             android.util.Log.e("C2Camera", "VIDEO_STOP_UNCAUGHT stage=" +
                     videoFinaliseStage, error);
             runOnUiThread(() -> {
