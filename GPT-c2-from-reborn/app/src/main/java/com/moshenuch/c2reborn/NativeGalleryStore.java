@@ -98,6 +98,30 @@ final class NativeGalleryStore {
         return count;
     }
 
+    /**
+     * Camera captures are more important than the bounded list of manually
+     * imported items. Once the 150-row C2 index is full, rotate out only
+     * its oldest entry; NEVER delete the actual device photo/video file.
+     * Duplicate captures remain indexed and still open their result view.
+     */
+    boolean addCaptured(boolean video, Uri uri) {
+        if (uri == null || !"content".equals(uri.getScheme())) return false;
+        String value = uri.toString();
+        ArrayList<Entry> list = video ? videos : images;
+        for (Entry entry : list)
+            if (value.equals(entry.uri)) return true;
+        if (list.size() >= 150) {
+            int oldest = 0;
+            for (int i = 1; i < list.size(); i++) {
+                if (list.get(i).addedAt < list.get(oldest).addedAt)
+                    oldest = i;
+            }
+            list.remove(oldest);
+            persist(video);
+        }
+        return add(video, Collections.singletonList(uri)) > 0;
+    }
+
     int sortMode(boolean video) {
         return prefs.getInt(video ? "gallery_sort_video_v1" : "gallery_sort_image_v1", 2);
     }
