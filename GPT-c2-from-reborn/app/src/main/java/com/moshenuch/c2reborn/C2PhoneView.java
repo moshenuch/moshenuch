@@ -5421,7 +5421,7 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Open","Add from phone","Details","Sort",
                     "Remove from gallery","Clear folder","Memory status"};
         else if ("galleryPreview".equals(page))
-            optionItems = new String[]{"Details","Remove from gallery","Add from phone"};
+            optionItems = new String[]{"Send","Details","Remove from gallery","Add from phone"};
         else if ("gallerySort".equals(page))
             optionItems = new String[]{"Select"};
         else if ("media".equals(page))
@@ -6315,6 +6315,12 @@ public class C2PhoneView extends View {
                 || "galleryVideos".equals(page) || "galleryPreview".equals(page)) {
             boolean video = "galleryVideos".equals(page);
             if ("Open".equals(choice)) openSelected();
+            else if ("Send".equals(choice) && "galleryPreview".equals(page)) {
+                NativeGalleryStore.Entry selectedPhoto = findGalleryPreviewEntry();
+                if (selectedPhoto != null && getContext() instanceof MainActivity)
+                    ((MainActivity) getContext()).shareCapturedPhoto(Uri.parse(selectedPhoto.uri));
+                else showNotice("Photo unavailable");
+            }
             else if ("View photos".equals(choice)) openGalleryFolder(false);
             else if ("View videos".equals(choice)) openGalleryFolder(true);
             else if ("Add from phone".equals(choice)) {
