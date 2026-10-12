@@ -4861,7 +4861,12 @@ public class C2PhoneView extends View {
     private Bitmap capturedPhotoPreview;
 
     private String capturedPhotoSaveNotice() {
-        return capturedPhotoUri != null && "media".equals(capturedPhotoUri.getAuthority())
+        if (capturedPhotoUri == null || !(getContext() instanceof MainActivity))
+            return "No captured photo";
+        if (!((MainActivity) getContext()).capturedPhotoExists(capturedPhotoUri))
+            return "Photo missing from storage";
+        // Capture already committed the file; Save verifies it did not disappear.
+        return "media".equals(capturedPhotoUri.getAuthority())
                 ? "Photo saved to Pictures" : "Photo saved privately";
     }
     private void showCapturedPhoto(Uri uri) {
