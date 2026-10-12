@@ -998,6 +998,7 @@ public class MainActivity extends Activity {
                     status.setText("Cannot play video");
                 }
             });
+            final boolean[] renderedFrame = {false};
             player.setOnPreparedListener(mp -> {
                 if (videoPlayerView != player) return;
                 if (!player.getHolder().getSurface().isValid()) {
@@ -1019,6 +1020,7 @@ public class MainActivity extends Activity {
                 });
                 mp.setOnInfoListener((ignored, what, extra) -> {
                     if (what == android.media.MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                        renderedFrame[0] = true;
                         android.util.Log.i("C2Gallery", "VIDEO_FIRST_FRAME_RENDERED");
                         if (videoPlayerView == player) status.setText("Playing - video frame ready");
                     }
@@ -1030,7 +1032,13 @@ public class MainActivity extends Activity {
                         "Playing - no picture size");
             });
             player.setOnCompletionListener(mp -> {
-                if (videoPlayerView == player) status.setText("Finished - Play to replay");
+                if (videoPlayerView == player) {
+                    if (renderedFrame[0]) status.setText("Finished - Play to replay");
+                    else {
+                        status.setText("Finished - no video frame confirmed");
+                        android.util.Log.w("C2Gallery", "VIDEO_COMPLETED_NO_FIRST_FRAME");
+                    }
+                }
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 if (videoPlayerView == player) {
