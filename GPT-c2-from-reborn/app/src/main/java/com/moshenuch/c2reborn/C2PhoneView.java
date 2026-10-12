@@ -4870,7 +4870,18 @@ public class C2PhoneView extends View {
         p.setTypeface(fontRegular);
         p.setTextSize(13);
         p.setColor(Color.WHITE);
-        drawWrappedText(c, videoErrorReason, 15, 112, 207, 18, 5);
+        drawWrappedText(c, videoErrorReason, 15, 112, 207, 18, 4);
+        // Report the Stop stage in Nokia's own screen: a photo of this
+        // page is enough for a first-pass Oppo/Appetize audit without ADB.
+        String failedStage = getContext() instanceof MainActivity ?
+                ((MainActivity) getContext()).lastNativeVideoFailureStage() : "";
+        if (failedStage != null && !failedStage.isEmpty()) {
+            p.setColor(Color.rgb(175, 210, 235));
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setTextSize(12);
+            c.drawText("Stage: " + failedStage, 15, 190, p);
+            p.setColor(Color.WHITE);
+        }
         boolean blocked = getContext() instanceof MainActivity &&
                 ((MainActivity) getContext()).isNativeVideoStopWorkerRunning();
         drawWrappedText(c, blocked ?
