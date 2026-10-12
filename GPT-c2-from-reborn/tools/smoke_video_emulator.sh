@@ -42,8 +42,16 @@ tap() {
   adb shell input tap "$px" "$py"
   sleep 0.8
 }
-adb shell pm grant "$package" android.permission.CAMERA
-adb shell pm grant "$package" android.permission.RECORD_AUDIO
+# MainActivity requests SMS, Contacts and Phone permissions at startup.
+# Grant them for the isolated emulator and restart so no runtime permission
+# sheet covers Nokia's on-screen keypad during the video probe.
+for permission in READ_CONTACTS WRITE_CONTACTS READ_SMS SEND_SMS RECEIVE_SMS \
+                  CALL_PHONE ANSWER_PHONE_CALLS READ_CALL_LOG CAMERA RECORD_AUDIO; do
+  adb shell pm grant "$package" "android.permission.$permission" 2>/dev/null || true
+done
+adb shell am force-stop "$package"
+adb shell am start -W -n "$package/.MainActivity" >> "$result"
+sleep 2
 adb logcat -c || true
 
 # Fresh install starts with Home's Menu on centre OK.
