@@ -57,6 +57,16 @@ adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
 adb logcat -c || true
+# Detect host/emulator System UI hangs before coordinate navigation. Such a
+# system-level ANR blocks every tap and must not be reported as a C2 camera bug.
+adb shell uiautomator dump /sdcard/c2-photo-preflight.xml >/dev/null 2>&1 || true
+adb pull /sdcard/c2-photo-preflight.xml "$report_dir/photo-preflight.xml" >/dev/null 2>&1 || true
+if [[ -f "$report_dir/photo-preflight.xml" ]] && grep -Eqi "System UI isn.t responding|System UI is not responding" "$report_dir/photo-preflight.xml"; then
+  echo "FAIL emulator infrastructure: System UI ANR blocks Nokia navigation" | tee -a "$result"
+  adb shell screencap -p /sdcard/c2-photo-systemui-anr.png >/dev/null 2>&1 || true
+  adb pull /sdcard/c2-photo-systemui-anr.png "$report_dir/photo-systemui-anr.png" >/dev/null 2>&1 || true
+  exit 1
+fi
 adb shell 'ls -1 /sdcard/Pictures/"C2 Reborn"/*.jpg 2>/dev/null' |
   tr -d '\r' | sort > "$report_dir/photo-before.txt" || true
 
