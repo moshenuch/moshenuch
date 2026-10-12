@@ -11,10 +11,11 @@ on:
 permissions:
   contents: write
 
-# Do not allow simultaneous builds to race on the public release assets.
+# Serialise release publication. Replace superseded runs so a stalled
+# emulator dependency step cannot hold up all newer APKs indefinitely.
 concurrency:
   group: c2-native-apk-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
