@@ -46,6 +46,10 @@ checks = {
         and "if (videoSaving())" in phone
     ),
     "surface loss finalises video": "finishNativeVideoCapture();" in preview,
+    "SurfaceChanged cannot restart preview while encoder is stopping": (
+        "if (camera != null && started && !recording && !stopping)" in preview
+        and "if (recording || stopping)" in preview
+    ),
     "video microphone permission declared": "android.permission.RECORD_AUDIO" in manifest,
     "video microphone runtime request": "REQ_VIDEO_MIC" in activity,
     "native record and stop actions": "host.toggleNativeVideoCapture();" in phone,
