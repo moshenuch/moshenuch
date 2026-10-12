@@ -325,12 +325,15 @@ public class MainActivity extends Activity {
                     android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
             String heightText = metadata.extractMetadata(
                     android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
+            String hasAudio = metadata.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO);
             long durationMs = durationText == null ? 0L : Long.parseLong(durationText);
             int width = widthText == null ? 0 : Integer.parseInt(widthText);
             int height = heightText == null ? 0 : Integer.parseInt(heightText);
             boolean valid = durationMs >= 500L && width > 0 && height > 0;
             android.util.Log.i("C2Camera", "VIDEO_VALIDATE result=" + valid +
-                    " durationMs=" + durationMs + " dimensions=" + width + "x" + height);
+                    " durationMs=" + durationMs + " dimensions=" + width + "x" + height +
+                    " hasAudio=" + hasAudio);
             return valid;
         } catch (Exception ex) {
             android.util.Log.w("C2Camera", "MP4 validation failed", ex);
