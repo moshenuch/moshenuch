@@ -200,7 +200,10 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
                 success = true;
             }
         } catch (RuntimeException ex) {
-            Log.w("C2Camera", "Video was not finalised", ex);
+            // Includes the complete MediaRecorder.stop Java exception/stack
+            // in Appetize or an Oppo adb logcat capture.
+            Log.e("C2Camera", "VIDEO_STOP_THROW " +
+                    ex.getClass().getName() + ": " + ex.getMessage(), ex);
         } finally {
             if (active != null) {
                 try { active.reset(); } catch (RuntimeException ignored) { }
