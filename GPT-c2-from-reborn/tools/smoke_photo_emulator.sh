@@ -42,6 +42,13 @@ tap() {
   local name="$1" px py
   read -r px py <<< "${points[$2]}"
   echo "TAP $name: $px,$py" >> "$result"
+  # Stop rather than silently tapping through a frozen system modal.
+  adb shell uiautomator dump /sdcard/c2-before-tap.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/c2-before-tap.xml "$report_dir/before-tap.xml" >/dev/null 2>&1 || true
+  if [[ -f "$report_dir/before-tap.xml" ]] && grep -Eqi "System UI isn.t responding|System UI is not responding" "$report_dir/before-tap.xml"; then
+    echo "FAIL emulator infrastructure: System UI ANR before tap $name" | tee -a "$result"
+    exit 1
+  fi
   adb shell input tap "$px" "$py"
   sleep 1
   # Preserve the actual Nokia screen at each navigation step. Without these
