@@ -5094,15 +5094,17 @@ public class C2PhoneView extends View {
     }
 
     private void openGalleryFolder(boolean video) {
+        // Enter the Nokia Gallery even when empty: never launch Android Files
+        // merely because no entries have been indexed.
         go(video ? "galleryVideos" : "galleryImages");
-        if (galleryStore.entries(video).isEmpty())
-            pickGalleryFiles(video);
     }
 
     private void pickGalleryFiles(boolean video) {
-        if (getContext() instanceof MainActivity)
-            ((MainActivity) getContext()).requestGalleryFiles(video);
-        else showNotice("Android file picker not available");
+        // No stock ACTION_OPEN_DOCUMENT screen is permitted in Nokia Gallery.
+        // Recorded clips are added automatically through onCameraCaptureCompleted.
+        // A native selectable MediaStore catalogue is a separate follow-up.
+        showNotice(video ? "Use Video camera to add clips" :
+                "Use Camera to add photos");
     }
 
     /** Only called after explicit user selection in Android's document picker. */
