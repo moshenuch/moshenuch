@@ -1,3 +1,50 @@
+GPT c2 from reborn — native APK source v1.76.0 / HTML reference v6.343
+
+v1.76.0 — Photo Send grants, public Gallery index verification and real JPEG smoke
+
+- Keep the v1.75.0 Camera1 recorder and independent video MP4
+  validation untouched; its GitHub Android 11 emulator produces a
+  finalised H.264/AMR-NB MP4. Oppo/Appetize recording still requires
+  independent confirmation.
+- Correct Android Sharesheet photo dispatch: provide the same captured
+  JPEG content URI via both Intent.EXTRA_STREAM and ClipData, with
+  FLAG_GRANT_READ_URI_PERMISSION on both the send and chooser intents.
+  This propagates temporary read access to the receiving application
+  even when the JPEG is held by C2's private ContentProvider.
+- After writing an Android 10+ JPEG to Pictures/C2 Reborn and clearing
+  IS_PENDING, query the resulting MediaStore image row. Confirm the
+  image is indexed as nonpending, size >128 bytes and MIME image/jpeg
+  before dropping C2's recoverable private photo copy. If the public
+  row is missing or unreadable, remove the failed public entry and
+  retain the C2-private copy, with the existing warning.
+- New post-release Android 11 still-photo smoke navigates native C2
+  Home > Menu > Media > Camera, captures a real emulated camera JPEG,
+  checks that a NEW file appears under Pictures/C2 Reborn, pulls that
+  JPEG, verifies JPEG markers, decodes an actual frame with FFmpeg and
+  confirms C2 logged PHOTO_INDEX indexed=true pending=0.
+- The new photo and existing video probes retain separate logcat,
+  screenshot and results files, and do not block release of an APK
+  already built and download-verified when emulator hardware fails.
+- CI statically checks both permission-grant propagation and the
+  MediaStore row verification; photo smoke shell syntax is checked.
+- An app-visible nonpending MediaStore row demonstrates public image
+  indexing, not whether every OEM Photos/Gallery app has refreshed.
+  Oppo Gallery display and recipient app opening a shared image
+  remain independent manual acceptance tests.
+
+No-PC Oppo test:
+1. Install exact v1.76.0 APK from the versioned GitHub release.
+2. In C2 > Media > Camera capture a photo, then press Save.
+3. Open Oppo Gallery/Photos; locate it. If absent, check Files >
+   Pictures > C2 Reborn. It should persist and be viewable.
+4. Back in C2, on the Photo result choose Options > Send; select a
+   compatible application and confirm the JPEG preview/attachment
+   loads in that receiving app. Cancel sending if you only want to test.
+5. Do not conclude Send works merely because Android Sharesheet opens;
+   check that the receiving app can actually read the image.
+
+---
+
 GPT c2 from reborn — native APK source v1.75.0 / HTML reference v6.343
 
 v1.75.0 — Enforce complete, independent emulated MP4/audio/video verification
