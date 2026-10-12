@@ -11,8 +11,8 @@ android {
         minSdk 23
         targetSdk 34
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        versionCode 19500
-        versionName "1.95.0"
+        versionCode 19600
+        versionName "1.96.0"
     }
 
     buildTypes {
