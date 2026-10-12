@@ -1,3 +1,48 @@
+GPT c2 from reborn — native APK source v1.81.0 / HTML reference v6.343
+
+v1.81.0 — Share native video Stop diagnostic from Nokia failure screen without a PC
+
+- The v1.80.0 Android 11 build and Gallery capacity smoke completed with
+  success. A disposable fixture seeded 153 old Gallery index entries,
+  followed by a real JPEG capture; the saved photo appeared in the
+  Nokia Photo result, exactly 150 index entries remained, and the
+  four oldest references were removed without deleting image files.
+- Video Stop, MP4 validation, shared Movies publication and recipient-side
+  photo sharing also passed in GitHub Android 11 CI.
+- Actual Appetize video-finalisation failure and real Oppo sound/MP4
+  compatibility remain UNVERIFIED; these environment-specific results
+  are not inferred from GitHub's emulator success.
+
+User-facing addition:
+- Nokia Video recorder > Recording failed now has **Report / Retry / Back**
+  softkeys. Report is a user-initiated ACTION_SEND text/plain sharesheet.
+- The report includes the installed native APK version, manufacturer/model,
+  Android/API, outcome, failed stage, exception class, up to 30 Java
+  exception frames or a snapshot of the stalled Stop-worker stack, and
+  whether the encoder worker remained running at the time of capture.
+- Exception stacks from MediaRecorder.stop() are kept temporarily
+  in app memory so users can share them on an Oppo without USB/ADB.
+- Reports contain NO photo/video bytes, recording URIs, SMS, contacts,
+  account data or bulk logcat; no report is sent automatically.
+- The 12-second stalled-stop recovery, Nokia error page, Retry and Back
+  remain active; a blocked worker still prevents unsafe camera reuse.
+- CI static auditing asserts the report action and privacy-limited data;
+  Android compilation is required before publishing v1.81.0.
+
+Oppo first-pass recording test (no PC):
+1. Install the exact versioned v1.81.0 APK when the release is published.
+2. C2 > Media > Video camera > Record for about 10 seconds with speech.
+3. Press Stop and check if C2 saves the clip to Movies/C2 Reborn and
+   whether Oppo Gallery plays the moving picture and audible speech.
+4. If Recording failed appears, press left softkey Report, select a text
+   recipient such as email/Notes and save or send the diagnostic for review.
+   Press Back to restore C2 Media; do not repeatedly retry while the
+   encoder is busy.
+5. If no failure screen appears, record whether the app remained on Saving
+   beyond 15 seconds. Only the user can reproduce Oppo/Appetize behaviour.
+
+---
+
 GPT c2 from reborn — native APK source v1.80.0 / HTML reference v6.343
 
 v1.80.0 — Repair Galaxy/Android emulator Gallery capacity fixture path
