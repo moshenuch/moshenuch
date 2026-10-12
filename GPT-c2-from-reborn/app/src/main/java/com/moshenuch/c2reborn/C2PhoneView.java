@@ -2214,9 +2214,12 @@ public class C2PhoneView extends View {
             return new String[]{"Options", "Select", "Exit"};
         }
         if ("cameraViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
-        if ("videoViewfinder".equals(page)) return new String[]{
-                videoRecording() ? "" : "Options", videoRecording() ? "Stop" : "Record",
-                videoRecording() ? "Stop" : "Back"};
+        if ("videoViewfinder".equals(page)) {
+            if (videoSaving()) return new String[]{"", "Saving...", ""};
+            return new String[]{videoRecording() ? "" : "Options",
+                    videoRecording() ? "Stop" : "Record",
+                    videoRecording() ? "Stop" : "Back"};
+        }
         if ("cameraResult".equals(page)) return new String[]{"Options", "Save", "Back"};
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
@@ -3849,6 +3852,7 @@ public class C2PhoneView extends View {
     }
 
     public boolean handleAndroidBack() {
+        if (videoSaving()) return true;
         if (videoRecording()) {
             ((MainActivity) getContext()).finishNativeVideoCapture();
             return true;
@@ -3880,6 +3884,10 @@ public class C2PhoneView extends View {
 
     private void press(String key) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        if ("videoViewfinder".equals(page) && videoSaving()) {
+            showNotice("Saving video...");
+            return;
+        }
 
         if (confirmOpen) {
             if ("LSK".equals(key) || "OK".equals(key)) executeConfirmed();
@@ -4776,6 +4784,16 @@ public class C2PhoneView extends View {
                 ((MainActivity) getContext()).isNativeVideoRecording();
     }
 
+    private boolean videoSaving() {
+        return getContext() instanceof MainActivity &&
+                ((MainActivity) getContext()).isNativeVideoFinalising();
+    }
+
+    public void onNativeVideoSaving() {
+        showNotice("Saving video...");
+        invalidate();
+    }
+
     public void onNativeVideoRecordingChanged(boolean recording) {
         showNotice(recording ? "Recording video - press Stop to save" : "Recording stopped");
         invalidate();
@@ -4807,7 +4825,8 @@ public class C2PhoneView extends View {
 
     private void drawNokiaCameraViewfinder(Canvas c) {
         boolean video = "videoViewfinder".equals(page);
-        drawStatus(c, video ? (videoRecording() ? "Video recording" : "Video recorder") : "Camera");
+        drawStatus(c, video ? (videoSaving() ? "Saving video" :
+                (videoRecording() ? "Video recording" : "Video recorder")) : "Camera");
         p.setColor(Color.rgb(19, 26, 30));
         c.drawRect(6, 45, 234, 253, p);
         p.setColor(Color.rgb(83, 105, 110));
@@ -4823,7 +4842,9 @@ public class C2PhoneView extends View {
         p.setTypeface(fontRegular);
         p.setTextSize(12);
         c.drawText("Live preview unavailable", 120, 141, p);
-        c.drawText(video ? (videoRecording() ? "Press Stop to save video" : "Press Record to start") : "Check camera permission", 120, 161, p);
+        c.drawText(video ? (videoSaving() ? "Saving video..." :
+                (videoRecording() ? "Press Stop to save video" : "Press Record to start")) :
+                "Check camera permission", 120, 161, p);
         p.setTextSize(13);
         c.drawText(video ? "Video mode" : "Photo mode", 120, 228, p);
     }
@@ -5155,7 +5176,10 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Assign","Restore defaults","Help"};
         else if ("shortcutAssign".equals(page)) optionItems = new String[]{"Assign"};
         else if ("demoTools".equals(page)) optionItems = new String[]{"Select","What is included"};
-        else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) optionItems = new String[]{"Capture","Switch mode","Help"};
+        else if ("cameraViewfinder".equals(page))
+            optionItems = new String[]{"Capture","Switch mode","Help"};
+        else if ("videoViewfinder".equals(page))
+            optionItems = new String[]{"Record","Switch to camera","Video clips","Help"};
         else if ("cameraResult".equals(page)) optionItems = new String[]{"Save","Delete","Send"};
         else if ("menuViewPicker".equals(page)) optionItems = new String[]{"Select"};
         else if ("menu".equals(page)) optionItems = new String[]{"Main menu view","Organise","Help"};
@@ -5553,16 +5577,29 @@ public class C2PhoneView extends View {
             return;
         }
 
-        if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
+        if ("cameraViewfinder".equals(page)) {
             if ("Capture".equals(choice)) {
-                final boolean isVideo = "videoViewfinder".equals(page);
-                // Options hides and releases the preview: restore it before capturing.
-                post(() -> launchHardwareCapture(isVideo));
-            }
-            else if ("Switch mode".equals(choice))
-                go("cameraViewfinder".equals(page) ? "videoViewfinder" : "cameraViewfinder");
+                // Options temporarily hides the preview; allow it to resume.
+                postDelayed(() -> {
+                    if ("cameraViewfinder".equals(page)) launchHardwareCapture(false);
+                }, 250L);
+            } else if ("Switch mode".equals(choice)) go("videoViewfinder");
             else if ("Help".equals(choice))
-                showNotice("Camera and video are recorded inside C2");
+                showNotice("Photos are saved in C2 and Pictures");
+            return;
+        }
+        if ("videoViewfinder".equals(page)) {
+            if ("Record".equals(choice)) {
+                // The preview was released while Options was open. Reopen
+                // the surface before starting MediaRecorder.
+                postDelayed(() -> {
+                    if (isInVideoViewfinder() && !videoRecording() && !videoSaving())
+                        launchHardwareCapture(true);
+                }, 250L);
+            } else if ("Switch to camera".equals(choice)) go("cameraViewfinder");
+            else if ("Video clips".equals(choice)) go("galleryVideos");
+            else if ("Help".equals(choice))
+                showNotice("Record, then Stop to save video");
             return;
         }
         if ("settings".equals(page) && "Demo data (debug)".equals(choice)) {
