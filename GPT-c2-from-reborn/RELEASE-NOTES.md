@@ -1,3 +1,35 @@
+GPT c2 from reborn — native APK source v1.78.0 / HTML reference v6.343
+
+v1.78.0 — Camera Gallery capacity recovery and Android emulator saturation audit
+
+- v1.77.0 Android 11 CI had successfully verified native camera MP4/JPEG
+  publication and decoding, and independently delivered Photo > Send to
+  the separate C2 Share Probe receiver, which opened the JPEG bytes.
+- Correct Gallery capture insertion if saved preferences contain more
+  than the 150-row index limit (e.g., older, imported, or interrupted
+  state). Repeatedly discard the oldest index rows until a new capture
+  fits; persist the final index once after insertion. Do NOT delete
+  photos or videos from device storage while pruning the index.
+- Add a non-sensitive C2Gallery CAPTURE_RESULT marker indicating that
+  Nokia's photo result actually opened, including index success and
+  current image count. No media bytes or URIs are logged.
+- New post-release emulator capacity audit uses 153 SYNTHETIC seeded
+  content-URI Gallery entries, then captures one REAL JPEG using the
+  native camera. It asserts exactly 150 final index entries, oldest
+  four seeded rows evicted, all 149 newer rows retained, the new
+  media:// JPEG URI indexed, a newly published shared JPEG in Pictures,
+  and the Nokia Photo result page shown after capture.
+- The fixture modifies only disposable CI emulator shared preferences.
+  It does NOT claim to have performed 153 actual camera captures.
+- Capture and share smoke tests remain separate; optional emulator
+  hardware tests issue warnings and retain logs rather than blocking
+  release of an otherwise signed and byte-verified APK.
+- Physical Oppo Gallery visibility, real-app sharing and voice-bearing
+  video capture remain independent acceptance tests. v1.78.0 is not
+  proof that the former Appetize video encoder stall is resolved.
+
+---
+
 GPT c2 from reborn — native APK source v1.77.0 / HTML reference v6.343
 
 v1.77.0 — Full-Gallery capture and independent Android share-recipient audit
