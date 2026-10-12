@@ -1093,6 +1093,7 @@ public class MainActivity extends Activity {
         hideSystemUi();
         if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
         if (phoneView != null) phoneView.onPermissionsChanged();
+        if (phoneView != null) phoneView.refreshVisibleVideoLibrary();
         observeSmsWhileVisible();
         if (phoneView != null && phoneView.isInCameraViewfinder()) {
             showNativeCameraPreview(true);
