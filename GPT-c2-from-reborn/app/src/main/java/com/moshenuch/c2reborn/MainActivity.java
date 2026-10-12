@@ -38,6 +38,8 @@ public class MainActivity extends Activity {
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
     private boolean videoSaveTimedOut;
+    private volatile Thread videoFinaliserThread;
+    private volatile String videoFinaliseStage = "idle";
     private final Handler videoSaveHandler = new Handler(Looper.getMainLooper());
     // A hung native encoder cannot safely be forcibly released on the UI
     // thread. Recover Nokia navigation after 12s while keeping the worker
@@ -46,7 +48,18 @@ public class MainActivity extends Activity {
         if (!videoStopWorkerRunning) return;
         videoSaveTimedOut = true;
         videoFinalising = false;
-        android.util.Log.e("C2Camera", "VIDEO_STOP_TIMEOUT after 12 seconds");
+        android.util.Log.e("C2Camera", "VIDEO_STOP_TIMEOUT after 12 seconds stage=" +
+                videoFinaliseStage + " workerAlive=" +
+                (videoFinaliserThread != null && videoFinaliserThread.isAlive()));
+        Thread stuck = videoFinaliserThread;
+        if (stuck != null) {
+            StackTraceElement[] frames = stuck.getStackTrace();
+            StringBuilder stack = new StringBuilder("VIDEO_STOP_WORKER_STACK stage=")
+                    .append(videoFinaliseStage);
+            for (int i = 0; i < Math.min(frames.length, 30); i++)
+                stack.append("\\n    at ").append(frames[i].toString());
+            android.util.Log.e("C2Camera", stack.toString());
+        }
         // Hide the SurfaceView without synchronously touching the camera.
         // An abandoned preview must not paint over the restored Nokia menu.
         if (cameraPreview != null) cameraPreview.setVisibility(View.GONE);
@@ -192,6 +205,8 @@ public class MainActivity extends Activity {
 
     boolean isNativeVideoFinalising() { return videoFinalising; }
 
+    boolean isNativeVideoStopWorkerRunning() { return videoStopWorkerRunning; }
+
     void toggleNativeVideoCapture() {
         if (videoFinalising || videoStopWorkerRunning) {
             if (phoneView != null) phoneView.onCameraCaptureFailed(
@@ -243,6 +258,7 @@ public class MainActivity extends Activity {
         videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
         videoStopWorkerRunning = true;
         videoSaveTimedOut = false;
+        videoFinaliseStage = "recorder.stop";
         videoSaveHandler.postDelayed(videoStopTimeout, 12_000L);
         final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
         android.util.Log.i("C2Camera", "VIDEO_STOP queued on worker");
@@ -253,14 +269,18 @@ public class MainActivity extends Activity {
         Thread worker = new Thread(() -> {
             boolean valid = false;
             try {
+                android.util.Log.i("C2Camera", "VIDEO_STOP_BEGIN thread=" +
+                        Thread.currentThread().getName());
                 valid = cameraPreview.stopRecording();
             } catch (Exception ex) {
-                android.util.Log.e("C2Camera", "MP4 finalisation failed", ex);
+                android.util.Log.e("C2Camera", "VIDEO_STOP_THROW class=" +
+                        ex.getClass().getSimpleName() + " message=" + ex.getMessage(), ex);
             }
 
             android.util.Log.i("C2Camera", "VIDEO_STOP encoder finalised valid=" + valid
                     + " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - finaliseStarted));
 
+            videoFinaliseStage = "camera.release";
             // Camera1 camera ownership remains on the UI thread. MediaRecorder
             // must have stopped and released before we release the camera.
             runOnUiThread(() -> {
@@ -278,6 +298,7 @@ public class MainActivity extends Activity {
                 failure = "Video recording too short or interrupted";
             } else {
                 try {
+                    videoFinaliseStage = "private-copy";
                     Uri privateCopy = C2MediaProvider.complete(this, pending, true, null);
                     if (privateCopy == null) {
                         failure = "Unable to save recorded video";
@@ -285,6 +306,7 @@ public class MainActivity extends Activity {
                         deleteCapturedPhoto(privateCopy);
                         failure = "Video could not be played; recording discarded";
                     } else {
+                        videoFinaliseStage = "media-store";
                         Uri shared = publishVideoToMovies(privateCopy);
                         sharedPublished = shared != null;
                         if (sharedPublished) {
@@ -312,9 +334,12 @@ public class MainActivity extends Activity {
                 videoStopWorkerRunning = false;
                 videoFinalising = false;
                 videoSaveTimedOut = false;
+                videoFinaliseStage = "idle";
+                videoFinaliserThread = null;
                 if (phoneView == null || isFinishing() || isDestroyed()) return;
                 if (finishedUri == null) {
-                    onNativePhotoFailed(error == null ? "Video save failed" : error);
+                    phoneView.onNativeVideoFinalisationFailed(
+                            error == null ? "Video save failed" : error);
                 } else if (recoveredFromTimeout) {
                     phoneView.onNativeVideoSavedAfterTimeout(finishedUri);
                 } else {
@@ -324,6 +349,21 @@ public class MainActivity extends Activity {
                     phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
             });
         }, "C2-video-finalise");
+        videoFinaliserThread = worker;
+        worker.setUncaughtExceptionHandler((thread, error) -> {
+            android.util.Log.e("C2Camera", "VIDEO_STOP_UNCAUGHT stage=" +
+                    videoFinaliseStage, error);
+            runOnUiThread(() -> {
+                videoSaveHandler.removeCallbacks(videoStopTimeout);
+                videoStopWorkerRunning = false;
+                videoFinalising = false;
+                videoFinaliserThread = null;
+                videoFinaliseStage = "failed";
+                if (cameraPreview != null) cameraPreview.setVisibility(View.GONE);
+                if (phoneView != null && !isFinishing() && !isDestroyed())
+                    phoneView.onNativeVideoFinalisationFailed("Recorder stopped unexpectedly");
+            });
+        });
         worker.start();
     }
 
