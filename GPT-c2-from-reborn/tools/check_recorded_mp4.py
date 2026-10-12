@@ -59,9 +59,8 @@ def validate(path):
     print(f"PASS complete ISO BMFF MP4 ({size} bytes); "
           f"top-level atoms: {', '.join(kinds)}")
 
-    if not shutil.which("ffprobe"):
-        print("WARN ffprobe unavailable: streams and playback not checked")
-        return
+    if not shutil.which("ffprobe") or not shutil.which("ffmpeg"):
+        raise ValueError("ffprobe and ffmpeg are required for MP4 stream/decode validation")
 
     probe = json.loads(run([
         "ffprobe", "-v", "error", "-show_streams", "-show_format",
@@ -81,14 +80,11 @@ def validate(path):
           f"{video[0].get('width')}x{video[0].get('height')}; "
           f"audio: {audio[0].get('codec_name')}; duration: {duration:.2f}s")
 
-    if shutil.which("ffmpeg"):
-        run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
-             "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"])
-        run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
-             "-map", "0:a:0", "-t", "1", "-f", "null", "-"])
-        print("PASS ffmpeg decoded one video frame and one second of audio")
-    else:
-        print("WARN ffmpeg unavailable: decode check skipped")
+    run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
+         "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"])
+    run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
+         "-map", "0:a:0", "-t", "1", "-f", "null", "-"])
+    print("PASS ffmpeg decoded one video frame and one second of audio")
     print("NOTE a decoded audio track can still be silent in an emulator.")
 
 
