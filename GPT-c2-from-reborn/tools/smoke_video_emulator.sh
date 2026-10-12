@@ -62,6 +62,11 @@ tap "Open Media" 0
 tap "Select Video camera row" 2
 tap "Open Video camera" 0
 sleep 3
+# Do not mistake a clip left from a previous run for a newly recorded video.
+# On an isolated emulator this is usually empty, but the assertion is useful
+# if the test script is reused against a persistent emulator/device.
+adb shell 'ls -1 /sdcard/Movies/"C2 Reborn"/*.mp4 2>/dev/null' |
+  tr -d '\r' | sort > "$report_dir/video-before.txt" || true
 tap "Record" 0
 sleep 8
 tap "Stop" 0
@@ -69,7 +74,8 @@ tap "Stop" 0
 # Stop/MediaStore publication is asynchronous. Check up to 35 seconds.
 found=""
 for i in $(seq 1 35); do
-  found="$(adb shell 'ls -1 /sdcard/Movies/"C2 Reborn"/*.mp4 2>/dev/null' | tr -d '\r' | head -n1 || true)"
+  found="$(adb shell 'ls -1 /sdcard/Movies/"C2 Reborn"/*.mp4 2>/dev/null' |
+    tr -d '\r' | grep -Fvx -f "$report_dir/video-before.txt" | head -n1 || true)"
   [[ -n "$found" ]] && break
   sleep 1
 done
