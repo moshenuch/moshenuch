@@ -1,3 +1,30 @@
+GPT c2 from reborn — native APK source v1.79.0 / HTML reference v6.343
+
+v1.79.0 — Bound Android emulator dependency installation
+
+- The v1.78.0 production APK compiled, passed package verification and
+  was published with a byte-identical download. Its post-release Gallery
+  saturation test could not start because the Ubuntu runner remained in
+  an unbounded apt-get update/install step for FFmpeg.
+- Limit CI FFmpeg preparation to six minutes; allow at most 90 seconds
+  to update package indexes and 120 seconds for installation. Check for
+  already-installed ffprobe and ffmpeg before contacting package mirrors.
+- Missing ffprobe/ffmpeg remains explicitly logged as a warning and
+  causes the *optional* independent decoding probes to fail honestly;
+  it does not skip the separate 153-index-entry + real photo capture
+  capacity test (which does not require FFmpeg).
+- Do not block release of an already compiled, signed, byte-verified
+  native APK for an unavailable dependency mirror.
+- Preserve v1.78.0 capture-index over-capacity normalisation, Nokia
+  Photo result navigation, share-receiver validation, and all camera
+  source code without modification.
+- The 153-entry test uses synthetic pre-existing index rows plus one
+  real Android emulator JPEG; it does not certify 153 actual captures.
+- Appetize/Oppo video Stop and external Oppo Gallery/Send remain
+  pending independent device verification.
+
+---
+
 GPT c2 from reborn — native APK source v1.78.0 / HTML reference v6.343
 
 v1.78.0 — Camera Gallery capacity recovery and Android emulator saturation audit
