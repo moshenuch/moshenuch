@@ -32,6 +32,8 @@ public class MainActivity extends Activity {
     private android.widget.FrameLayout phoneFrame;
     private C2CameraPreview cameraPreview;
     private static final int REQ_CAMERA_PREVIEW = 408;
+    private static final int REQ_VIDEO_MIC = 409;
+    private Uri pendingNativeVideo;
     private static MainActivity foreground;
     static void notifyCallUpdated() {
         MainActivity a = foreground;
@@ -163,6 +165,104 @@ public class MainActivity extends Activity {
         layoutCameraPreview();
         cameraPreview.setVisibility(View.VISIBLE);
         cameraPreview.start();
+    }
+
+    boolean isNativeVideoRecording() {
+        return cameraPreview != null && cameraPreview.isRecording();
+    }
+
+    void toggleNativeVideoCapture() {
+        if (isNativeVideoRecording()) finishNativeVideoCapture();
+        else startNativeVideoCapture();
+    }
+
+    private void startNativeVideoCapture() {
+        if (phoneView == null || !phoneView.isInVideoViewfinder()) return;
+        if (Build.VERSION.SDK_INT >= 23 &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_VIDEO_MIC);
+            return;
+        }
+        if (cameraPreview == null || !cameraPreview.isRunning()) {
+            onNativePhotoFailed("Video camera preview unavailable");
+            return;
+        }
+        Uri pending = C2MediaProvider.pendingUri(this, true);
+        java.io.File directory = new java.io.File(getCacheDir(), "camera_pending");
+        if ((!directory.exists() && !directory.mkdirs()) || pending.getLastPathSegment() == null) {
+            onNativePhotoFailed("Unable to prepare video storage");
+            return;
+        }
+        java.io.File output = new java.io.File(directory, pending.getLastPathSegment());
+        if (!cameraPreview.startRecording(output)) {
+            onNativePhotoFailed("Video recorder could not start");
+            return;
+        }
+        pendingNativeVideo = pending;
+        phoneView.onNativeVideoRecordingChanged(true);
+    }
+
+    /** Finalise MP4 before releasing the camera; preserve a private copy if publish fails. */
+    void finishNativeVideoCapture() {
+        if (!isNativeVideoRecording()) return;
+        Uri pending = pendingNativeVideo;
+        pendingNativeVideo = null;
+        boolean valid = cameraPreview.stopRecording();
+        cameraPreview.stop();
+        cameraPreview.setVisibility(View.GONE);
+        if (pending == null || !valid) {
+            if (pending != null) C2MediaProvider.discard(this, pending);
+            onNativePhotoFailed("Video recording too short or interrupted");
+            return;
+        }
+        Uri saved = C2MediaProvider.complete(this, pending, true, null);
+        if (saved == null) {
+            onNativePhotoFailed("Unable to save recorded video");
+            return;
+        }
+        Uri shared = publishVideoToMovies(saved);
+        if (shared != null) deleteCapturedPhoto(saved);
+        if (phoneView != null) {
+            phoneView.onCameraCaptureCompleted(true, shared != null ? shared : saved);
+            if (shared == null)
+                phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
+        }
+    }
+
+    /** Share an MP4 through scoped storage, without requesting global storage access. */
+    private Uri publishVideoToMovies(Uri privateUri) {
+        if (Build.VERSION.SDK_INT < 29) return null;
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(MediaStore.Video.Media.DISPLAY_NAME,
+                "C2_" + System.currentTimeMillis() + ".mp4");
+        values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+        values.put(MediaStore.Video.Media.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_MOVIES + "/C2 Reborn");
+        values.put(MediaStore.Video.Media.IS_PENDING, 1);
+        Uri shared = null;
+        try {
+            shared = getContentResolver().insert(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+            if (shared == null) return null;
+            try (java.io.InputStream in = getContentResolver().openInputStream(privateUri);
+                 java.io.OutputStream out = getContentResolver().openOutputStream(shared)) {
+                if (in == null || out == null) throw new java.io.IOException("Video stream unavailable");
+                byte[] buf = new byte[32 * 1024];
+                int read;
+                while ((read = in.read(buf)) != -1) out.write(buf, 0, read);
+            }
+            android.content.ContentValues ready = new android.content.ContentValues();
+            ready.put(MediaStore.Video.Media.IS_PENDING, 0);
+            if (getContentResolver().update(shared, ready, null, null) <= 0)
+                throw new java.io.IOException("Video publication failed");
+            return shared;
+        } catch (Exception ex) {
+            android.util.Log.e("C2Camera", "Unable to publish video to Movies", ex);
+            if (shared != null) try { getContentResolver().delete(shared, null, null); }
+            catch (Exception ignored) { }
+            return null;
+        }
     }
 
     void captureNativePhoto() {
@@ -309,6 +409,11 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_CAMERA_PREVIEW && results.length > 0 &&
                 results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
                 phoneView.isInCameraViewfinder()) showNativeCameraPreview(true);
+        if (requestCode == REQ_VIDEO_MIC && phoneView != null) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED &&
+                    phoneView.isInVideoViewfinder()) startNativeVideoCapture();
+            else phoneView.onCameraCaptureFailed("Microphone permission is required for video");
+        }
         if (requestCode == REQ_MICROPHONE && phoneView != null)
             phoneView.onMicrophonePermissionResult(results.length > 0 &&
                     results[0] == PackageManager.PERMISSION_GRANTED);
@@ -465,6 +570,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (isNativeVideoRecording()) finishNativeVideoCapture();
         if (cameraPreview != null) cameraPreview.stop();
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
