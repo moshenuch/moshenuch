@@ -110,15 +110,19 @@ final class NativeGalleryStore {
         ArrayList<Entry> list = video ? videos : images;
         for (Entry entry : list)
             if (value.equals(entry.uri)) return true;
-        if (list.size() >= 150) {
+        // Older installs or interrupted preference writes can contain
+        // more than 150 entries. Trim all excess entries, rather than just
+        // one, before indexing the new capture. Only index rows are pruned:
+        // existing JPEGs/MP4s on Android storage are never removed here.
+        while (list.size() >= 150) {
             int oldest = 0;
             for (int i = 1; i < list.size(); i++) {
                 if (list.get(i).addedAt < list.get(oldest).addedAt)
                     oldest = i;
             }
             list.remove(oldest);
-            persist(video);
         }
+        // add() sorts and persists the final 150-entry state once.
         return add(video, Collections.singletonList(uri)) > 0;
     }
 
