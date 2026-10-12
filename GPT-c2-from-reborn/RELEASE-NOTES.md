@@ -1,3 +1,32 @@
+GPT c2 from reborn — native APK source v1.70.0 / HTML reference v6.343
+
+v1.70.0 — Video finalisation race and automated Record/Stop diagnostics
+
+- The confirmed v1.69.0 GitHub Actions pipeline successfully built a native
+  APK, verified both release downloads, installed it on Android 11 and launched
+  the in-house Activity. This did NOT exercise video recording.
+- Fix a camera SurfaceView lifecycle race: when MediaRecorder.stop() runs on
+  the video finalisation worker, the SurfaceHolder.surfaceChanged callback can
+  no longer restart camera preview while the recorder is still stopping.
+  This avoids interrupting encoder shutdown on surface resize/recreation.
+- Add a source regression assertion for the !recording && !stopping guard.
+- Add post-publication Android 11 emulated-camera smoke diagnostics that
+  navigate Home > Menu > Media > Video camera, tap Record, record ~8 seconds,
+  tap Stop and check for an MP4 in Movies/C2 Reborn.
+- Record video-scope logcat, Nokia emulator screenshot and an independent
+  video-results.txt as GitHub Actions artifacts. The video probe emits a CI
+  warning if it fails; it does not prevent release of a compile/signature-
+  verified, downloadable APK, since emulated camera hardware may differ
+  from real camera hardware.
+- Maintain separate Android 11 install/launch smoke as a required CI step.
+- The source still uses native Java/Canvas and Android Camera1/MediaRecorder;
+  the video camera is not a WebView or external capture Activity.
+- The independent Appetize acceptance test remains decisive for runtime
+  camera/MP4 playback and sound. Do not claim the v1.70.0 recording
+  functionality passed until its probe and Appetize results have been read.
+
+---
+
 GPT c2 from reborn — native APK source v1.69.0 / HTML reference v6.343
 
 v1.69.0 — MP4 integrity checks and slow-save diagnostics
