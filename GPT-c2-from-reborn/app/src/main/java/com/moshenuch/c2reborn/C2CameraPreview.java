@@ -69,7 +69,18 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             int cameraId = 0;
             if (!CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_LOW))
                 throw new IllegalStateException("No supported video capture profile");
-            recorder.setProfile(CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW));
+            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
+            // A low-quality profile may select 3GPP. Explicitly encode an MP4
+            // to match the .mp4 filename and Android Gallery MIME type.
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
+            recorder.setVideoFrameRate(profile.videoFrameRate);
+            recorder.setVideoEncodingBitRate(profile.videoBitRate);
+            recorder.setVideoEncoder(profile.videoCodec);
+            recorder.setAudioEncodingBitRate(profile.audioBitRate);
+            recorder.setAudioSamplingRate(profile.audioSampleRate);
+            recorder.setAudioChannels(profile.audioChannels);
+            recorder.setAudioEncoder(profile.audioCodec);
             recorder.setOrientationHint(90);
             recorder.setOutputFile(output.getAbsolutePath());
             recorder.setPreviewDisplay(getHolder().getSurface());
