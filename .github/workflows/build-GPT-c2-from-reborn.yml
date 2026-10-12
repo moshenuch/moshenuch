@@ -252,6 +252,10 @@ jobs:
         working-directory: GPT-c2-from-reborn
         run: python3 tools/audit_native_video_wiring.py
 
+      - name: Audit camera, Gallery and capture failure handling
+        working-directory: GPT-c2-from-reborn
+        run: python3 tools/audit_camera_media_wiring.py
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
