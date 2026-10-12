@@ -849,17 +849,105 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Delegate playback to an installed Android video player. No WebView used. */
+    // Nokia-style in-app video viewer: no ACTION_VIEW, external player, or
+    // Android MediaController. The existing Gallery continues to own its list.
+    private android.widget.FrameLayout videoPlayerOverlay;
+    private android.widget.VideoView videoPlayerView;
+    private android.widget.TextView videoPlayerState;
+
+    private android.widget.TextView videoPlayerLabel(String value, boolean bold) {
+        android.widget.TextView label = new android.widget.TextView(this);
+        label.setText(value);
+        label.setTextColor(android.graphics.Color.WHITE);
+        label.setTextSize(17);
+        label.setTypeface(NokiaFontFaces.get(this, bold));
+        label.setGravity(android.view.Gravity.CENTER);
+        label.setPadding(7, 5, 7, 5);
+        return label;
+    }
+
+    private void closeGalleryVideo() {
+        android.widget.VideoView player = videoPlayerView;
+        videoPlayerView = null;
+        if (player != null) {
+            try { player.stopPlayback(); } catch (RuntimeException ignored) { }
+        }
+        if (videoPlayerOverlay != null && phoneFrame != null)
+            phoneFrame.removeView(videoPlayerOverlay);
+        videoPlayerOverlay = null;
+        videoPlayerState = null;
+    }
+
+    /** Play indexed Gallery content inside the Nokia application itself. */
     public boolean viewGalleryVideo(String uriString) {
         try {
             Uri uri = Uri.parse(uriString);
             if (!"content".equals(uri.getScheme())) return false;
-            Intent view = new Intent(Intent.ACTION_VIEW);
-            view.setDataAndType(uri, "video/*");
-            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(view);
+            // Check access before showing an empty playback surface.
+            try (android.os.ParcelFileDescriptor fd =
+                    getContentResolver().openFileDescriptor(uri, "r")) {
+                if (fd == null) return false;
+            }
+            closeGalleryVideo();
+            android.widget.FrameLayout overlay = new android.widget.FrameLayout(this);
+            overlay.setBackgroundColor(android.graphics.Color.rgb(12, 19, 29));
+            android.widget.LinearLayout column = new android.widget.LinearLayout(this);
+            column.setOrientation(android.widget.LinearLayout.VERTICAL);
+            overlay.addView(column, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            android.widget.TextView title = videoPlayerLabel("Video clip", true);
+            title.setBackgroundColor(android.graphics.Color.BLACK);
+            column.addView(title, new android.widget.LinearLayout.LayoutParams(-1, 45));
+            android.widget.VideoView player = new android.widget.VideoView(this);
+            player.setBackgroundColor(android.graphics.Color.BLACK);
+            column.addView(player, new android.widget.LinearLayout.LayoutParams(
+                    -1, 0, 1));
+            android.widget.TextView status = videoPlayerLabel("Loading video...", false);
+            column.addView(status, new android.widget.LinearLayout.LayoutParams(-1, 37));
+            android.widget.LinearLayout controls = new android.widget.LinearLayout(this);
+            controls.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            controls.setBackgroundColor(android.graphics.Color.rgb(22, 40, 69));
+            android.widget.TextView play = videoPlayerLabel("Pause / Play", true);
+            android.widget.TextView back = videoPlayerLabel("Back", true);
+            controls.addView(play, new android.widget.LinearLayout.LayoutParams(0, 48, 1));
+            controls.addView(back, new android.widget.LinearLayout.LayoutParams(0, 48, 1));
+            column.addView(controls);
+            videoPlayerOverlay = overlay;
+            videoPlayerView = player;
+            videoPlayerState = status;
+            phoneFrame.addView(overlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            back.setOnClickListener(v -> closeGalleryVideo());
+            play.setOnClickListener(v -> {
+                if (videoPlayerView != player) return;
+                try {
+                    if (player.isPlaying()) {
+                        player.pause();
+                        status.setText("Paused");
+                    } else {
+                        player.start();
+                        status.setText("Playing");
+                    }
+                } catch (RuntimeException ex) {
+                    status.setText("Cannot play video");
+                }
+            });
+            player.setOnPreparedListener(mp -> {
+                if (videoPlayerView != player) return;
+                mp.setOnVideoSizeChangedListener((ignored, width, height) -> {});
+                player.start();
+                status.setText("Playing");
+            });
+            player.setOnCompletionListener(mp -> {
+                if (videoPlayerView == player) status.setText("Finished - Play to replay");
+            });
+            player.setOnErrorListener((mp, what, extra) -> {
+                if (videoPlayerView == player) status.setText("Unable to play this clip");
+                return true;
+            });
+            player.setVideoURI(uri);
             return true;
         } catch (Exception ex) {
+            closeGalleryVideo();
+            android.util.Log.w("C2Gallery", "In-app video unavailable", ex);
             return false;
         }
     }
@@ -929,6 +1017,10 @@ public class MainActivity extends Activity {
         if (isNativeVideoRecording()) finishNativeVideoCapture();
         // Recorder stop/camera release is owned by the finaliser while saving.
         if (cameraPreview != null && !videoStopWorkerRunning) cameraPreview.stop();
+        if (videoPlayerView != null) {
+            try { videoPlayerView.pause(); } catch (RuntimeException ignored) { }
+            if (videoPlayerState != null) videoPlayerState.setText("Paused");
+        }
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
         super.onPause();
@@ -937,6 +1029,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         videoSaveHandler.removeCallbacks(videoStopTimeout);
+        closeGalleryVideo();
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
         if (foreground == this) foreground = null;
@@ -1000,6 +1093,7 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
+        if (videoPlayerOverlay != null) { closeGalleryVideo(); return; }
         if (phoneView == null || !phoneView.handleAndroidBack()) {
             super.onBackPressed();
         }
