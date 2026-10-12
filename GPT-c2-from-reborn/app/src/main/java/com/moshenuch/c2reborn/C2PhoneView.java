@@ -66,6 +66,7 @@ public class C2PhoneView extends View {
 
     private float fitScale = 1f, offX = 0f, offY = 0f;
     private String page = "home";
+    private String videoErrorReason = "Unable to finish video";
     private int sel = 0;
     private String notice = "";
     private long noticeUntil = 0L;
@@ -941,6 +942,7 @@ public class C2PhoneView extends View {
         else if ("call".equals(page)) drawCall(c);
         else if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) drawNokiaCameraViewfinder(c);
         else if ("cameraResult".equals(page)) drawCameraResult(c);
+        else if ("videoError".equals(page)) drawNokiaVideoError(c);
         else if ("calculator".equals(page)) drawCalculator(c);
         else if ("loan".equals(page)) drawLoan(c);
         else if ("stopwatch".equals(page)) drawStopwatch(c);
@@ -2213,6 +2215,7 @@ public class C2PhoneView extends View {
                         menuMovingFrom < 0 ? "Done" : "Cancel"};
             return new String[]{"Options", "Select", "Exit"};
         }
+        if ("videoError".equals(page)) return new String[]{"", "Retry", "Back"};
         if ("cameraViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
         if ("videoViewfinder".equals(page)) {
             if (videoSaving()) return new String[]{"", "Saving...", ""};
@@ -3852,6 +3855,10 @@ public class C2PhoneView extends View {
     }
 
     public boolean handleAndroidBack() {
+        if ("videoError".equals(page)) {
+            exitVideoError();
+            return true;
+        }
         if (videoSaving()) return true;
         if (videoRecording()) {
             ((MainActivity) getContext()).finishNativeVideoCapture();
@@ -3884,6 +3891,21 @@ public class C2PhoneView extends View {
 
     private void press(String key) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        if ("videoError".equals(page)) {
+            if ("RSK".equals(key) || "END".equals(key)) exitVideoError();
+            else if ("OK".equals(key) || "LSK".equals(key)) {
+                MainActivity host = getContext() instanceof MainActivity ?
+                        (MainActivity) getContext() : null;
+                if (host != null && host.isNativeVideoStopWorkerRunning())
+                    showNotice("Recorder busy - restart C2 to retry");
+                else {
+                    exitVideoError();
+                    startCameraCapture(true);
+                }
+            }
+            invalidate();
+            return;
+        }
         if ("videoViewfinder".equals(page) && videoSaving()) {
             showNotice("Saving video...");
             return;
@@ -4805,12 +4827,56 @@ public class C2PhoneView extends View {
      * Camera reuse is prevented in MainActivity until the worker returns.
      */
     public void onNativeVideoFinalisationTimedOut() {
+        onNativeVideoFinalisationFailed(
+                "Stop stalled. Restart C2 if Retry is unavailable.");
+    }
+
+    /** In-house Nokia recovery screen, never an Android error dialog. */
+    public void onNativeVideoFinalisationFailed(String reason) {
+        videoErrorReason = reason == null || reason.trim().isEmpty() ?
+                "Unable to finalise video" : reason;
         if ("videoViewfinder".equals(page)) {
             optionsOpen = false;
-            go("media");
+            go("videoError");
+        } else if (!"videoError".equals(page)) {
+            showNotice("Video failed - " + videoErrorReason);
         }
-        showNotice("Video encoder stalled - reopen C2 to retry");
         invalidate();
+    }
+
+    private void exitVideoError() {
+        // Do not return via history to the stale SurfaceView while the
+        // MediaRecorder worker may still be holding its camera instance.
+        history.clear();
+        page = "media";
+        sel = 1;
+        optionsOpen = false;
+        invalidate();
+    }
+
+    private void drawNokiaVideoError(Canvas c) {
+        drawStatus(c, "Video recorder");
+        p.setShader(null);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.rgb(8, 18, 30));
+        c.drawRect(5, 48, 235, 260, p);
+        p.setColor(Color.rgb(45, 73, 100));
+        c.drawRect(7, 51, 233, 83, p);
+        p.setTypeface(fontBold);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setColor(Color.WHITE);
+        p.setTextSize(16);
+        c.drawText("Recording failed", 15, 72, p);
+        p.setTypeface(fontRegular);
+        p.setTextSize(13);
+        p.setColor(Color.WHITE);
+        drawWrappedText(c, videoErrorReason, 15, 112, 207, 18, 5);
+        boolean blocked = getContext() instanceof MainActivity &&
+                ((MainActivity) getContext()).isNativeVideoStopWorkerRunning();
+        drawWrappedText(c, blocked ?
+                "Encoder busy. Restart C2 before recording again." :
+                "Choose Retry to open the recorder or Back for Media.",
+                15, 213, 207, 16, 3);
     }
 
     /** If an overdue stop eventually succeeds, index it without hijacking UI. */
