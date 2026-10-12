@@ -915,6 +915,25 @@ public class MainActivity extends Activity {
             videoPlayerView = player;
             videoPlayerState = status;
             phoneFrame.addView(overlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            // The handset's centre key and Back/End work without Android
+            // playback controls; touch controls remain available as fallback.
+            overlay.setFocusableInTouchMode(true);
+            overlay.requestFocus();
+            overlay.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() != android.view.KeyEvent.ACTION_UP) return false;
+                if (keyCode == android.view.KeyEvent.KEYCODE_BACK ||
+                        keyCode == android.view.KeyEvent.KEYCODE_ENDCALL) {
+                    closeGalleryVideo();
+                    return true;
+                }
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                        keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                        keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+                    play.performClick();
+                    return true;
+                }
+                return false;
+            });
             back.setOnClickListener(v -> closeGalleryVideo());
             play.setOnClickListener(v -> {
                 if (videoPlayerView != player) return;
