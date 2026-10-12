@@ -4892,10 +4892,9 @@ public class C2PhoneView extends View {
 
     /** If an overdue stop eventually succeeds, index it without hijacking UI. */
     public void onNativeVideoSavedAfterTimeout(Uri uri) {
-        int added = galleryStore.add(true,
-                java.util.Collections.singletonList(uri));
-        showNotice(added > 0 ? "Video saved to Gallery" :
-                "Video saved, but Gallery index unchanged");
+        boolean indexed = galleryStore.addCaptured(true, uri);
+        showNotice(indexed ? "Video saved to Gallery" :
+                "Video saved, but Gallery index unavailable");
         invalidate();
     }
 
@@ -4956,13 +4955,16 @@ public class C2PhoneView extends View {
 
     /** Called only when the Android camera saved a validated private file. */
     public void onCameraCaptureCompleted(boolean video, Uri uri) {
-        int added = galleryStore.add(video, java.util.Collections.singletonList(uri));
-        if (added == 0) {
-            showNotice("Capture saved, but could not be added to Gallery");
+        boolean indexed = galleryStore.addCaptured(video, uri);
+        if (!video) {
+            // A successful photo capture must always show its Nokia result
+            // (Save/Delete/Send), even if Gallery indexing is unavailable.
+            showCapturedPhoto(uri);
+            if (!indexed) showNotice("Photo saved; Gallery index unavailable");
             return;
         }
-        if (!video) {
-            showCapturedPhoto(uri);
+        if (!indexed) {
+            showNotice("Video saved; Gallery index unavailable");
             return;
         }
         go("galleryVideos");
