@@ -49,9 +49,21 @@ checks = {
     "Successful publishing frees duplicate private photo": (
         "if (shared != null) deleteCapturedPhoto(result);" in activity
     ),
-    "Recording finalizes before camera is released": (
-        "boolean valid = cameraPreview.stopRecording();" in activity
-        and "if (recording) stopRecording();" in preview
+    "Video recorder stop and MediaStore publishing are off UI thread": (
+        'Thread worker = new Thread(() ->' in activity
+        and 'valid = cameraPreview.stopRecording();' in activity
+        and 'Uri shared = publishVideoToMovies(privateCopy);' in activity
+        and 'worker.start();' in activity
+    ),
+    "Camera cannot be released while MediaRecorder is finalising": (
+        'if (recording || stopping)' in preview
+        and 'cameraPreview.finishVideoCamera();' in activity
+        and 'if (cameraPreview != null && !videoFinalising) cameraPreview.stop();' in activity
+    ),
+    "Video UI guards against repeated Stop and uses video-specific Options": (
+        'if (videoSaving()) return true;' in view
+        and 'if ("videoViewfinder".equals(page) && videoSaving())' in view
+        and 'optionItems = new String[]{"Record","Switch to camera","Video clips","Help"};' in view
     ),
     "Capture failure can restore preview after UI is resumed": (
         "cameraActivityResumed && phoneFrame != null" in activity
