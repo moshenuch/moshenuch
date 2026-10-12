@@ -1,3 +1,37 @@
+GPT c2 from reborn — native APK v1.83.0 / HTML reference v6.343
+
+v1.83.0 — Gallery photo EXIF orientation parity
+
+Independent v1.81.0 on-device audit:
+- Captured JPEG appears in public Pictures/C2 Reborn and in C2 Gallery > Images.
+- Photo > Options > Send opens Android Sharesheet with an attachment.
+- BUG: Photo result displayed upright, Gallery viewer displayed the same
+  image rotated about 90 degrees.
+- BUG: Photo Save had no feedback in v1.81.0.
+- Video Stop still blocked in native MediaRecorder.stop (VIDEO_STOP_TIMEOUT
+  after 12 seconds); separate Oppo real-camera test remains decisive.
+
+Source changes:
+- Gallery viewer now calls the same EXIF orientation transform used by
+  the upright Nokia Photo result for its sampled bitmap, without
+  rewriting/rotating the original saved JPEG.
+- Preserve the Nokia Save feedback already present in v1.82.0:
+  pressing Save confirms the committed image with a Nokia notice.
+- Static regression tests now assert both Gallery EXIF orientation and
+  the existing Nokia Save confirmation.
+- MediaRecorder configuration and the previously passing photo send,
+  storage and in-house Gallery flows are unchanged.
+
+Acceptance checks still needed:
+- Capture photo, open Photo result and then Gallery > Images > same photo;
+  both must appear upright without duplicate rotation.
+- Photo result centre Save and Options > Save must show Nokia notice.
+- Oppo Video recorder: record ~10s, Stop, check MP4 playback and sound.
+  If it fails, share the on-screen Report diagnostic; do not declare
+  video finalisation fixed based only on GitHub emulator tests.
+
+---
+
 GPT c2 from reborn — native APK source v1.82.0 / HTML reference v6.343
 
 v1.82.0 — End-to-end Android test for no-PC video Report sharing
