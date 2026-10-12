@@ -117,6 +117,14 @@ checks = {
         and 'if ("videoViewfinder".equals(page) && videoSaving())' in view
         and 'optionItems = new String[]{"Record","Switch to camera","Video clips","Help"};' in view
     ),
+    "Home/Recents resume retries preview with existing camera permission": (
+        "boolean isPreviewRunning() { return started && camera != null; }" in preview
+        and "RESUME_PREVIEW_RETRY" in activity
+        and "cameraPreview.isPreviewRunning()" in activity
+        and "phoneFrame.postDelayed(() ->" in activity
+        and "checkSelfPermission(Manifest.permission.CAMERA)" in activity
+        and "videoFinalising || videoStopWorkerRunning" in activity
+    ),
     "Capture failure can restore preview after UI is resumed": (
         "cameraActivityResumed && phoneFrame != null" in activity
         and "phoneFrame.post(() ->" in activity
