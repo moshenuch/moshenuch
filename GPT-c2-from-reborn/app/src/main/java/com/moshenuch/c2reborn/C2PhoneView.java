@@ -4785,8 +4785,8 @@ public class C2PhoneView extends View {
         c.drawText(video ? "Video recorder" : "Camera", 120, 110, p);
         p.setTypeface(fontRegular);
         p.setTextSize(12);
-        c.drawText("Camera preview not yet embedded", 120, 141, p);
-        c.drawText("Select Capture to use device camera", 120, 161, p);
+        c.drawText("Live preview unavailable", 120, 141, p);
+        c.drawText(video ? "Recording not yet supported" : "Check camera permission", 120, 161, p);
         p.setTextSize(13);
         c.drawText(video ? "Video mode" : "Photo mode", 120, 228, p);
     }
