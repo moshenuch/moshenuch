@@ -1,3 +1,46 @@
+GPT c2 from reborn — native APK source v1.71.0 / HTML reference v6.343
+
+v1.71.0 — Appetize v1.69 video-finalisation blocker
+
+Independent v1.69.0 audit reported:
+- Native video Options menu correct; pressing Stop no longer ANRs.
+- After Stop, "Saving video..." never finished and Nokia controls locked up.
+- Only a ~27 KB incomplete cache MP4 existed, without a moov atom.
+  No playable MP4 was published to /sdcard/Movies.
+- Photo Send and external Gallery visibility remain unverified.
+- Prior APK "Upload failed" rejections were emulator-account-specific,
+  not established packaging problems.
+
+Native fixes in this release:
+- Camera1 recorder preview size is now set to the selected hardware
+  CamcorderProfile video dimensions when that exact preview size is
+  supported, before camera.unlock()/MediaRecorder.prepare().
+- MediaRecorder no longer replaces the camera's already configured preview
+  surface; doing so can interrupt camera frames feeding the encoder.
+- MediaRecorder.stop() continues on a background finaliser, never the UI.
+  If it stalls beyond 12 seconds, C2 exits "Saving..." back to native Media
+  menu and its physical/on-screen keys become responsive again.
+- The stalled worker retains camera ownership and blocks new recordings;
+  it is not unsafely terminated. The user may need to force-close/restart
+  C2 if the underlying native camera encoder remains stuck.
+- A late successful video is indexed in Gallery without forcing navigation
+  away from the user's current screen.
+- Camera preview SurfaceView is hidden on timeout so it cannot overlay
+  native Nokia menus.
+- Regression CI checks verify the stop timeout, race guards, matched
+  video preview size, and exclusive camera surface.
+- Fix the Android emulator CI runner invocation to use one shell-script
+  entrypoint rather than a multiline if/fi script that was split per line.
+
+Still pending independent verification:
+- Native video Stop returns and produces complete MP4 with video/audio.
+- /sdcard/Movies/C2 Reborn persistence and external Gallery discovery.
+- Photo Send, Gallery visibility, real camera/audio hardware compatibility.
+- CI build/release status must be established separately from these source
+  commits. Android 11 emulator recordings may differ from Appetize.
+
+---
+
 GPT c2 from reborn — native APK source v1.70.0 / HTML reference v6.343
 
 v1.70.0 — Video finalisation race and automated Record/Stop diagnostics
