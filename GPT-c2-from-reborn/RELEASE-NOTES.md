@@ -1,3 +1,49 @@
+GPT c2 from reborn — native APK source v1.72.0 / HTML reference v6.343
+
+v1.72.0 — Record/Stop exception tracing and Nokia failure/retry screen
+
+Independent Appetize v1.70.0 audit:
+- Video-specific Options works and Stop no longer causes UI-thread ANR.
+- On Appetize, Stop hangs indefinitely in Saving video; a ~27 KB temporary
+  MP4 lacks its moov atom and Movies remains empty.
+- Previous Camera1 preview-race change did not fix Appetize recording.
+- Photo Send and Android Gallery photo visibility remain unverified.
+
+Root-cause evidence:
+- A separate GitHub Android 11 emulated-camera test for v1.70.0 DID
+  complete Stop, metadata validation, and public Movies MP4 publication.
+  This proves video can complete in that emulator, but not on Appetize.
+- Appetize's actual video Stop stack trace has NOT been captured.
+  A missing moov atom alone does not prove whether stop() throws or blocks.
+
+Changes:
+- Log VIDEO_STOP_BEGIN; record a full throwable stack as VIDEO_STOP_THROW
+  if MediaRecorder.stop() throws.
+- At the 12-second deadline, log VIDEO_STOP_TIMEOUT, the current stage
+  and VIDEO_STOP_WORKER_STACK (up to 30 Java frames from the encoder thread).
+- Log VIDEO_STOP_UNCAUGHT if a worker exception escapes its normal handler.
+- Surface failed/blocked capture as an in-house dark Nokia Video recorder
+  failure screen with Retry and Back softkeys, not an Android AlertDialog.
+- Retry reopens native Video recorder only after the previous stop worker
+  has returned. If still blocked, inform the user C2 must be restarted
+  to retry; never reuse a camera owned by an outstanding MediaRecorder.
+- Error handling no longer returns to a stale live camera viewfinder.
+- Keep v1.71's preview configuration and already verified still photo and
+  video Options behaviour unchanged.
+- Add CI source assertions for Stop exception/stack and Nokia error UI.
+
+Request for independent test:
+- Run v1.72.0 in Appetize, record ~10 seconds and press Stop. Inspect
+  C2Camera logcat for VIDEO_STOP_BEGIN, VIDEO_STOP_THROW, VIDEO_STOP_TIMEOUT
+  and VIDEO_STOP_WORKER_STACK; capture the full stack, including cause.
+- If Appetize remains different from GitHub emulated camera, install on
+  an Oppo Android device, enable CAMERA/RECORD_AUDIO permissions, record
+  10 seconds, press Stop, and capture an adb logcat of tag C2Camera.
+- Verify whether the MP4 is finalised and visible under Movies/C2 Reborn.
+- Do NOT mark video recording fixed without playable MP4 and sound on-device.
+
+---
+
 GPT c2 from reborn — native APK source v1.71.0 / HTML reference v6.343
 
 v1.71.0 — Appetize v1.69 video-finalisation blocker
