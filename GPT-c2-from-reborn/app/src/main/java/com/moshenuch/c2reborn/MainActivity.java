@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private static final int REQ_VIDEO_MIC = 409;
     private static final int REQ_VIDEO_LIBRARY = 410;
     private static final int REQ_IMAGE_LIBRARY = 411;
+    private static final int REQ_STARTUP_MEDIA = 412;
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
@@ -188,6 +189,7 @@ public class MainActivity extends Activity {
             pendingCameraVideo = savedInstanceState.getBoolean("pendingCameraVideo", false);
         }
         requestPhonePermissions();
+        requestStartupMediaAfterPhonePermissions();
         // Emulator acceptance fixture. Debug-build only and only accessible
         // through this app's PRIVATE preferences (not an exported intent).
         // This exercises Nokia Report without depending on a camera failure.
@@ -759,6 +761,12 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_PHONE_DATA && phoneView != null) {
             phoneView.onPermissionsChanged();
             observeSmsWhileVisible();
+            getSharedPreferences("c2_startup_media", MODE_PRIVATE).edit()
+                    .putBoolean("phone_prompt_finished", true).apply();
+            requestStartupMediaAfterPhonePermissions();
+        }
+        if (requestCode == REQ_STARTUP_MEDIA && phoneView != null) {
+            phoneView.refreshVisibleVideoLibrary();
         }
         if (requestCode == REQ_CAMERA_PREVIEW && results.length > 0 &&
                 results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
@@ -803,6 +811,37 @@ public class MainActivity extends Activity {
     }
 
     /** Uses Android's scoped Storage Access Framework. No broad storage permission. */
+    /** Ask for read access during launch, after the initial phone prompt.
+     * Never interrupt a Nokia Gallery list with a late system permission popup.
+     * Android owns the mandatory runtime prompt; it cannot be replaced by C2 UI.
+     */
+    private void requestStartupMediaAfterPhonePermissions() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        String[] phone = {Manifest.permission.READ_CONTACTS,
+                Manifest.permission.WRITE_CONTACTS, Manifest.permission.READ_SMS,
+                Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS,
+                Manifest.permission.READ_CALL_LOG};
+        for (String permission : phone) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED &&
+                    !getSharedPreferences("c2_startup_media", MODE_PRIVATE)
+                            .getBoolean("phone_prompt_finished", false)) return;
+        }
+        android.content.SharedPreferences prefs =
+                getSharedPreferences("c2_startup_media", MODE_PRIVATE);
+        if (prefs.getBoolean("requested_v1", false)) return;
+        String[] media = Build.VERSION.SDK_INT >= 33
+                ? new String[]{Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_IMAGES}
+                : new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
+        boolean missing = false;
+        for (String permission : media)
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED)
+                missing = true;
+        prefs.edit().putBoolean("requested_v1", true).apply();
+        if (missing) requestPermissions(media, REQ_STARTUP_MEDIA);
+    }
+
     public void requestImageLibraryPermission() {
         if (Build.VERSION.SDK_INT < 23) return;
         String permission = Build.VERSION.SDK_INT >= 33 ?
