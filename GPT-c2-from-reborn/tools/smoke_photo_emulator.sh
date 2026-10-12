@@ -26,7 +26,7 @@ import sys
 w, h = map(int, sys.argv[1:])
 scale = min(w / 360, h / 780)
 ox, oy = (w - 360 * scale) / 2, (h - 780 * scale) / 2
-for x, y in [(180, 474), (212, 474)]:
+for x, y in [(180, 474), (212, 474), (90, 414), (180, 505)]:
     print(f"{round(ox + x * scale)} {round(oy + y * scale)}")
 PY
 )
@@ -93,4 +93,70 @@ else
   echo "FAIL C2 did not confirm its photo indexed in MediaStore" | tee -a "$result"
   exit 1
 fi
-echo "NOTE Oppo Gallery visibility and share-target attachment access still require manual tests" | tee -a "$result"
+echo "NOTE External Oppo Gallery UI visibility still requires manual test" | tee -a "$result"
+
+# Test the actual C2 Photo > Options > Send path against a second Android
+# package. A real recipient must open EXTRA_STREAM, not just display
+# Android's share chooser.
+receiver="GPT-c2-from-reborn/shareprobe/build/outputs/apk/debug/shareprobe-debug.apk"
+if [[ ! -f "$receiver" ]]; then
+  echo "FAIL CI receiver APK missing: $receiver" | tee -a "$result"
+  exit 1
+fi
+adb install -r -t "$receiver" >> "$result"
+adb logcat -c || true
+tap "Photo result Options" 2
+tap "Options down to Delete" 3
+tap "Options down to Send" 3
+tap "Select Send" 0
+sleep 3
+
+# Android's resolver is system UI. Locate the independent recipient by its
+# actual visible accessibility label, not a device-dependent fixed position.
+target_found=false
+for attempt in 1 2 3; do
+  adb shell uiautomator dump /sdcard/c2-share-ui.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/c2-share-ui.xml "$report_dir/share-ui.xml" >/dev/null 2>&1 || true
+  if [[ -s "$report_dir/share-ui.xml" ]]; then
+    coords="$(python3 - "$report_dir/share-ui.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+    for item in root.iter("node"):
+        text = item.attrib.get("text", "") + " " + item.attrib.get("content-desc", "")
+        if "C2 Share Probe" in text:
+            b = item.attrib.get("bounds", "")
+            match = re.match(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]", b)
+            if match:
+                x1,y1,x2,y2 = map(int, match.groups())
+                print(f"{(x1+x2)//2} {(y1+y2)//2}")
+                break
+except Exception:
+    pass
+PY
+)"
+    if [[ -n "$coords" ]]; then
+      read -r sharex sharey <<< "$coords"
+      echo "TAP C2 Share Probe: $sharex,$sharey" >> "$result"
+      adb shell input tap "$sharex" "$sharey"
+      target_found=true
+      break
+    fi
+  fi
+  adb shell input swipe "$((width/2))" "$((height*3/4))" \
+    "$((width/2))" "$((height/3))" 500
+  sleep 1
+done
+adb logcat -d -v brief -s C2ShareProbe:V '*:S' > "$report_dir/share-receiver-log.txt" || true
+if [[ "$target_found" != true ]]; then
+  echo "FAIL recipient app missing from chooser - see share-ui.xml" | tee -a "$result"
+  exit 1
+fi
+sleep 2
+adb logcat -d -v brief -s C2ShareProbe:V '*:S' > "$report_dir/share-receiver-log.txt" || true
+if grep -q 'PASS opened C2 JPEG from separate application' "$report_dir/share-receiver-log.txt"; then
+  echo "PASS independent Android app received and decoded C2 JPEG share URI" | tee -a "$result"
+else
+  echo "FAIL photo recipient could not read C2 shared URI" | tee -a "$result"
+  exit 1
+fi
