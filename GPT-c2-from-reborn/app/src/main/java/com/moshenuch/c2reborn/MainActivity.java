@@ -410,8 +410,11 @@ public class MainActivity extends Activity {
                 results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
                 phoneView.isInCameraViewfinder()) showNativeCameraPreview(true);
         if (requestCode == REQ_VIDEO_MIC && phoneView != null) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED &&
-                    phoneView.isInVideoViewfinder()) startNativeVideoCapture();
+            // The runtime permission sheet may destroy the SurfaceView.
+            // Do not attempt recorder.prepare() until the user retries from
+            // the restored viewfinder after onResume().
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.onCameraCaptureFailed("Microphone allowed - press Record again");
             else phoneView.onCameraCaptureFailed("Microphone permission is required for video");
         }
         if (requestCode == REQ_MICROPHONE && phoneView != null)
