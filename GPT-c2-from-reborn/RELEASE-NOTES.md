@@ -22,13 +22,22 @@ Source changes:
 - MediaRecorder configuration and the previously passing photo send,
   storage and in-house Gallery flows are unchanged.
 
-Acceptance checks still needed:
-- Capture photo, open Photo result and then Gallery > Images > same photo;
-  both must appear upright without duplicate rotation.
-- Photo result centre Save and Options > Save must show Nokia notice.
-- Oppo Video recorder: record ~10s, Stop, check MP4 playback and sound.
-  If it fails, share the on-screen Report diagnostic; do not declare
-  video finalisation fixed based only on GitHub emulator tests.
+Independent v1.83.0 emulator/on-device audit — ACCEPTED (12 October 2026):
+- VERIFIED FIXED: photo opened from Gallery > Images is upright and
+  agrees with the camera Photo result screen.
+- VERIFIED FIXED: Photo Save produces Nokia-style
+  "Photo saved to Pictures" confirmation.
+- VERIFIED UNCHANGED: in-house viewfinder, capture/result screen,
+  Options > Save/Delete/Send, Nokia Delete? confirmation, Android
+  Sharesheet attachment, and saved-photo listing in C2 Gallery.
+- Camera/photo category is accepted on emulator. These are independent
+  observed checks, not merely source-code assertions.
+- VIDEO STILL PENDING: perform ~10-second recording on actual Oppo,
+  Stop, verify playable MP4 with audible speech in public storage; if
+  failed, share the user-triggered Report diagnostic. No claim of
+  real-device video success, and no video-code changes before that test.
+- Keep v1.83.0 as verified baseline; do not version-bump or publish a
+  replacement APK solely for this documentation update.
 
 ---
 
