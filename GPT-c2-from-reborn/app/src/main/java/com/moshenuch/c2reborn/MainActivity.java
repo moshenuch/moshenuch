@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAMERA_PREVIEW = 408;
     private static final int REQ_VIDEO_MIC = 409;
     private Uri pendingNativeVideo;
+    private volatile boolean videoFinalising;
     private static MainActivity foreground;
     static void notifyCallUpdated() {
         MainActivity a = foreground;
@@ -152,7 +153,7 @@ public class MainActivity extends Activity {
     }
 
     void showNativeCameraPreview(boolean show) {
-        if (cameraPreview == null) return;
+        if (cameraPreview == null || videoFinalising) return;
         if (!show) {
             cameraPreview.stop();
             cameraPreview.setVisibility(View.GONE);
@@ -172,13 +173,19 @@ public class MainActivity extends Activity {
         return cameraPreview != null && cameraPreview.isRecording();
     }
 
+    boolean isNativeVideoFinalising() { return videoFinalising; }
+
     void toggleNativeVideoCapture() {
+        if (videoFinalising) {
+            if (phoneView != null) phoneView.onCameraCaptureFailed("Saving video...");
+            return;
+        }
         if (isNativeVideoRecording()) finishNativeVideoCapture();
         else startNativeVideoCapture();
     }
 
     private void startNativeVideoCapture() {
-        if (phoneView == null || !phoneView.isInVideoViewfinder()) return;
+        if (videoFinalising || phoneView == null || !phoneView.isInVideoViewfinder()) return;
         if (Build.VERSION.SDK_INT >= 23 &&
                 checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                         != PackageManager.PERMISSION_GRANTED) {
@@ -205,31 +212,78 @@ public class MainActivity extends Activity {
         phoneView.onNativeVideoRecordingChanged(true);
     }
 
-    /** Finalise MP4 before releasing the camera; preserve a private copy if publish fails. */
+    /**
+     * Start video finalisation without blocking the Nokia UI.
+     * MediaRecorder.stop(), private-file copy and MediaStore publication can
+     * block for seconds on emulators. They MUST NOT run on the main thread.
+     */
     void finishNativeVideoCapture() {
-        if (!isNativeVideoRecording()) return;
-        Uri pending = pendingNativeVideo;
+        if (videoFinalising || cameraPreview == null || !cameraPreview.isRecording()) return;
+        videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
+        final Uri pending = pendingNativeVideo;
         pendingNativeVideo = null;
-        boolean valid = cameraPreview.stopRecording();
-        cameraPreview.stop();
-        cameraPreview.setVisibility(View.GONE);
-        if (pending == null || !valid) {
-            if (pending != null) C2MediaProvider.discard(this, pending);
-            onNativePhotoFailed("Video recording too short or interrupted");
-            return;
-        }
-        Uri saved = C2MediaProvider.complete(this, pending, true, null);
-        if (saved == null) {
-            onNativePhotoFailed("Unable to save recorded video");
-            return;
-        }
-        Uri shared = publishVideoToMovies(saved);
-        if (shared != null) deleteCapturedPhoto(saved);
-        if (phoneView != null) {
-            phoneView.onCameraCaptureCompleted(true, shared != null ? shared : saved);
-            if (shared == null)
-                phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
-        }
+        if (phoneView != null) phoneView.onNativeVideoSaving();
+
+        Thread worker = new Thread(() -> {
+            boolean valid = false;
+            try {
+                valid = cameraPreview.stopRecording();
+            } catch (Exception ex) {
+                android.util.Log.e("C2Camera", "MP4 finalisation failed", ex);
+            }
+
+            // Camera1 camera ownership remains on the UI thread. MediaRecorder
+            // must have stopped and released before we release the camera.
+            runOnUiThread(() -> {
+                if (cameraPreview != null) {
+                    cameraPreview.finishVideoCamera();
+                    cameraPreview.setVisibility(View.GONE);
+                }
+            });
+
+            Uri saved = null;
+            boolean sharedPublished = false;
+            String failure = null;
+            if (pending == null || !valid) {
+                if (pending != null) C2MediaProvider.discard(this, pending);
+                failure = "Video recording too short or interrupted";
+            } else {
+                try {
+                    Uri privateCopy = C2MediaProvider.complete(this, pending, true, null);
+                    if (privateCopy == null) {
+                        failure = "Unable to save recorded video";
+                    } else {
+                        Uri shared = publishVideoToMovies(privateCopy);
+                        sharedPublished = shared != null;
+                        if (sharedPublished) {
+                            deleteCapturedPhoto(privateCopy);
+                            saved = shared;
+                        } else {
+                            saved = privateCopy; // Keep the usable recording.
+                        }
+                    }
+                } catch (Exception ex) {
+                    android.util.Log.e("C2Camera", "Unable to publish recorded video", ex);
+                    failure = "Unable to save recorded video";
+                }
+            }
+
+            final Uri finishedUri = saved;
+            final boolean publishedToMovies = sharedPublished;
+            final String error = failure;
+            runOnUiThread(() -> {
+                videoFinalising = false;
+                if (phoneView == null || isFinishing() || isDestroyed()) return;
+                if (finishedUri == null) {
+                    onNativePhotoFailed(error == null ? "Video save failed" : error);
+                } else {
+                    phoneView.onCameraCaptureCompleted(true, finishedUri);
+                    if (!publishedToMovies)
+                        phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
+                }
+            });
+        }, "C2-video-finalise");
+        worker.start();
     }
 
     /** Share an MP4 through scoped storage, without requesting global storage access. */
@@ -606,7 +660,8 @@ public class MainActivity extends Activity {
     protected void onPause() {
         cameraActivityResumed = false;
         if (isNativeVideoRecording()) finishNativeVideoCapture();
-        if (cameraPreview != null) cameraPreview.stop();
+        // Recorder stop/camera release is owned by the finaliser while saving.
+        if (cameraPreview != null && !videoFinalising) cameraPreview.stop();
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
         super.onPause();
