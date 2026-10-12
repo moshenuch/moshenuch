@@ -386,8 +386,8 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           command -v ffprobe
           command -v ffmpeg
-          ffprobe -version | head -n 1
-          ffmpeg -version | head -n 1
+          ffprobe -version | sed -n '1p'
+          ffmpeg -version | sed -n '1p'
 
       - name: Enable Android emulator hardware acceleration
         run: |
