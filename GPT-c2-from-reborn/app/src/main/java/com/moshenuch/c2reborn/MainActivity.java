@@ -189,7 +189,8 @@ public class MainActivity extends Activity {
         // Emulator acceptance fixture. Debug-build only and only accessible
         // through this app's PRIVATE preferences (not an exported intent).
         // This exercises Nokia Report without depending on a camera failure.
-        if (BuildConfig.DEBUG && getSharedPreferences("c2_ci_video_report", MODE_PRIVATE)
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 &&
+                getSharedPreferences("c2_ci_video_report", MODE_PRIVATE)
                 .getBoolean("synthetic_error_once", false)) {
             getSharedPreferences("c2_ci_video_report", MODE_PRIVATE).edit()
                     .remove("synthetic_error_once").apply();
