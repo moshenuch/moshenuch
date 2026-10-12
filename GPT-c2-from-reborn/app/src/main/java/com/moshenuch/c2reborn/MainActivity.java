@@ -257,6 +257,9 @@ public class MainActivity extends Activity {
                     Uri privateCopy = C2MediaProvider.complete(this, pending, true, null);
                     if (privateCopy == null) {
                         failure = "Unable to save recorded video";
+                    } else if (!isPlayableNativeVideo(privateCopy)) {
+                        deleteCapturedPhoto(privateCopy);
+                        failure = "Video could not be played; recording discarded";
                     } else {
                         Uri shared = publishVideoToMovies(privateCopy);
                         sharedPublished = shared != null;
@@ -292,6 +295,39 @@ public class MainActivity extends Activity {
             });
         }, "C2-video-finalise");
         worker.start();
+    }
+
+    /**
+     * Validate the completed MP4 on the background finaliser before publishing.
+     * Checking file length alone misses empty/corrupted MP4 containers.
+     */
+    private boolean isPlayableNativeVideo(Uri privateUri) {
+        if (privateUri == null) return false;
+        android.media.MediaMetadataRetriever metadata =
+                new android.media.MediaMetadataRetriever();
+        try (android.os.ParcelFileDescriptor descriptor =
+                     getContentResolver().openFileDescriptor(privateUri, "r")) {
+            if (descriptor == null) return false;
+            metadata.setDataSource(descriptor.getFileDescriptor());
+            String durationText = metadata.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_DURATION);
+            String widthText = metadata.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
+            String heightText = metadata.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
+            long durationMs = durationText == null ? 0L : Long.parseLong(durationText);
+            int width = widthText == null ? 0 : Integer.parseInt(widthText);
+            int height = heightText == null ? 0 : Integer.parseInt(heightText);
+            boolean valid = durationMs >= 500L && width > 0 && height > 0;
+            android.util.Log.i("C2Camera", "VIDEO_VALIDATE result=" + valid +
+                    " durationMs=" + durationMs + " dimensions=" + width + "x" + height);
+            return valid;
+        } catch (Exception ex) {
+            android.util.Log.w("C2Camera", "MP4 validation failed", ex);
+            return false;
+        } finally {
+            try { metadata.release(); } catch (RuntimeException ignored) { }
+        }
     }
 
     /** Share an MP4 through scoped storage, without requesting global storage access. */
