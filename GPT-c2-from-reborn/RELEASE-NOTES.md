@@ -1,3 +1,37 @@
+GPT c2 from reborn — native APK source v1.82.0 / HTML reference v6.343
+
+v1.82.0 — End-to-end Android test for no-PC video Report sharing
+
+- v1.81.0 CI passed native compilation, release download verification,
+  Android 11 video Record/Stop, JPEG publication, separate-app photo
+  Send and 153-entry Gallery capacity tests.
+- v1.81.0's new Nokia Video recorder failure screen has
+  Report / Retry / Back controls, but source checks alone did not prove
+  that an external recipient could actually receive a diagnostic.
+- Add a test fixture gated by Android's FLAG_DEBUGGABLE flag and a
+  one-shot app-PRIVATE preference. It displays a deterministic synthetic
+  encoder-stop error with a safe representative Java stack. The fixture
+  cannot be launched by an exported intent and is absent in non-debug builds.
+- Extend the separate CI-only C2 Share Probe receiver to register
+  text/plain ACTION_SEND alongside its existing image/jpeg receiver.
+  It validates that the message includes a recording failure stage,
+  the exception class and a Java stack frame, without logging or storing
+  the full diagnostic content.
+- In the post-release Android 11 emulator test, seed the private fixture,
+  open the real Nokia Recording failed UI, press its Report softkey,
+  select C2 Share Probe in the Android Sharesheet and assert the
+  separate application received the diagnostic.
+- Retain separate video/photo/media/gallery tests and the earlier
+  physical-device limitation: this exercises a synthetic failure,
+  not actual Appetize/Oppo MediaRecorder.stop failure.
+- Production runtime diagnostics remain shared only when the user
+  chooses Report and contain no video bytes, message contents or
+  photo URIs. No data is sent automatically.
+- On-device Oppo tests must still confirm Video > Record > Stop, public
+  MP4 playback with audible speech, or supply a real Report diagnostic.
+
+---
+
 GPT c2 from reborn — native APK source v1.81.0 / HTML reference v6.343
 
 v1.81.0 — Share native video Stop diagnostic from Nokia failure screen without a PC
