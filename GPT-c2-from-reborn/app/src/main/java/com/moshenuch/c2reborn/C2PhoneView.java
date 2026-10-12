@@ -5133,8 +5133,7 @@ public class C2PhoneView extends View {
                     android.Manifest.permission.READ_EXTERNAL_STORAGE;
             if (getContext().checkSelfPermission(permission) !=
                     android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                if (getContext() instanceof MainActivity)
-                    ((MainActivity) getContext()).requestImageLibraryPermission();
+                showNotice("Allow photos in Android app settings");
                 return;
             }
         }
@@ -5170,8 +5169,7 @@ public class C2PhoneView extends View {
                     : android.Manifest.permission.READ_EXTERNAL_STORAGE;
             if (getContext().checkSelfPermission(permission) !=
                     android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                if (getContext() instanceof MainActivity)
-                    ((MainActivity) getContext()).requestVideoLibraryPermission();
+                showNotice("Allow videos in Android app settings");
                 invalidate();
                 return;
             }
