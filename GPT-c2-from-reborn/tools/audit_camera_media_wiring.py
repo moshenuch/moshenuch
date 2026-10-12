@@ -90,6 +90,14 @@ checks = {
         'if (!"image".equals(category) && !"video".equals(category)) return 0;' in provider
         and 'file.isFile() && file.delete() ? 1 : 0' in provider
     ),
+    "Photo Delete waits for Nokia confirmation before removing saved media": (
+        'requestConfirm("deleteCapturedPhoto", "Delete?")' in view
+        and 'if ("deleteCapturedPhoto".equals(action))' in view
+        and '((MainActivity) getContext()).deleteCapturedPhoto(capturedPhotoUri)' in view
+        and 'galleryStore.removeUri(false, capturedPhotoUri.toString());' in view
+        and 'showNotice("Photo deleted");' in view
+        and 'showNotice("Unable to delete photo");' in view
+    ),
     "Photo delete removes only matching saved Gallery URI": (
         "boolean removeUri(boolean video, String uri)" in gallery
         and "galleryStore.removeUri(false, capturedPhotoUri.toString());" in view
