@@ -58,7 +58,7 @@ checks = {
     "Camera cannot be released while MediaRecorder is finalising": (
         'if (recording || stopping)' in preview
         and 'cameraPreview.finishVideoCamera();' in activity
-        and 'if (cameraPreview != null && !videoFinalising) cameraPreview.stop();' in activity
+        and 'if (cameraPreview != null && !videoStopWorkerRunning) cameraPreview.stop();' in activity
     ),
     "Video UI guards against repeated Stop and uses video-specific Options": (
         'if (videoSaving()) return true;' in view
