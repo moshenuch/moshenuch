@@ -2215,7 +2215,7 @@ public class C2PhoneView extends View {
                         menuMovingFrom < 0 ? "Done" : "Cancel"};
             return new String[]{"Options", "Select", "Exit"};
         }
-        if ("videoError".equals(page)) return new String[]{"", "Retry", "Back"};
+        if ("videoError".equals(page)) return new String[]{"Report", "Retry", "Back"};
         if ("cameraViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
         if ("videoViewfinder".equals(page)) {
             if (videoSaving()) return new String[]{"", "Saving...", ""};
@@ -3893,7 +3893,10 @@ public class C2PhoneView extends View {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if ("videoError".equals(page)) {
             if ("RSK".equals(key) || "END".equals(key)) exitVideoError();
-            else if ("OK".equals(key) || "LSK".equals(key)) {
+            else if ("LSK".equals(key)) {
+                if (getContext() instanceof MainActivity)
+                    ((MainActivity) getContext()).shareLastVideoDiagnostic();
+            } else if ("OK".equals(key)) {
                 MainActivity host = getContext() instanceof MainActivity ?
                         (MainActivity) getContext() : null;
                 if (host != null && host.isNativeVideoStopWorkerRunning())
@@ -4886,7 +4889,7 @@ public class C2PhoneView extends View {
                 ((MainActivity) getContext()).isNativeVideoStopWorkerRunning();
         drawWrappedText(c, blocked ?
                 "Encoder busy. Restart C2 before recording again." :
-                "Choose Retry to open the recorder or Back for Media.",
+                "Report shares diagnostics. Retry reopens recorder; Back for Media.",
                 15, 213, 207, 16, 3);
     }
 
