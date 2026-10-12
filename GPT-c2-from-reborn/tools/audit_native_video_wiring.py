@@ -18,6 +18,21 @@ checks = {
         and "MEDIA_RECORDER_INFO_MAX_DURATION_REACHED" in preview),
     "record/stop lifecycle": "boolean startRecording(File output)" in preview
         and "boolean stopRecording()" in preview,
+    "Recorder stop and publication run off Android UI thread": (
+        "Thread worker = new Thread(() ->" in activity
+        and "valid = cameraPreview.stopRecording();" in activity
+        and "publishVideoToMovies(privateCopy)" in activity
+        and "worker.start();" in activity
+    ),
+    "Native video Options do not show photo Capture action": (
+        'optionItems = new String[]{"Record","Switch to camera","Video clips","Help"};' in phone
+        and 'if ("videoViewfinder".equals(page)) {' in phone
+    ),
+    "Video saving protects Nokia softkeys and prevents duplicate Stop": (
+        "videoFinalising = true;" in activity
+        and "onNativeVideoSaving()" in activity
+        and "if (videoSaving())" in phone
+    ),
     "surface loss finalises video": "finishNativeVideoCapture();" in preview,
     "video microphone permission declared": "android.permission.RECORD_AUDIO" in manifest,
     "video microphone runtime request": "REQ_VIDEO_MIC" in activity,
