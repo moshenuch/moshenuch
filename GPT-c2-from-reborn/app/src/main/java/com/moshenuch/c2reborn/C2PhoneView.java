@@ -2522,6 +2522,7 @@ public class C2PhoneView extends View {
             case "voiceRecordings": return "Recordings";
             case "galleryImages": return "Images";
             case "galleryVideos": return "Video clips";
+            case "galleryVideoBrowser": return "Phone videos";
             case "galleryPreview": return "Image";
             case "gallerySort": return "Sort files";
             case "media": return "Media";
@@ -2765,6 +2766,9 @@ public class C2PhoneView extends View {
                 return titles;
             }
             case "gallerySort": return new String[]{"Name A–Z","Name Z–A","Newest added"};
+            case "galleryVideoBrowser":
+                return deviceVideoNames.isEmpty() ? new String[]{"(No phone videos)"} :
+                        deviceVideoNames.toArray(new String[0]);
             case "galleryImages":
             case "galleryVideos": {
                 java.util.List<NativeGalleryStore.Entry> media =
@@ -3264,6 +3268,16 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("galleryVideoBrowser".equals(page)) {
+            if (sel >= 0 && sel < deviceVideoUris.size()) {
+                int added = galleryStore.add(true,
+                        java.util.Collections.singletonList(deviceVideoUris.get(sel)));
+                back();
+                showNotice(added > 0 ? "1 file(s) added to Gallery" :
+                        "Video already in Gallery");
+            } else showNotice("No video selected");
+            return;
+        }
         if ("galleryImages".equals(page) || "galleryVideos".equals(page)) {
             openSelectedGalleryEntry();
             return;
@@ -5093,18 +5107,65 @@ public class C2PhoneView extends View {
         }
     }
 
+    private final java.util.ArrayList<Uri> deviceVideoUris = new java.util.ArrayList<>();
+    private final java.util.ArrayList<String> deviceVideoNames = new java.util.ArrayList<>();
+
+    /** Reads the public video library only; the Nokia Canvas draws every row. */
+    public void refreshDeviceVideos() {
+        deviceVideoUris.clear();
+        deviceVideoNames.clear();
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            String permission = android.os.Build.VERSION.SDK_INT >= 33
+                    ? android.Manifest.permission.READ_MEDIA_VIDEO
+                    : android.Manifest.permission.READ_EXTERNAL_STORAGE;
+            if (getContext().checkSelfPermission(permission) !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                if (getContext() instanceof MainActivity)
+                    ((MainActivity) getContext()).requestVideoLibraryPermission();
+                invalidate();
+                return;
+            }
+        }
+        try (android.database.Cursor cursor = getContext().getContentResolver().query(
+                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                new String[]{android.provider.MediaStore.Video.Media._ID,
+                        android.provider.MediaStore.Video.Media.DISPLAY_NAME},
+                null, null, android.provider.MediaStore.Video.Media.DATE_ADDED + " DESC")) {
+            if (cursor != null) {
+                while (cursor.moveToNext() && deviceVideoUris.size() < 150) {
+                    Uri uri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                            cursor.getLong(0));
+                    deviceVideoUris.add(uri);
+                    String name = cursor.getString(1);
+                    deviceVideoNames.add(name == null || name.isEmpty() ?
+                            "Video clip" : name);
+                }
+            }
+            // Public videos appear directly in Video clips; original files
+            // stay untouched and duplicate URIs are ignored by GalleryStore.
+            galleryStore.add(true, deviceVideoUris);
+        } catch (SecurityException ex) {
+            showNotice("Allow video library access");
+        } catch (RuntimeException ex) {
+            android.util.Log.w("C2Gallery", "Video MediaStore scan failed", ex);
+            showNotice("Unable to read phone videos");
+        }
+        invalidate();
+    }
+
     private void openGalleryFolder(boolean video) {
-        // Enter the Nokia Gallery even when empty: never launch Android Files
-        // merely because no entries have been indexed.
         go(video ? "galleryVideos" : "galleryImages");
+        if (video) refreshDeviceVideos();
     }
 
     private void pickGalleryFiles(boolean video) {
-        // No stock ACTION_OPEN_DOCUMENT screen is permitted in Nokia Gallery.
-        // Recorded clips are added automatically through onCameraCaptureCompleted.
-        // A native selectable MediaStore catalogue is a separate follow-up.
-        showNotice(video ? "Use Video camera to add clips" :
-                "Use Camera to add photos");
+        if (!video) {
+            showNotice("Use Camera to add photos");
+            return;
+        }
+        refreshDeviceVideos();
+        go("galleryVideoBrowser");
     }
 
     /** Only called after explicit user selection in Android's document picker. */
@@ -5422,6 +5483,8 @@ public class C2PhoneView extends View {
                     "Remove from gallery","Clear folder","Memory status"};
         else if ("galleryPreview".equals(page))
             optionItems = new String[]{"Send","Details","Remove from gallery","Add from phone"};
+        else if ("galleryVideoBrowser".equals(page))
+            optionItems = new String[]{"Add to Gallery","Refresh"};
         else if ("gallerySort".equals(page))
             optionItems = new String[]{"Select"};
         else if ("media".equals(page))
