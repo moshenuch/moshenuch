@@ -2213,7 +2213,10 @@ public class C2PhoneView extends View {
                         menuMovingFrom < 0 ? "Done" : "Cancel"};
             return new String[]{"Options", "Select", "Exit"};
         }
-        if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
+        if ("cameraViewfinder".equals(page)) return new String[]{"Options", "Capture", "Back"};
+        if ("videoViewfinder".equals(page)) return new String[]{
+                videoRecording() ? "" : "Options", videoRecording() ? "Stop" : "Record",
+                videoRecording() ? "Stop" : "Back"};
         if ("cameraResult".equals(page)) return new String[]{"Options", "Save", "Back"};
         if ("menuViewPicker".equals(page)) return new String[]{"", "Select", "Back"};
         if ("shortcutAssign".equals(page)) return new String[]{"", "Assign", "Back"};
@@ -3838,6 +3841,10 @@ public class C2PhoneView extends View {
     }
 
     public boolean handleAndroidBack() {
+        if (videoRecording()) {
+            ((MainActivity) getContext()).finishNativeVideoCapture();
+            return true;
+        }
         if ("menu".equals(page) && menuOrganising) {
             if (menuMovingFrom >= 0) menuMovingFrom = -1;
             else menuOrganising = false;
@@ -3909,6 +3916,10 @@ public class C2PhoneView extends View {
         }
 
         if ("END".equals(key)) {
+            if (videoRecording()) {
+                ((MainActivity) getContext()).finishNativeVideoCapture();
+                return;
+            }
             if ("call".equals(page)) endCall();
             else {
                 musicEngine.pause();
@@ -4077,10 +4088,16 @@ public class C2PhoneView extends View {
             return;
         }
         if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
-            if ("OK".equals(key) || "CALL".equals(key))
+            if ("OK".equals(key))
                 launchHardwareCapture("videoViewfinder".equals(page));
-            else if ("LSK".equals(key)) openOptionsForPage();
-            else if ("RSK".equals(key)) back();
+            else if ("LSK".equals(key)) {
+                if (videoRecording()) showNotice("Stop recording before opening Options");
+                else openOptionsForPage();
+            }
+            else if ("RSK".equals(key)) {
+                if (videoRecording()) ((MainActivity) getContext()).finishNativeVideoCapture();
+                else back();
+            }
             invalidate();
             return;
         }
@@ -4742,6 +4759,20 @@ public class C2PhoneView extends View {
         return null;
     }
 
+    public boolean isInVideoViewfinder() {
+        return "videoViewfinder".equals(page);
+    }
+
+    private boolean videoRecording() {
+        return getContext() instanceof MainActivity &&
+                ((MainActivity) getContext()).isNativeVideoRecording();
+    }
+
+    public void onNativeVideoRecordingChanged(boolean recording) {
+        showNotice(recording ? "Recording video - press Stop to save" : "Recording stopped");
+        invalidate();
+    }
+
     public boolean isInCameraViewfinder() {
         return "cameraViewfinder".equals(page) || "videoViewfinder".equals(page);
     }
@@ -4762,15 +4793,13 @@ public class C2PhoneView extends View {
         if (!video) {
             host.captureNativePhoto();
         } else {
-            // Never transfer control to a stock camera/recorder Activity.
-            // Recording is disabled until a C2-hosted MediaRecorder is ready.
-            showNotice("In-house video recording is under development");
+            host.toggleNativeVideoCapture();
         }
     }
 
     private void drawNokiaCameraViewfinder(Canvas c) {
         boolean video = "videoViewfinder".equals(page);
-        drawStatus(c, video ? "Video recorder" : "Camera");
+        drawStatus(c, video ? (videoRecording() ? "Video recording" : "Video recorder") : "Camera");
         p.setColor(Color.rgb(19, 26, 30));
         c.drawRect(6, 45, 234, 253, p);
         p.setColor(Color.rgb(83, 105, 110));
@@ -4786,7 +4815,7 @@ public class C2PhoneView extends View {
         p.setTypeface(fontRegular);
         p.setTextSize(12);
         c.drawText("Live preview unavailable", 120, 141, p);
-        c.drawText(video ? "Recording not yet supported" : "Check camera permission", 120, 161, p);
+        c.drawText(video ? (videoRecording() ? "Press Stop to save video" : "Press Record to start") : "Check camera permission", 120, 161, p);
         p.setTextSize(13);
         c.drawText(video ? "Video mode" : "Photo mode", 120, 228, p);
     }
@@ -4815,7 +4844,8 @@ public class C2PhoneView extends View {
                 break;
             }
         }
-        showNotice(video ? "Video saved in private Gallery" : "Photo saved in private Gallery");
+        showNotice(video ? ("media".equals(uri.getAuthority()) ?
+                "Video saved to Movies" : "Video saved privately") : "Photo saved");
         invalidate();
     }
 
@@ -5455,11 +5485,15 @@ public class C2PhoneView extends View {
         }
 
         if ("cameraViewfinder".equals(page) || "videoViewfinder".equals(page)) {
-            if ("Capture".equals(choice)) launchHardwareCapture("videoViewfinder".equals(page));
+            if ("Capture".equals(choice)) {
+                final boolean isVideo = "videoViewfinder".equals(page);
+                // Options hides and releases the preview: restore it before capturing.
+                post(() -> launchHardwareCapture(isVideo));
+            }
             else if ("Switch mode".equals(choice))
                 go("cameraViewfinder".equals(page) ? "videoViewfinder" : "cameraViewfinder");
             else if ("Help".equals(choice))
-                showNotice("Native preview is still under development");
+                showNotice("Camera and video are recorded inside C2");
             return;
         }
         if ("settings".equals(page) && "Demo data (debug)".equals(choice)) {
