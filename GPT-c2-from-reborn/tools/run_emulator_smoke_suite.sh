@@ -10,3 +10,9 @@ bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh "$apk" "$results"
 if ! bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh "$results"; then
   echo "::warning::Native video probe failed; inspect video-results.txt and video-camera-log.txt"
 fi
+# A photo can be present in private app storage but absent from Gallery.
+# Explicitly capture another image, query its public MediaStore row and
+# independently decode the JPEG saved under shared Pictures.
+if ! bash GPT-c2-from-reborn/tools/smoke_photo_emulator.sh "$results"; then
+  echo "::warning::Native photo or Gallery-index probe failed; inspect photo-results.txt and photo-camera-log.txt"
+fi
