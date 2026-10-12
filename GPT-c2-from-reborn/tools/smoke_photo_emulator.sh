@@ -45,8 +45,8 @@ tap() {
   # Stop rather than silently tapping through a frozen system modal.
   adb shell uiautomator dump /sdcard/c2-before-tap.xml >/dev/null 2>&1 || true
   adb pull /sdcard/c2-before-tap.xml "$report_dir/before-tap.xml" >/dev/null 2>&1 || true
-  if [[ -f "$report_dir/before-tap.xml" ]] && grep -Eqi "System UI isn.t responding|System UI is not responding" "$report_dir/before-tap.xml"; then
-    echo "FAIL emulator infrastructure: System UI ANR before tap $name" | tee -a "$result"
+  if [[ -f "$report_dir/before-tap.xml" ]] && grep -Eqi "isn.t responding|is not responding" "$report_dir/before-tap.xml"; then
+    echo "FAIL emulator infrastructure: Android OS ANR before tap $name" | tee -a "$result"
     exit 1
   fi
   adb shell input tap "$px" "$py"
@@ -68,8 +68,8 @@ adb logcat -c || true
 # system-level ANR blocks every tap and must not be reported as a C2 camera bug.
 adb shell uiautomator dump /sdcard/c2-photo-preflight.xml >/dev/null 2>&1 || true
 adb pull /sdcard/c2-photo-preflight.xml "$report_dir/photo-preflight.xml" >/dev/null 2>&1 || true
-if [[ -f "$report_dir/photo-preflight.xml" ]] && grep -Eqi "System UI isn.t responding|System UI is not responding" "$report_dir/photo-preflight.xml"; then
-  echo "FAIL emulator infrastructure: System UI ANR blocks Nokia navigation" | tee -a "$result"
+if [[ -f "$report_dir/photo-preflight.xml" ]] && grep -Eqi "isn.t responding|is not responding" "$report_dir/photo-preflight.xml"; then
+  echo "FAIL emulator infrastructure: Android OS ANR blocks Nokia navigation" | tee -a "$result"
   adb shell screencap -p /sdcard/c2-photo-systemui-anr.png >/dev/null 2>&1 || true
   adb pull /sdcard/c2-photo-systemui-anr.png "$report_dir/photo-systemui-anr.png" >/dev/null 2>&1 || true
   exit 1
