@@ -19,6 +19,15 @@ checks = {
         "photoParameters.setRotation(jpegOrientation)" in preview
         and "camera.setDisplayOrientation(sensorOrientation)" in preview
     ),
+    "Gallery image viewer applies same EXIF orientation as photo result": (
+        "galleryPreviewBitmap = galleryStore.decodePreview(item.uri, 240, 240);" in view
+        and "galleryPreviewBitmap = orientCapturedPhotoPreview(" in view
+        and "android.net.Uri.parse(item.uri), galleryPreviewBitmap" in view
+    ),
+    "Photo Save shows Nokia in-house feedback": (
+        "capturedPhotoSaveNotice()" in view
+        and 'showNotice(capturedPhotoSaveNotice());' in view
+    ),
     "Photo result respects EXIF orientation": (
         "orientCapturedPhotoPreview(uri, capturedPhotoPreview)" in view
         and "android.media.ExifInterface.TAG_ORIENTATION" in view
