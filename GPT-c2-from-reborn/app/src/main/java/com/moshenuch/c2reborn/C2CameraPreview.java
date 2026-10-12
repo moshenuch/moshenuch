@@ -22,6 +22,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     // worker has stopped and released MediaRecorder.
     private volatile boolean stopping;
     private volatile String lastStopFailure = "";
+    private volatile StackTraceElement[] lastStopExceptionStack;
     private boolean started;
     C2CameraPreview(Context context) {
         super(context);
@@ -194,6 +195,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
         stopping = true;
         recording = false;
         lastStopFailure = "";
+        lastStopExceptionStack = null;
         MediaRecorder active = recorder;
         boolean success = false;
         try {
@@ -203,6 +205,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             }
         } catch (RuntimeException ex) {
             lastStopFailure = ex.getClass().getSimpleName();
+            lastStopExceptionStack = ex.getStackTrace();
             // Includes the complete MediaRecorder.stop Java exception/stack
             // in Appetize or an Oppo adb logcat capture.
             Log.e("C2Camera", "VIDEO_STOP_THROW " +
@@ -230,6 +233,11 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     }
 
     String lastStopFailure() { return lastStopFailure; }
+
+    StackTraceElement[] lastStopExceptionStack() {
+        StackTraceElement[] frames = lastStopExceptionStack;
+        return frames == null ? null : frames.clone();
+    }
 
     boolean isStopping() { return stopping; }
 
