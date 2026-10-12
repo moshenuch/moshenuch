@@ -22,3 +22,9 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
   echo "::warning::Gallery index-capacity fixture failed; see gallery-capacity-results.txt and gallery-capacity-log.txt"
 fi
+
+# Verify Nokia's actual Report softkey sends a privacy-limited synthetic
+# failure report to a separate Android app. No camera failure is induced.
+if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
+  echo "::warning::No-PC video diagnostic Report/receiver test failed; see video-report-results.txt and video-report-receiver-log.txt"
+fi
