@@ -260,6 +260,11 @@ jobs:
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
 
+      - name: Verify Gradle APK packaging before publication
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: bash tools/audit_apk_package.sh app/build/outputs/apk/debug/app-debug.apk
+
       - name: HTML reference
         id: html
         run: |
