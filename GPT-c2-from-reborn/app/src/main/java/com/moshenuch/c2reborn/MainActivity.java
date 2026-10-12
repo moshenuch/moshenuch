@@ -968,7 +968,7 @@ public class MainActivity extends Activity {
                     if (Build.VERSION.SDK_INT >= 23 &&
                             checkSelfPermission(Manifest.permission.CAMERA)
                                     != PackageManager.PERMISSION_GRANTED) return;
-                    Log.i("C2Camera", "RESUME_PREVIEW_RETRY");
+                    android.util.Log.i("C2Camera", "RESUME_PREVIEW_RETRY");
                     showNativeCameraPreview(true);
                 }, delayMs);
             }
