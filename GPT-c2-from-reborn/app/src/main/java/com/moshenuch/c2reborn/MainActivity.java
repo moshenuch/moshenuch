@@ -1000,6 +1000,11 @@ public class MainActivity extends Activity {
             });
             player.setOnPreparedListener(mp -> {
                 if (videoPlayerView != player) return;
+                if (!player.getHolder().getSurface().isValid()) {
+                    status.setText("Video surface not ready");
+                    android.util.Log.e("C2Gallery", "VIDEO_SURFACE_INVALID at prepared");
+                    return;
+                }
                 mp.setOnVideoSizeChangedListener((ignored, width, height) -> {
                     if (videoPlayerView == player && (width <= 0 || height <= 0))
                         status.setText("No video picture available");
@@ -1011,7 +1016,10 @@ public class MainActivity extends Activity {
                 if (videoPlayerView == player) status.setText("Finished - Play to replay");
             });
             player.setOnErrorListener((mp, what, extra) -> {
-                if (videoPlayerView == player) status.setText("Unable to play this clip");
+                if (videoPlayerView == player) {
+                    status.setText("Video error (" + what + ")");
+                    android.util.Log.e("C2Gallery", "VIDEO_PLAYBACK_ERROR what=" + what + " extra=" + extra);
+                }
                 return true;
             });
             player.getHolder().addCallback(new android.view.SurfaceHolder.Callback() {
