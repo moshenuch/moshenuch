@@ -15,6 +15,25 @@ provider = (java / "C2MediaProvider.java").read_text(encoding="utf-8")
 preview = (java / "C2CameraPreview.java").read_text(encoding="utf-8")
 
 checks = {
+    "Still camera specifies JPEG rotation, not only preview rotation": (
+        "photoParameters.setRotation(jpegOrientation)" in preview
+        and "camera.setDisplayOrientation(sensorOrientation)" in preview
+    ),
+    "Photo result respects EXIF orientation": (
+        "orientCapturedPhotoPreview(uri, capturedPhotoPreview)" in view
+        and "android.media.ExifInterface.TAG_ORIENTATION" in view
+        and "Bitmap.createBitmap(" in view
+    ),
+    "Delete confirmation uses Nokia Canvas rather than stock grey dialog": (
+        "private void drawConfirm(Canvas c)" in view
+        and "c.drawRect(11, 93, 229, 208, p);" in view
+        and 'c.drawText("Confirm"' not in view
+    ),
+    "Save and Send verify committed photo still readable": (
+        "boolean capturedPhotoExists(Uri uri)" in activity
+        and "!((MainActivity) getContext()).capturedPhotoExists(capturedPhotoUri)" in view
+        and "if (!capturedPhotoExists(uri))" in activity
+    ),
     "Private media delete is implemented": (
         'if (!"image".equals(category) && !"video".equals(category)) return 0;' in provider
         and 'file.isFile() && file.delete() ? 1 : 0' in provider
