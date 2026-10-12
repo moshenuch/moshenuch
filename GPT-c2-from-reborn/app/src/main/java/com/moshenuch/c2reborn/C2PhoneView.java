@@ -4077,7 +4077,7 @@ public class C2PhoneView extends View {
                 return;
             }
             if ("OK".equals(key)) {
-                showNotice("Photo saved to Pictures");
+                showNotice(capturedPhotoSaveNotice());
                 return;
             }
             if ("RSK".equals(key) || "END".equals(key)) {
@@ -4851,6 +4851,11 @@ public class C2PhoneView extends View {
 
     private Uri capturedPhotoUri;
     private Bitmap capturedPhotoPreview;
+
+    private String capturedPhotoSaveNotice() {
+        return capturedPhotoUri != null && "media".equals(capturedPhotoUri.getAuthority())
+                ? "Photo saved to Pictures" : "Photo saved privately";
+    }
     private void showCapturedPhoto(Uri uri) {
         capturedPhotoUri = uri;
         if (capturedPhotoPreview != null) {
@@ -5476,7 +5481,7 @@ public class C2PhoneView extends View {
         }
 
         if ("cameraResult".equals(page)) {
-            if ("Save".equals(choice)) showNotice("Photo saved to Pictures");
+            if ("Save".equals(choice)) showNotice(capturedPhotoSaveNotice());
             else if ("Send".equals(choice) && capturedPhotoUri != null &&
                     getContext() instanceof MainActivity)
                 ((MainActivity) getContext()).shareCapturedPhoto(capturedPhotoUri);
@@ -6318,6 +6323,7 @@ public class C2PhoneView extends View {
         if ("deleteCapturedPhoto".equals(action)) {
             if (capturedPhotoUri != null && getContext() instanceof MainActivity &&
                     ((MainActivity) getContext()).deleteCapturedPhoto(capturedPhotoUri)) {
+                galleryStore.removeUri(false, capturedPhotoUri.toString());
                 capturedPhotoUri = null;
                 if (capturedPhotoPreview != null) {
                     capturedPhotoPreview.recycle();
