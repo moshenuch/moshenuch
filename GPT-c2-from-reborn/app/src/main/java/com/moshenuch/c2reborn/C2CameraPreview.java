@@ -99,7 +99,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     }
     /** Record camera video and microphone audio into a private temporary MP4. */
     boolean startRecording(File output) {
-        if (recording || camera == null || !started || output == null) return false;
+        if (recording || stopping || camera == null || !started || output == null) return false;
         try {
             camera.unlock();
             recorder = new MediaRecorder();
