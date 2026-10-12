@@ -1,3 +1,46 @@
+GPT c2 from reborn — native APK source v1.66.0 / HTML reference v6.343
+
+v1.66.0 — Independent v1.63 camera-audit follow-up
+
+Confirmed by the user's v1.63.0 Android emulator audit:
+- Embedded camera Options display is properly layered over the viewfinder.
+- Captured Photo shows Options/Save/Back; Save/Delete/Send options appear,
+  and Delete shows a Yes/No confirmation.
+- Camera writes captured photos to /sdcard/Pictures/C2 Reborn.
+
+Corrections in native source:
+- Camera1 still-photo capture now sets JPEG rotation on Camera.Parameters
+  separately from SurfaceView display orientation.
+- Photo result preview decodes EXIF orientation and rotates/mirrors the
+  sampled Bitmap before drawing (Android 7.0+). Android 6.0 lacks the
+  platform InputStream ExifInterface; still-photo hardware rotation applies.
+- The grey rounded Confirm box is replaced with a dark rectangular Nokia
+  Canvas prompt. Confirmation continues to use C2's Yes/No softkeys; no
+  Android AlertDialog is involved.
+- Save acknowledges a previously committed photo only after confirming it
+  is still readable. Send checks readability before presenting Android's
+  external sharing chooser. Capture itself continues writing the file to
+  MediaStore; Save does not move or rewrite it.
+- A read-only APK packaging test verifies ZIP/DEX/manifest, versionName,
+  debug signing, zip alignment, file size, SHA-256 before GitHub publishes.
+  Publishing then downloads the release APK and compares its bytes against
+  the built output. There is no re-compression step in the project workflow.
+- Expand CI static checks for orientation, Nokia confirmation, and Save/Send.
+
+Unverified / external constraints:
+- The user observed that v1.62.0 and v1.64.0 were rejected by their
+  emulator upload interface, whereas v1.59.0 and v1.63.0 uploaded.
+  Binary asset content and the failing upload response were unavailable
+  for analysis, so their exact cause cannot yet be established.
+- v1.63.0 Save-to-Pictures persistence after session loss, actual Send
+  operation and C2 Gallery reopening remain to be verified.
+- Native v1.64+ video recording on a device remains unverified until an
+  installable APK is independently tested.
+- The current source version does not by itself establish that a release APK
+  built, uploaded, downloaded, or installed successfully.
+
+---
+
 GPT c2 from reborn — native APK source v1.65.0 / HTML reference v6.343
 
 v1.65.0 — Captured-photo Gallery consistency and camera retry reliability
