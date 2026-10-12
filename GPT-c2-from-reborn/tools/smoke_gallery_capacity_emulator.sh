@@ -17,8 +17,13 @@ ET.ElementTree(root).write(sys.argv[1],encoding="utf-8",xml_declaration=True)
 print("Prepared 153 Gallery fixture rows")
 PY
 adb shell am force-stop "$package"
-adb shell run-as "$package" sh -c 'cat > shared_prefs/c2_state.xml' < "$report_dir/gallery-capacity-seed.xml"
-adb shell run-as "$package" cat shared_prefs/c2_state.xml > "$report_dir/gallery-capacity-seed-readback.xml"
+# run-as does not guarantee the shell starts in the package data directory.
+# Use the fully qualified app-owned path; only the disposable CI emulator's
+# debug SharedPreferences are changed, never photos/videos on shared storage.
+prefs_file="/data/data/$package/shared_prefs/c2_state.xml"
+adb shell run-as "$package" mkdir -p "/data/data/$package/shared_prefs"
+adb shell "run-as $package sh -c 'cat > $prefs_file'" < "$report_dir/gallery-capacity-seed.xml"
+adb shell run-as "$package" cat "$prefs_file" > "$report_dir/gallery-capacity-seed-readback.xml"
 python3 - "$report_dir/gallery-capacity-seed-readback.xml" <<'PY'
 import sys,json,xml.etree.ElementTree as ET
 root=ET.parse(sys.argv[1]).getroot()
@@ -71,7 +76,7 @@ if ! grep -q 'CAPTURE_RESULT page=cameraResult indexed=true imageCount=150' "$re
 fi
 echo "PASS native Nokia photo result shown at full index capacity" | tee -a "$result"
 adb shell am force-stop "$package"
-adb shell run-as "$package" cat shared_prefs/c2_state.xml > "$report_dir/gallery-capacity-final.xml"
+adb shell run-as "$package" cat "$prefs_file" > "$report_dir/gallery-capacity-final.xml"
 python3 - "$report_dir/gallery-capacity-final.xml" <<'PY' | tee -a "$result"
 import json,sys,xml.etree.ElementTree as ET
 root=ET.parse(sys.argv[1]).getroot()
