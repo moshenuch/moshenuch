@@ -248,6 +248,10 @@ jobs:
           path: GPT-c2-from-reborn/build/overlay-layout-smoke/audit.txt
           if-no-files-found: error
 
+      - name: Audit embedded video recording source wiring
+        working-directory: GPT-c2-from-reborn
+        run: python3 tools/audit_native_video_wiring.py
+
       - name: Build native debug APK
         working-directory: GPT-c2-from-reborn
         run: gradle --no-daemon clean assembleDebug
