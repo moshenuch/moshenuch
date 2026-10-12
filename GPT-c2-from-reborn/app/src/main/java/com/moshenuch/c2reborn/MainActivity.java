@@ -295,7 +295,11 @@ public class MainActivity extends Activity {
             String failure = null;
             if (pending == null || !valid) {
                 if (pending != null) C2MediaProvider.discard(this, pending);
-                failure = "Video recording too short or interrupted";
+                String stopError = cameraPreview == null ? "" :
+                        cameraPreview.lastStopFailure();
+                failure = stopError != null && !stopError.isEmpty() ?
+                        "Encoder stop error: " + stopError :
+                        "Video recording too short or interrupted";
             } else {
                 try {
                     videoFinaliseStage = "private-copy";
