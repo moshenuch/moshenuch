@@ -37,7 +37,10 @@ public class ExifOrientationInstrumentedTest {
         assertNotNull(corrected);
         assertEquals(20, corrected.getWidth());
         assertEquals(40, corrected.getHeight());
-        assertEquals(Color.RED, corrected.getPixel(10, 20));
+        int pixel = corrected.getPixel(10, 20);
+        assertTrue(Color.red(pixel) > 200);
+        assertTrue(Color.green(pixel) < 70);
+        assertTrue(Color.blue(pixel) < 70);
         corrected.recycle();
         original.recycle();
         assertTrue(jpeg.delete());
