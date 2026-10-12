@@ -42,3 +42,39 @@ jobs:
           name: c2-api23-exif-pr-validation
           path: GPT-c2-from-reborn/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  android6-launch:
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/download-artifact@v4
+        with:
+          name: c2-api23-exif-pr-validation
+          path: apk-validation
+      - name: Install and launch native app on API 23
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 23
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics
+          script: |
+            set -euo pipefail
+            apk="$(find apk-validation -type f -name '*.apk' -print -quit)"
+            test -n "$apk"
+            adb install -r "$apk"
+            adb shell am start -n com.moshenuch.c2reborn/.MainActivity
+            sleep 4
+            adb shell pidof com.moshenuch.c2reborn
+            if adb logcat -d -s AndroidRuntime:E | grep -A 8 'FATAL EXCEPTION' | grep -q 'com.moshenuch.c2reborn'; then
+              echo "Native app crashed on Android 6 (API 23)"
+              exit 1
+            fi
+            echo "Android 6 native launch passed; EXIF visual correctness remains untested."
