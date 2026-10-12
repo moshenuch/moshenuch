@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     private C2PhoneView phoneView;
     private android.widget.FrameLayout phoneFrame;
     private C2CameraPreview cameraPreview;
+    private boolean cameraActivityResumed;
     private static final int REQ_CAMERA_PREVIEW = 408;
     private static final int REQ_VIDEO_MIC = 409;
     private Uri pendingNativeVideo;
@@ -276,6 +277,20 @@ public class MainActivity extends Activity {
 
     void onNativePhotoFailed(String message) {
         if (phoneView != null) phoneView.onCameraCaptureFailed(message);
+        // Restore the shutter after a failed still/video capture. Posting keeps
+        // surfaceDestroyed() from recursively creating another camera surface.
+        if (cameraActivityResumed && phoneFrame != null &&
+                phoneView != null && phoneView.isInCameraViewfinder() &&
+                cameraPreview != null && !cameraPreview.isRecording() &&
+                (Build.VERSION.SDK_INT < 23 ||
+                        checkSelfPermission(Manifest.permission.CAMERA)
+                                == PackageManager.PERMISSION_GRANTED)) {
+            phoneFrame.post(() -> {
+                if (cameraActivityResumed && phoneView != null &&
+                        phoneView.isInCameraViewfinder() && !isNativeVideoRecording())
+                    showNativeCameraPreview(true);
+            });
+        }
     }
 
     void saveNativePhoto(byte[] jpeg) {
@@ -575,6 +590,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        cameraActivityResumed = false;
         if (isNativeVideoRecording()) finishNativeVideoCapture();
         if (cameraPreview != null) cameraPreview.stop();
         stopSmsObservation();
@@ -593,6 +609,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        cameraActivityResumed = true;
         foreground = this;
         hideSystemUi();
         if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
