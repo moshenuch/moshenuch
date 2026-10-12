@@ -45,6 +45,17 @@ checks = {
         and "public void onNativeVideoFinalisationTimedOut()" in phone
         and 'videoErrorReason' in phone
     ),
+    "Debug-only fixture tests real Nokia Report with external Android recipient": (
+        "c2_ci_video_report" in activity
+        and "synthetic_error_once" in activity
+        and "android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE" in activity
+        and "void showCiVideoReportFixture()" in phone
+        and (root / "tools/smoke_video_report_emulator.sh").exists()
+        and "video-report-receiver-log.txt" in
+            (root / "tools/smoke_video_report_emulator.sh").read_text(encoding="utf-8")
+        and "smoke_video_report_emulator.sh" in
+            (root / "tools/run_emulator_smoke_suite.sh").read_text(encoding="utf-8")
+    ),
     "No-PC diagnostic report shares exception or stuck worker stack on user action": (
         "StackTraceElement[] lastStopExceptionStack()" in preview
         and "lastStopExceptionStack = ex.getStackTrace();" in preview
