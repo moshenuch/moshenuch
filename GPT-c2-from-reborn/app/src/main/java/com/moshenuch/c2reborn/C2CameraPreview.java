@@ -17,7 +17,10 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     private int sensorOrientation = 90;
     private int jpegOrientation = 90;
     private MediaRecorder recorder;
-    private boolean recording;
+    private volatile boolean recording;
+    // Remains true until the main thread releases the camera after the
+    // worker has stopped and released MediaRecorder.
+    private volatile boolean stopping;
     private boolean started;
     C2CameraPreview(Context context) {
         super(context);
@@ -32,12 +35,15 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
         }
     }
     @Override public void surfaceDestroyed(SurfaceHolder holder) {
+        // Do not call MediaRecorder.stop() from a Surface callback: it may
+        // block the UI thread and cause an ANR on emulators and real phones.
         if (recording && getContext() instanceof MainActivity)
             ((MainActivity) getContext()).finishNativeVideoCapture();
-        stop();
+        if (!recording && !stopping) stop();
     }
     void start() {
-        if (camera != null || getHolder().getSurface() == null ||
+        if (camera != null || recording || stopping ||
+                getHolder().getSurface() == null ||
                 !getHolder().getSurface().isValid()) return;
         try {
             cameraId = 0;
@@ -69,8 +75,14 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
         }
     }
     void stop() {
+        // Callers including Activity.onPause and SurfaceHolder callbacks
+        // must not synchronously stop the encoder on Android's UI thread.
+        if (recording || stopping) {
+            if (recording && getContext() instanceof MainActivity)
+                ((MainActivity) getContext()).finishNativeVideoCapture();
+            return;
+        }
         started = false;
-        if (recording) stopRecording();
         if (recorder != null) {
             try { recorder.release(); } catch (RuntimeException ignored) { }
             recorder = null;
@@ -143,28 +155,43 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
         }
     }
 
-    /** Recorder.stop() can fail if recording was too short; caller discards invalid MP4. */
+    /** Call ONLY on the video finaliser worker, never the main/UI thread. */
     boolean stopRecording() {
-        if (!recording) return false;
+        if (!recording || stopping) return false;
+        stopping = true;
         recording = false;
+        MediaRecorder active = recorder;
         boolean success = false;
         try {
-            recorder.stop();
-            success = true;
+            if (active != null) {
+                active.stop();
+                success = true;
+            }
         } catch (RuntimeException ex) {
             Log.w("C2Camera", "Video was not finalised", ex);
         } finally {
-            if (recorder != null) {
-                try { recorder.reset(); } catch (RuntimeException ignored) { }
-                try { recorder.release(); } catch (RuntimeException ignored) { }
-                recorder = null;
+            if (active != null) {
+                try { active.reset(); } catch (RuntimeException ignored) { }
+                try { active.release(); } catch (RuntimeException ignored) { }
             }
-            if (camera != null) {
-                try { camera.lock(); } catch (RuntimeException ignored) { }
-            }
+            recorder = null;
+            // The Camera object was created on the UI thread. Do not lock
+            // or release it here; finishVideoCamera() runs on the UI thread.
         }
         return success;
     }
+
+    /** Call on the UI thread AFTER the recorder worker has returned. */
+    void finishVideoCamera() {
+        if (!stopping) return;
+        if (camera != null) {
+            try { camera.lock(); } catch (RuntimeException ignored) { }
+        }
+        stopping = false;
+        stop();
+    }
+
+    boolean isStopping() { return stopping; }
 
     boolean isRecording() { return recording; }
 
