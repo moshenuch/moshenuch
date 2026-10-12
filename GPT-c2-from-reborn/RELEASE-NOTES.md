@@ -1,3 +1,30 @@
+GPT c2 from reborn — native APK source v1.69.0 / HTML reference v6.343
+
+v1.69.0 — MP4 integrity checks and slow-save diagnostics
+
+- Keep the v1.68.0 worker-thread video Stop/Save implementation and the
+  dedicated Nokia Video recorder Options menu.
+- After the recorder finalises but before publishing to shared Movies storage,
+  inspect the saved private MP4 using Android MediaMetadataRetriever.
+  Require readable duration (at least 500 ms) and positive video dimensions.
+  An invalid/unplayable output is removed from the private media library and
+  reported as a failed recording rather than appearing in C2 Gallery.
+- Record MP4 duration, dimensions and audio-track presence in C2Camera logcat.
+  No captured media or private URI is written to debug logs.
+- If background finalisation lasts more than 15 seconds, report that saving
+  is still in progress without freezing C2 or deleting the pending recording.
+  Clear the delayed warning on completion or Activity destruction.
+- Update CI source checks to enforce video validation and the slow-save path.
+
+On-device tests still required:
+- Video recorder Record ~10 seconds > Stop: check no ANR, confirm playable
+  MP4 appears in /sdcard/Movies/C2 Reborn and contains audio.
+- Review logcat for C2Camera VIDEO_STOP, VIDEO_VALIDATE and VIDEO_SAVE.
+- Retest in-house Video recorder Options and existing v1.67 photo controls.
+- Source version does not guarantee build success or a downloadable release.
+
+---
+
 GPT c2 from reborn — native APK source v1.68.0 / HTML reference v6.343
 
 v1.68.0 — Fix reported video Stop ANR and Nokia Video Options
