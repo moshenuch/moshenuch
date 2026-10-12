@@ -5033,36 +5033,36 @@ public class C2PhoneView extends View {
      * hardware orientation metadata intact for external Gallery apps.
      */
     private Bitmap orientCapturedPhotoPreview(Uri uri, Bitmap source) {
-        if (source == null || android.os.Build.VERSION.SDK_INT < 24) return source;
-        int orientation = android.media.ExifInterface.ORIENTATION_NORMAL;
+        if (source == null) return source;
+        int orientation = androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL;
         try (java.io.InputStream input =
                      getContext().getContentResolver().openInputStream(uri)) {
             if (input == null) return source;
-            android.media.ExifInterface exif = new android.media.ExifInterface(input);
+            androidx.exifinterface.media.ExifInterface exif = new androidx.exifinterface.media.ExifInterface(input);
             orientation = exif.getAttributeInt(
-                    android.media.ExifInterface.TAG_ORIENTATION,
-                    android.media.ExifInterface.ORIENTATION_NORMAL);
+                    androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                    androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL);
         } catch (Exception ex) {
             android.util.Log.w("C2Camera", "Photo EXIF orientation unreadable", ex);
             return source;
         }
         android.graphics.Matrix transform = new android.graphics.Matrix();
         switch (orientation) {
-            case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
                 transform.setScale(-1f, 1f); break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_180:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180:
                 transform.setRotate(180f); break;
-            case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_FLIP_VERTICAL:
                 transform.setScale(1f, -1f); break;
-            case android.media.ExifInterface.ORIENTATION_TRANSPOSE:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_TRANSPOSE:
                 transform.setRotate(90f);
                 transform.postScale(-1f, 1f); break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_90:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90:
                 transform.setRotate(90f); break;
-            case android.media.ExifInterface.ORIENTATION_TRANSVERSE:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_TRANSVERSE:
                 transform.setRotate(270f);
                 transform.postScale(-1f, 1f); break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_270:
+            case androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270:
                 transform.setRotate(270f); break;
             default:
                 return source;
