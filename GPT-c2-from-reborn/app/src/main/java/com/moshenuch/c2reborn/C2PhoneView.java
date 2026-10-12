@@ -2523,6 +2523,7 @@ public class C2PhoneView extends View {
             case "galleryImages": return "Images";
             case "galleryVideos": return "Video clips";
             case "galleryVideoBrowser": return "Phone videos";
+            case "galleryImageBrowser": return "Phone images";
             case "galleryPreview": return "Image";
             case "gallerySort": return "Sort files";
             case "media": return "Media";
@@ -2766,6 +2767,9 @@ public class C2PhoneView extends View {
                 return titles;
             }
             case "gallerySort": return new String[]{"Name A–Z","Name Z–A","Newest added"};
+            case "galleryImageBrowser":
+                return deviceImageNames.isEmpty() ? new String[]{"(No phone images)"} :
+                        deviceImageNames.toArray(new String[0]);
             case "galleryVideoBrowser":
                 return deviceVideoNames.isEmpty() ? new String[]{"(No phone videos)"} :
                         deviceVideoNames.toArray(new String[0]);
@@ -3268,6 +3272,16 @@ public class C2PhoneView extends View {
             return;
         }
 
+        if ("galleryImageBrowser".equals(page)) {
+            if (sel >= 0 && sel < deviceImageUris.size()) {
+                int added = galleryStore.add(false,
+                        java.util.Collections.singletonList(deviceImageUris.get(sel)));
+                back();
+                showNotice(added > 0 ? "1 file(s) added to Gallery" :
+                        "Photo already in Gallery");
+            } else showNotice("No image selected");
+            return;
+        }
         if ("galleryVideoBrowser".equals(page)) {
             if (sel >= 0 && sel < deviceVideoUris.size()) {
                 int added = galleryStore.add(true,
@@ -5107,6 +5121,42 @@ public class C2PhoneView extends View {
         }
     }
 
+    private final java.util.ArrayList<Uri> deviceImageUris = new java.util.ArrayList<>();
+    private final java.util.ArrayList<String> deviceImageNames = new java.util.ArrayList<>();
+
+    public void refreshDeviceImages() {
+        deviceImageUris.clear();
+        deviceImageNames.clear();
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            String permission = android.os.Build.VERSION.SDK_INT >= 33 ?
+                    android.Manifest.permission.READ_MEDIA_IMAGES :
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE;
+            if (getContext().checkSelfPermission(permission) !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                if (getContext() instanceof MainActivity)
+                    ((MainActivity) getContext()).requestImageLibraryPermission();
+                return;
+            }
+        }
+        try (android.database.Cursor c = getContext().getContentResolver().query(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                new String[]{android.provider.MediaStore.Images.Media._ID,
+                        android.provider.MediaStore.Images.Media.DISPLAY_NAME},
+                null, null, android.provider.MediaStore.Images.Media.DATE_ADDED + " DESC")) {
+            while (c != null && c.moveToNext() && deviceImageUris.size() < 150) {
+                deviceImageUris.add(android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        c.getLong(0)));
+                String n = c.getString(1);
+                deviceImageNames.add(n == null || n.isEmpty() ? "Photo" : n);
+            }
+        } catch (Exception ex) {
+            android.util.Log.w("C2Gallery", "Image MediaStore query failed", ex);
+            showNotice("Unable to read phone images");
+        }
+        invalidate();
+    }
+
     private final java.util.ArrayList<Uri> deviceVideoUris = new java.util.ArrayList<>();
     private final java.util.ArrayList<String> deviceVideoNames = new java.util.ArrayList<>();
 
@@ -5167,7 +5217,8 @@ public class C2PhoneView extends View {
 
     private void pickGalleryFiles(boolean video) {
         if (!video) {
-            showNotice("Use Camera to add photos");
+            refreshDeviceImages();
+            go("galleryImageBrowser");
             return;
         }
         refreshDeviceVideos();
@@ -5489,7 +5540,7 @@ public class C2PhoneView extends View {
                     "Remove from gallery","Clear folder","Memory status"};
         else if ("galleryPreview".equals(page))
             optionItems = new String[]{"Send","Details","Remove from gallery","Add from phone"};
-        else if ("galleryVideoBrowser".equals(page))
+        else if ("galleryVideoBrowser".equals(page) || "galleryImageBrowser".equals(page))
             optionItems = new String[]{"Add to Gallery","Refresh"};
         else if ("gallerySort".equals(page))
             optionItems = new String[]{"Select"};
