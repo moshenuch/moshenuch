@@ -4837,7 +4837,8 @@ public class C2PhoneView extends View {
     /** In-house Nokia recovery screen, never an Android error dialog. */
     /** Debug-only CI entrypoint, never surfaced by normal Nokia navigation. */
     void showCiVideoReportFixture() {
-        if (!BuildConfig.DEBUG) return;
+        if ((getContext().getApplicationInfo().flags &
+                android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return;
         videoErrorReason = "CI synthetic encoder stop failure";
         optionsOpen = false;
         go("videoError");
