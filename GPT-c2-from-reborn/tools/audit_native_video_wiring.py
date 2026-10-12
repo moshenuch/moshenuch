@@ -31,6 +31,25 @@ checks = {
         and "onNativeVideoFinalisationTimedOut()" in phone
         and "onNativeVideoSavedAfterTimeout(Uri uri)" in phone
     ),
+    "Native video Stop logs thrown exception and blocked worker Java stack": (
+        "VIDEO_STOP_THROW " in preview
+        and "VIDEO_STOP_BEGIN thread=" in activity
+        and "VIDEO_STOP_WORKER_STACK stage=" in activity
+        and "stuck.getStackTrace()" in activity
+        and "VIDEO_STOP_UNCAUGHT stage=" in activity
+    ),
+    "Native Stop failure renders Nokia recovery screen with Retry and Back": (
+        'else if ("videoError".equals(page)) drawNokiaVideoError(c);' in phone
+        and 'if ("videoError".equals(page)) return new String[]{"", "Retry", "Back"};' in phone
+        and "onNativeVideoFinalisationFailed(" in phone
+        and "public void onNativeVideoFinalisationTimedOut()" in phone
+        and 'videoErrorReason' in phone
+    ),
+    "Retry cannot overlap a still-stalled encoder": (
+        "isNativeVideoStopWorkerRunning()" in activity
+        and "host.isNativeVideoStopWorkerRunning()" in phone
+        and "Recorder busy - restart C2 to retry" in phone
+    ),
 
     "Recorder stop and publication run off Android UI thread": (
         "Thread worker = new Thread(() ->" in activity
