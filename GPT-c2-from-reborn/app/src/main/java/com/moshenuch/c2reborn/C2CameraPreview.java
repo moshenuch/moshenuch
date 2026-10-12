@@ -29,7 +29,10 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     }
     @Override public void surfaceCreated(SurfaceHolder holder) { start(); }
     @Override public void surfaceChanged(SurfaceHolder h, int f, int w, int height) {
-        if (camera != null && !recording) {
+        // MediaRecorder.stop() runs on a worker. During finalisation recording
+        // becomes false before the recorder has released the camera.
+        // Never restart preview until that worker has finished.
+        if (camera != null && started && !recording && !stopping) {
             try { camera.stopPreview(); camera.setPreviewDisplay(h); camera.startPreview(); }
             catch (Exception ex) { Log.w("C2Camera", "Preview surface changed", ex); stop(); }
         }
