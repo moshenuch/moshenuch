@@ -101,15 +101,43 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
     boolean startRecording(File output) {
         if (recording || stopping || camera == null || !started || output == null) return false;
         try {
+            // MediaRecorder may wait indefinitely for camera frames if its
+            // encoded frame size does not match the active Camera1 preview.
+            // Configure that matching preview BEFORE unlocking the camera.
+            if (!CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_LOW))
+                throw new IllegalStateException("No supported video capture profile");
+            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
+            Camera.Parameters params = camera.getParameters();
+            boolean hasExactPreviewSize = false;
+            java.util.List<Camera.Size> supported = params.getSupportedPreviewSizes();
+            if (supported != null) {
+                for (Camera.Size size : supported) {
+                    if (size.width == profile.videoFrameWidth &&
+                            size.height == profile.videoFrameHeight) {
+                        hasExactPreviewSize = true;
+                        break;
+                    }
+                }
+            }
+            if (hasExactPreviewSize) {
+                camera.stopPreview();
+                params.setPreviewSize(profile.videoFrameWidth, profile.videoFrameHeight);
+                params.setRecordingHint(true);
+                camera.setParameters(params);
+                camera.setPreviewDisplay(getHolder());
+                camera.startPreview();
+                Log.i("C2Camera", "VIDEO_PREVIEW matched " +
+                        profile.videoFrameWidth + "x" + profile.videoFrameHeight);
+            } else {
+                Log.w("C2Camera", "VIDEO_PREVIEW unsupported " +
+                        profile.videoFrameWidth + "x" + profile.videoFrameHeight +
+                        "; active preview may differ");
+            }
             camera.unlock();
             recorder = new MediaRecorder();
             recorder.setCamera(camera);
             recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-            // Match the selected camera's hardware-supported capture profile.
-            if (!CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_LOW))
-                throw new IllegalStateException("No supported video capture profile");
-            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
             // A low-quality profile may select 3GPP. Explicitly encode an MP4
             // to match the .mp4 filename and Android Gallery MIME type.
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
@@ -140,7 +168,8 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
                 }
             });
             recorder.setOutputFile(output.getAbsolutePath());
-            recorder.setPreviewDisplay(getHolder().getSurface());
+            // Camera.setPreviewDisplay(getHolder()) already owns this surface.
+            // Replacing it in MediaRecorder can interrupt incoming frames.
             recorder.prepare();
             recorder.start();
             recording = true;
