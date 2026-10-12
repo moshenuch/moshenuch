@@ -1,3 +1,43 @@
+GPT c2 from reborn — native APK source v1.75.0 / HTML reference v6.343
+
+v1.75.0 — Enforce complete, independent emulated MP4/audio/video verification
+
+Observed GitHub v1.74.0 Android 11 emulator test:
+- C2 recorded a video and published an MP4 in Movies/C2 Reborn.
+- Independent ISO-BMFF parser confirmed a complete 171,063-byte MP4
+  with ftyp, moov, free and mdat top-level atoms.
+- ffprobe was unavailable on the CI runner, so the v1.74 test skipped
+  audio/video streams and actual decode checks. It DID NOT establish
+  playable video/audio despite its pass status.
+
+v1.75.0 test corrections:
+- Install ffprobe and ffmpeg in post-publication GitHub Android 11 job.
+- Independent recorded-MP4 validation now FAILS rather than skips if
+  either tool is missing. Verify at least one video AND audio stream,
+  positive width/height and duration, decode one video frame and one
+  second of audio samples using FFmpeg.
+- Ensure the MP4 discovered after Record > Stop is NEW compared with
+  the list of videos before recording; pre-existing shared Movies
+  files cannot satisfy the acceptance check.
+- Emulator smoke test retains video-mp4-validation.txt, the pulled
+  recorded MP4, its own result summary, video logcat and screenshot.
+- Video recording probe remains a post-publication diagnostic; if it
+  fails, the workflow emits a warning and retains evidence instead
+  of hiding an independently signed and downloadable APK.
+- Do not infer that audio samples contain audible speech on a virtual
+  emulator. Oppo/Appetize functional tests remain decisive.
+
+Native app behavior:
+- No unverified Camera1 encoder changes are introduced in v1.75.0.
+- Maintain the Nokia Recording failed screen with "Stage:", 12-second
+  timeout, Retry/Back, exception/worker stack logcat, and all existing
+  photo and Video recorder Options behavior.
+- Still awaiting a v1.73/v1.74 Oppo/Appetize test that reports whether
+  native MediaRecorder.stop returns, throws, or remains blocked.
+- Photo Send and external Gallery visibility remain unverified.
+
+---
+
 GPT c2 from reborn — native APK source v1.74.0 / HTML reference v6.343
 
 v1.74.0 — Independent MP4 playback checks and no-PC video failure stage
