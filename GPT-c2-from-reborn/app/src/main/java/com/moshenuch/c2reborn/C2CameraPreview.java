@@ -46,6 +46,8 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             ((MainActivity) getContext()).finishNativeVideoCapture();
         if (!recording && !stopping) stop();
     }
+    boolean isPreviewRunning() { return started && camera != null; }
+
     void start() {
         if (camera != null || recording || stopping ||
                 getHolder().getSurface() == null ||
