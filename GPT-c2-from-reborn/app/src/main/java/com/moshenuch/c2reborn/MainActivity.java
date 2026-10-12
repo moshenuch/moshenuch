@@ -50,13 +50,6 @@ public class MainActivity extends Activity {
         if (phoneView != null && !isFinishing() && !isDestroyed())
             phoneView.onNativeVideoFinalisationTimedOut();
     };
-    private final Runnable videoSaveSlowNotice = () -> {
-        if (videoFinalising) {
-            android.util.Log.w("C2Camera", "VIDEO_SAVE slow: finalisation exceeded 15 seconds");
-            if (phoneView != null) phoneView.onCameraCaptureFailed(
-                    "Video still saving - please wait");
-        }
-    };
     private static MainActivity foreground;
     static void notifyCallUpdated() {
         MainActivity a = foreground;
@@ -312,7 +305,6 @@ public class MainActivity extends Activity {
             final String error = failure;
             runOnUiThread(() -> {
                 videoSaveHandler.removeCallbacks(videoStopTimeout);
-                videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
                 boolean recoveredFromTimeout = videoSaveTimedOut;
                 videoStopWorkerRunning = false;
                 videoFinalising = false;
@@ -751,7 +743,6 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
         videoSaveHandler.removeCallbacks(videoStopTimeout);
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
