@@ -28,7 +28,11 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             catch (Exception ex) { Log.w("C2Camera", "Preview surface changed", ex); stop(); }
         }
     }
-    @Override public void surfaceDestroyed(SurfaceHolder holder) { stop(); }
+    @Override public void surfaceDestroyed(SurfaceHolder holder) {
+        if (recording && getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).finishNativeVideoCapture();
+        stop();
+    }
     void start() {
         if (camera != null || getHolder().getSurface() == null ||
                 !getHolder().getSurface().isValid()) return;
