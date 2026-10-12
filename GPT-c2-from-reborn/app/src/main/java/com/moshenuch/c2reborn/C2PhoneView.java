@@ -5149,6 +5149,16 @@ public class C2PhoneView extends View {
         galleryPreviewUri = item.uri;
         galleryPreviewTitle = item.title;
         galleryPreviewBitmap = galleryStore.decodePreview(item.uri, 240, 240);
+        // The Photo result screen already applies EXIF rotation. Reuse its
+        // exact orientation transform when an image is opened from Gallery.
+        if (galleryPreviewBitmap != null) {
+            try {
+                galleryPreviewBitmap = orientCapturedPhotoPreview(
+                        android.net.Uri.parse(item.uri), galleryPreviewBitmap);
+            } catch (RuntimeException ex) {
+                android.util.Log.w("C2Gallery", "Gallery photo orientation failed", ex);
+            }
+        }
         invalidate();
     }
 
