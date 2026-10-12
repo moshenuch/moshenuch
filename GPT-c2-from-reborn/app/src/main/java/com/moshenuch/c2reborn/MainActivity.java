@@ -339,7 +339,7 @@ public class MainActivity extends Activity {
             android.util.Log.w("C2Camera", "MP4 validation failed", ex);
             return false;
         } finally {
-            try { metadata.release(); } catch (RuntimeException ignored) { }
+            try { metadata.release(); } catch (Exception ignored) { }
         }
     }
 
