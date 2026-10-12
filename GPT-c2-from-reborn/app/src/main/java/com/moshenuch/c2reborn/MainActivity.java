@@ -908,6 +908,7 @@ public class MainActivity extends Activity {
         videoPlayerOverlay = null;
         videoPlayerState = null;
         videoPlayerSurfaceFrame = null;
+        if (player != null && phoneView != null) phoneView.onNativeVideoViewerClosed();
     }
 
     /** Play indexed Gallery content inside the Nokia application itself. */
