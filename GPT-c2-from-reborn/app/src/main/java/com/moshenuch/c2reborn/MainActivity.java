@@ -1005,12 +1005,29 @@ public class MainActivity extends Activity {
                     android.util.Log.e("C2Gallery", "VIDEO_SURFACE_INVALID at prepared");
                     return;
                 }
+                final int videoWidth = mp.getVideoWidth();
+                final int videoHeight = mp.getVideoHeight();
+                android.util.Log.i("C2Gallery", "VIDEO_PREPARED size=" +
+                        videoWidth + "x" + videoHeight +
+                        " surface=" + player.getHolder().getSurface().isValid());
                 mp.setOnVideoSizeChangedListener((ignored, width, height) -> {
-                    if (videoPlayerView == player && (width <= 0 || height <= 0))
+                    if (videoPlayerView != player) return;
+                    android.util.Log.i("C2Gallery", "VIDEO_SIZE_CHANGED " +
+                            width + "x" + height);
+                    if (width <= 0 || height <= 0)
                         status.setText("No video picture available");
                 });
+                mp.setOnInfoListener((ignored, what, extra) -> {
+                    if (what == android.media.MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                        android.util.Log.i("C2Gallery", "VIDEO_FIRST_FRAME_RENDERED");
+                        if (videoPlayerView == player) status.setText("Playing - video frame ready");
+                    }
+                    return false;
+                });
                 player.start();
-                status.setText("Playing");
+                status.setText(videoWidth > 0 && videoHeight > 0 ?
+                        "Playing " + videoWidth + "x" + videoHeight :
+                        "Playing - no picture size");
             });
             player.setOnCompletionListener(mp -> {
                 if (videoPlayerView == player) status.setText("Finished - Play to replay");
