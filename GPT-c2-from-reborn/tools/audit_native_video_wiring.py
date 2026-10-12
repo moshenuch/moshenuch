@@ -45,6 +45,11 @@ checks = {
         and "public void onNativeVideoFinalisationTimedOut()" in phone
         and 'videoErrorReason' in phone
     ),
+    "On-screen error identifies MediaRecorder.stop exception type": (
+        'String lastStopFailure()' in preview
+        and 'lastStopFailure = ex.getClass().getSimpleName();' in preview
+        and '"Encoder stop error: " + stopError' in activity
+    ),
     "Retry cannot overlap a still-stalled encoder": (
         "isNativeVideoStopWorkerRunning()" in activity
         and "host.isNativeVideoStopWorkerRunning()" in phone
