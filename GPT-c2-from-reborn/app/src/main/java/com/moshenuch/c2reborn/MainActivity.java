@@ -36,7 +36,20 @@ public class MainActivity extends Activity {
     private static final int REQ_VIDEO_MIC = 409;
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
+    private volatile boolean videoStopWorkerRunning;
+    private boolean videoSaveTimedOut;
     private final Handler videoSaveHandler = new Handler(Looper.getMainLooper());
+    // A hung native encoder cannot safely be forcibly released on the UI
+    // thread. Recover Nokia navigation after 12s while keeping the worker
+    // isolated until Android's native stop returns.
+    private final Runnable videoStopTimeout = () -> {
+        if (!videoStopWorkerRunning) return;
+        videoSaveTimedOut = true;
+        videoFinalising = false;
+        android.util.Log.e("C2Camera", "VIDEO_STOP_TIMEOUT after 12 seconds");
+        if (phoneView != null && !isFinishing() && !isDestroyed())
+            phoneView.onNativeVideoFinalisationTimedOut();
+    };
     private final Runnable videoSaveSlowNotice = () -> {
         if (videoFinalising) {
             android.util.Log.w("C2Camera", "VIDEO_SAVE slow: finalisation exceeded 15 seconds");
@@ -161,7 +174,7 @@ public class MainActivity extends Activity {
     }
 
     void showNativeCameraPreview(boolean show) {
-        if (cameraPreview == null || videoFinalising) return;
+        if (cameraPreview == null || videoFinalising || videoStopWorkerRunning) return;
         if (!show) {
             cameraPreview.stop();
             cameraPreview.setVisibility(View.GONE);
@@ -184,8 +197,10 @@ public class MainActivity extends Activity {
     boolean isNativeVideoFinalising() { return videoFinalising; }
 
     void toggleNativeVideoCapture() {
-        if (videoFinalising) {
-            if (phoneView != null) phoneView.onCameraCaptureFailed("Saving video...");
+        if (videoFinalising || videoStopWorkerRunning) {
+            if (phoneView != null) phoneView.onCameraCaptureFailed(
+                    videoStopWorkerRunning ? "Video recorder busy; restart C2 if stalled" :
+                            "Saving video...");
             return;
         }
         if (isNativeVideoRecording()) finishNativeVideoCapture();
@@ -193,7 +208,8 @@ public class MainActivity extends Activity {
     }
 
     private void startNativeVideoCapture() {
-        if (videoFinalising || phoneView == null || !phoneView.isInVideoViewfinder()) return;
+        if (videoFinalising || videoStopWorkerRunning ||
+                phoneView == null || !phoneView.isInVideoViewfinder()) return;
         if (Build.VERSION.SDK_INT >= 23 &&
                 checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                         != PackageManager.PERMISSION_GRANTED) {
@@ -226,9 +242,12 @@ public class MainActivity extends Activity {
      * block for seconds on emulators. They MUST NOT run on the main thread.
      */
     void finishNativeVideoCapture() {
-        if (videoFinalising || cameraPreview == null || !cameraPreview.isRecording()) return;
+        if (videoStopWorkerRunning || videoFinalising ||
+                cameraPreview == null || !cameraPreview.isRecording()) return;
         videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
-        videoSaveHandler.postDelayed(videoSaveSlowNotice, 15_000L);
+        videoStopWorkerRunning = true;
+        videoSaveTimedOut = false;
+        videoSaveHandler.postDelayed(videoStopTimeout, 12_000L);
         final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
         android.util.Log.i("C2Camera", "VIDEO_STOP queued on worker");
         final Uri pending = pendingNativeVideo;
@@ -292,16 +311,22 @@ public class MainActivity extends Activity {
             final boolean publishedToMovies = sharedPublished;
             final String error = failure;
             runOnUiThread(() -> {
+                videoSaveHandler.removeCallbacks(videoStopTimeout);
                 videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
+                boolean recoveredFromTimeout = videoSaveTimedOut;
+                videoStopWorkerRunning = false;
                 videoFinalising = false;
+                videoSaveTimedOut = false;
                 if (phoneView == null || isFinishing() || isDestroyed()) return;
                 if (finishedUri == null) {
                     onNativePhotoFailed(error == null ? "Video save failed" : error);
+                } else if (recoveredFromTimeout) {
+                    phoneView.onNativeVideoSavedAfterTimeout(finishedUri);
                 } else {
                     phoneView.onCameraCaptureCompleted(true, finishedUri);
-                    if (!publishedToMovies)
-                        phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
                 }
+                if (finishedUri != null && !publishedToMovies)
+                    phoneView.onCameraCaptureFailed("Video saved privately; Movies unavailable");
             });
         }, "C2-video-finalise");
         worker.start();
@@ -718,7 +743,7 @@ public class MainActivity extends Activity {
         cameraActivityResumed = false;
         if (isNativeVideoRecording()) finishNativeVideoCapture();
         // Recorder stop/camera release is owned by the finaliser while saving.
-        if (cameraPreview != null && !videoFinalising) cameraPreview.stop();
+        if (cameraPreview != null && !videoStopWorkerRunning) cameraPreview.stop();
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppPaused();
         super.onPause();
@@ -727,6 +752,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
+        videoSaveHandler.removeCallbacks(videoStopTimeout);
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
         if (foreground == this) foreground = null;
