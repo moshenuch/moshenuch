@@ -13,6 +13,9 @@ checks = {
     "embedded MediaRecorder configured": "new MediaRecorder()" in preview
         and "recorder.setCamera(camera)" in preview,
     "MPEG-4 output configured": "MediaRecorder.OutputFormat.MPEG_4" in preview,
+    "Video duration and size limits are configured": ("recorder.setMaxDuration(120_000)" in preview
+        and "recorder.setMaxFileSize(150L * 1024L * 1024L)" in preview
+        and "MEDIA_RECORDER_INFO_MAX_DURATION_REACHED" in preview),
     "record/stop lifecycle": "boolean startRecording(File output)" in preview
         and "boolean stopRecording()" in preview,
     "surface loss finalises video": "finishNativeVideoCapture();" in preview,
