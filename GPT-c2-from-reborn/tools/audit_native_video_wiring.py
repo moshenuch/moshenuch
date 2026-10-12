@@ -24,10 +24,12 @@ checks = {
         and "METADATA_KEY_DURATION" in activity
         and "!isPlayableNativeVideo(privateCopy)" in activity
     ),
-    "Slow video save reports progress without discarding media": (
-        "videoSaveHandler.postDelayed(videoSaveSlowNotice, 15_000L)" in activity
-        and 'VIDEO_SAVE slow: finalisation exceeded 15 seconds' in activity
-        and "videoSaveHandler.removeCallbacks(videoSaveSlowNotice);" in activity
+    "Stalled native Stop recovers Nokia navigation without cancelling encoder worker": (
+        "videoSaveHandler.postDelayed(videoStopTimeout, 12_000L)" in activity
+        and "videoStopWorkerRunning = true;" in activity
+        and "onNativeVideoFinalisationTimedOut()" in activity
+        and "onNativeVideoFinalisationTimedOut()" in phone
+        and "onNativeVideoSavedAfterTimeout(Uri uri)" in phone
     ),
 
     "Recorder stop and publication run off Android UI thread": (
