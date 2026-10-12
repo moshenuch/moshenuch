@@ -40,10 +40,28 @@ checks = {
     ),
     "Native Stop failure renders Nokia recovery screen with Retry and Back": (
         'else if ("videoError".equals(page)) drawNokiaVideoError(c);' in phone
-        and 'if ("videoError".equals(page)) return new String[]{"", "Retry", "Back"};' in phone
+        and 'if ("videoError".equals(page)) return new String[]{"Report", "Retry", "Back"};' in phone
         and "onNativeVideoFinalisationFailed(" in phone
         and "public void onNativeVideoFinalisationTimedOut()" in phone
         and 'videoErrorReason' in phone
+    ),
+    "No-PC diagnostic report shares exception or stuck worker stack on user action": (
+        "StackTraceElement[] lastStopExceptionStack()" in preview
+        and "lastStopExceptionStack = ex.getStackTrace();" in preview
+        and "lastVideoDiagnostic = formatVideoDiagnostic(" in activity
+        and "MediaRecorder.stop timed out after 12 seconds" in activity
+        and "cameraPreview.lastStopExceptionStack()" in activity
+        and 'void shareLastVideoDiagnostic()' in activity
+        and 'send.setType("text/plain")' in activity
+        and 'send.putExtra(Intent.EXTRA_TEXT, lastVideoDiagnostic);' in activity
+        and '"LSK".equals(key)' in phone
+        and "shareLastVideoDiagnostic()" in phone
+    ),
+    "Diagnostic explicitly excludes media and personal content": (
+        "No recorded media, contacts, messages or private file URIs attached." in activity
+        and "No video recording failure reported." in activity
+        and 'new Intent(Intent.ACTION_SEND)' in activity
+        and 'send.setType("text/plain")' in activity
     ),
     "On-screen error identifies MediaRecorder.stop exception type": (
         'String lastStopFailure()' in preview
