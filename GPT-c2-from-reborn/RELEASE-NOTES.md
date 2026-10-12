@@ -2,6 +2,22 @@ GPT c2 from reborn — native APK source v1.73.0 / HTML reference v6.343
 
 v1.73.0 — Explicit MediaRecorder.stop exception type on Nokia failure screen
 
+Oppo first-pass acceptance test (no PC / adb required):
+1. On the Oppo, download exactly GPT-c2-from-reborn-HTML-v6.343-APK-v1.73.0.apk
+   from https://github.com/moshenuch/moshenuch/releases/download/c2-native-v1.73.0/GPT-c2-from-reborn-HTML-v6.343-APK-v1.73.0.apk
+   and install/update C2; allow browser/Files "Install unknown apps" if asked.
+2. Open C2 > Media > Video camera. Grant Camera/Microphone permission.
+3. Record for ~10 seconds while speaking a few words, then press Stop once.
+4. Allow up to 15 seconds. Check if Saving clears and Nokia keys still work;
+   if Recording failed appears, capture the exact on-screen error text.
+5. Check Oppo Photos/Gallery for the new clip. If absent, open Files >
+   Internal storage > Movies > C2 Reborn and look for the MP4 there.
+6. Play the clip and verify visible motion and audible spoken words.
+Report: screen after Stop, whether controls responded, MP4 present in
+Movies/Gallery, whether it plays with picture/audio, and any error screenshot.
+This is a user-facing smoke test, not a substitute for logcat debugging.
+
+
 - Preserve v1.72.0 full VIDEO_STOP_THROW stack trace, 12-second
   VIDEO_STOP_WORKER_STACK timeout diagnostics and in-house Retry/Back screen.
 - If MediaRecorder.stop() throws RuntimeException, remember its actual
