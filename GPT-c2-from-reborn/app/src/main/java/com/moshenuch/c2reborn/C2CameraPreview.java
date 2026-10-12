@@ -13,6 +13,8 @@ import android.util.Log;
 @SuppressWarnings("deprecation")
 public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
     private Camera camera;
+    private int cameraId = -1;
+    private int sensorOrientation = 90;
     private MediaRecorder recorder;
     private boolean recording;
     private boolean started;
@@ -37,8 +39,20 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
         if (camera != null || getHolder().getSurface() == null ||
                 !getHolder().getSurface().isValid()) return;
         try {
-            camera = Camera.open();
-            camera.setDisplayOrientation(90);
+            cameraId = 0;
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            for (int id = 0; id < Camera.getNumberOfCameras(); id++) {
+                Camera.getCameraInfo(id, info);
+                if (info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
+                    cameraId = id;
+                    break;
+                }
+            }
+            Camera.getCameraInfo(cameraId, info);
+            camera = Camera.open(cameraId);
+            sensorOrientation = info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT
+                    ? (360 - info.orientation) % 360 : info.orientation;
+            camera.setDisplayOrientation(sensorOrientation);
             camera.setPreviewDisplay(getHolder());
             camera.startPreview();
             started = true;
@@ -59,6 +73,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             try { camera.release(); } catch (RuntimeException ignored) {}
             camera = null;
         }
+        cameraId = -1;
     }
     /** Record camera video and microphone audio into a private temporary MP4. */
     boolean startRecording(File output) {
@@ -70,7 +85,6 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
             // Match the selected camera's hardware-supported capture profile.
-            int cameraId = 0;
             if (!CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_LOW))
                 throw new IllegalStateException("No supported video capture profile");
             CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
@@ -85,7 +99,7 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             recorder.setAudioSamplingRate(profile.audioSampleRate);
             recorder.setAudioChannels(profile.audioChannels);
             recorder.setAudioEncoder(profile.audioCodec);
-            recorder.setOrientationHint(90);
+            recorder.setOrientationHint(sensorOrientation);
             recorder.setOutputFile(output.getAbsolutePath());
             recorder.setPreviewDisplay(getHolder().getSurface());
             recorder.prepare();
