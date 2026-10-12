@@ -196,6 +196,7 @@ public class MainActivity extends Activity {
         }
         java.io.File output = new java.io.File(directory, pending.getLastPathSegment());
         if (!cameraPreview.startRecording(output)) {
+            C2MediaProvider.discard(this, pending);
             onNativePhotoFailed("Video recorder could not start");
             return;
         }
@@ -327,7 +328,8 @@ public class MainActivity extends Activity {
             }
             android.content.ContentValues published = new android.content.ContentValues();
             published.put(MediaStore.Images.Media.IS_PENDING, 0);
-            getContentResolver().update(uri, published, null, null);
+            if (getContentResolver().update(uri, published, null, null) <= 0)
+                throw new java.io.IOException("Photo publication failed");
             return uri;
         } catch (Exception ex) {
             android.util.Log.e("C2Camera", "Unable to publish photo to Pictures", ex);
