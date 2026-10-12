@@ -13,6 +13,14 @@ on_exit() {
   adb shell screencap -p /sdcard/c2-photo-probe.png 2>/dev/null || true
   adb pull /sdcard/c2-photo-probe.png "$report_dir/photo-screen.png" >/dev/null 2>&1 || true
   adb shell rm -f /sdcard/c2-photo-probe.png 2>/dev/null || true
+  adb shell uiautomator dump /sdcard/c2-photo-hierarchy.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/c2-photo-hierarchy.xml "$report_dir/photo-hierarchy.xml" >/dev/null 2>&1 || true
+  adb logcat -d -v brief -s AndroidRuntime:E C2Camera:V C2Gallery:V '*:S' > "$report_dir/photo-runtime-log.txt" 2>&1 || true
+  adb shell dumpsys activity activities > "$report_dir/photo-activities.txt" 2>&1 || true
+  if [[ -f "$result" ]]; then
+    echo "Photo regression trace:"
+    tail -n 35 "$result" || true
+  fi
 }
 trap on_exit EXIT
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -n1 | tr -d '\r')"
@@ -62,6 +70,9 @@ for i in $(seq 1 20); do
 done
 if [[ -z "$found" ]]; then
   echo "FAIL no newly published JPEG in Pictures/C2 Reborn" | tee -a "$result"
+  echo "Diagnostic: installed app, current activity and camera log" | tee -a "$result"
+  adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity|ResumedActivity' | head -n 8 | tee -a "$result" || true
+  adb logcat -d -v brief -s C2Camera:V AndroidRuntime:E '*:S' | tail -n 60 | tee -a "$result" || true
   exit 1
 fi
 echo "PASS newly published JPEG: $found" | tee -a "$result"
