@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAMERA_PREVIEW = 408;
     private static final int REQ_VIDEO_MIC = 409;
     private static final int REQ_VIDEO_LIBRARY = 410;
+    private static final int REQ_IMAGE_LIBRARY = 411;
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
@@ -762,6 +763,11 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_CAMERA_PREVIEW && results.length > 0 &&
                 results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
                 phoneView.isInCameraViewfinder()) showNativeCameraPreview(true);
+        if (requestCode == REQ_IMAGE_LIBRARY && phoneView != null) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.refreshDeviceImages();
+            else phoneView.onGalleryPickerError();
+        }
         if (requestCode == REQ_VIDEO_LIBRARY && phoneView != null) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
                 phoneView.refreshDeviceVideos();
@@ -797,6 +803,15 @@ public class MainActivity extends Activity {
     }
 
     /** Uses Android's scoped Storage Access Framework. No broad storage permission. */
+    public void requestImageLibraryPermission() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        String permission = Build.VERSION.SDK_INT >= 33 ?
+                Manifest.permission.READ_MEDIA_IMAGES :
+                Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{permission}, REQ_IMAGE_LIBRARY);
+    }
+
     public void requestVideoLibraryPermission() {
         if (Build.VERSION.SDK_INT < 23) return;
         String permission = Build.VERSION.SDK_INT >= 33 ?
@@ -869,6 +884,7 @@ public class MainActivity extends Activity {
     private android.widget.FrameLayout videoPlayerOverlay;
     private android.widget.VideoView videoPlayerView;
     private android.widget.TextView videoPlayerState;
+    private android.widget.FrameLayout videoPlayerSurfaceFrame;
 
     private android.widget.TextView videoPlayerLabel(String value, boolean bold) {
         android.widget.TextView label = new android.widget.TextView(this);
@@ -891,6 +907,7 @@ public class MainActivity extends Activity {
             phoneFrame.removeView(videoPlayerOverlay);
         videoPlayerOverlay = null;
         videoPlayerState = null;
+        videoPlayerSurfaceFrame = null;
     }
 
     /** Play indexed Gallery content inside the Nokia application itself. */
@@ -927,7 +944,8 @@ public class MainActivity extends Activity {
             title.setBackgroundColor(android.graphics.Color.BLACK);
             column.addView(title, new android.widget.LinearLayout.LayoutParams(-1, Math.max(1, Math.round(42f / 320f * lcdHeight))));
             android.widget.VideoView player = new android.widget.VideoView(this);
-            player.setBackgroundColor(android.graphics.Color.BLACK);
+            // Keep SurfaceView visible above the underlying Canvas phone face.
+            player.setZOrderMediaOverlay(true);
             column.addView(player, new android.widget.LinearLayout.LayoutParams(
                     -1, 0, 1));
             android.widget.TextView status = videoPlayerLabel("Loading video...", false);
@@ -981,7 +999,10 @@ public class MainActivity extends Activity {
             });
             player.setOnPreparedListener(mp -> {
                 if (videoPlayerView != player) return;
-                mp.setOnVideoSizeChangedListener((ignored, width, height) -> {});
+                mp.setOnVideoSizeChangedListener((ignored, width, height) -> {
+                    if (videoPlayerView == player && (width <= 0 || height <= 0))
+                        status.setText("No video picture available");
+                });
                 player.start();
                 status.setText("Playing");
             });
@@ -991,6 +1012,13 @@ public class MainActivity extends Activity {
             player.setOnErrorListener((mp, what, extra) -> {
                 if (videoPlayerView == player) status.setText("Unable to play this clip");
                 return true;
+            });
+            player.getHolder().addCallback(new android.view.SurfaceHolder.Callback() {
+                @Override public void surfaceCreated(android.view.SurfaceHolder holder) { }
+                @Override public void surfaceChanged(android.view.SurfaceHolder holder, int format, int w, int h) { }
+                @Override public void surfaceDestroyed(android.view.SurfaceHolder holder) {
+                    if (videoPlayerView == player) status.setText("Video surface unavailable");
+                }
             });
             player.setVideoURI(uri);
             return true;
