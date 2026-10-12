@@ -15,6 +15,10 @@ v1.79.0 — Bound Android emulator dependency installation
   capacity test (which does not require FFmpeg).
 - Do not block release of an already compiled, signed, byte-verified
   native APK for an unavailable dependency mirror.
+- Cap the entire CI job at 25 minutes, and cancel an older superseded
+  run when a new commit is pushed. This avoids the v1.78.0 stuck
+  dependency job monopolising the public-release queue indefinitely.
+  Only one APK workflow occupies that concurrency group at a time.
 - Preserve v1.78.0 capture-index over-capacity normalisation, Nokia
   Photo result navigation, share-receiver validation, and all camera
   source code without modification.
