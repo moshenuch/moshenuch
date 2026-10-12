@@ -4960,6 +4960,10 @@ public class C2PhoneView extends View {
             // A successful photo capture must always show its Nokia result
             // (Save/Delete/Send), even if Gallery indexing is unavailable.
             showCapturedPhoto(uri);
+            // File-free CI evidence that the Nokia Photo result screen was
+            // entered even when the Gallery index was already at capacity.
+            android.util.Log.i("C2Gallery", "CAPTURE_RESULT page=" + page +
+                    " indexed=" + indexed + " imageCount=" + galleryStore.images.size());
             if (!indexed) showNotice("Photo saved; Gallery index unavailable");
             return;
         }
