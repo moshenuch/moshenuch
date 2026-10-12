@@ -37,10 +37,11 @@ public class MainActivity extends Activity {
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
-    private boolean videoSaveTimedOut;
+    private volatile boolean videoSaveTimedOut;
     private volatile Thread videoFinaliserThread;
     private volatile String videoFinaliseStage = "idle";
     private volatile String lastVideoFailureStage = "";
+    private volatile String lastVideoDiagnostic = "No video recording failure reported.";
     private final Handler videoSaveHandler = new Handler(Looper.getMainLooper());
     // A hung native encoder cannot safely be forcibly released on the UI
     // thread. Recover Nokia navigation after 12s while keeping the worker
@@ -54,8 +55,11 @@ public class MainActivity extends Activity {
                 videoFinaliseStage + " workerAlive=" +
                 (videoFinaliserThread != null && videoFinaliserThread.isAlive()));
         Thread stuck = videoFinaliserThread;
+        StackTraceElement[] timeoutFrames = stuck == null ? null : stuck.getStackTrace();
+        lastVideoDiagnostic = formatVideoDiagnostic("MediaRecorder.stop timed out after 12 seconds",
+                videoFinaliseStage, "Native worker still running", timeoutFrames);
         if (stuck != null) {
-            StackTraceElement[] frames = stuck.getStackTrace();
+            StackTraceElement[] frames = timeoutFrames;
             StringBuilder stack = new StringBuilder("VIDEO_STOP_WORKER_STACK stage=")
                     .append(videoFinaliseStage);
             for (int i = 0; i < Math.min(frames.length, 30); i++)
@@ -207,6 +211,61 @@ public class MainActivity extends Activity {
 
     boolean isNativeVideoFinalising() { return videoFinalising; }
 
+    /**
+     * Lightweight in-memory recording diagnostic. Never reads logcat or
+     * includes photo/video bytes, URI paths, SMS, contacts, or account data.
+     * Shared only after the Nokia user presses Report.
+     */
+    private String formatVideoDiagnostic(String outcome, String stage,
+                                         String exceptionType, StackTraceElement[] stack) {
+        String version = "unknown";
+        try {
+            android.content.pm.PackageInfo info =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            if (info.versionName != null) version = info.versionName;
+        } catch (Exception ignored) { }
+        StringBuilder report = new StringBuilder();
+        report.append("C2 Reborn native video diagnostic\\n")
+                .append("APK version: ").append(version).append('\\n')
+                .append("Device: ").append(Build.MANUFACTURER).append(' ')
+                .append(Build.MODEL).append('\\n')
+                .append("Android: ").append(Build.VERSION.RELEASE)
+                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\\n")
+                .append("Outcome: ").append(outcome).append('\\n')
+                .append("Stage: ").append(stage).append('\\n')
+                .append("Exception type: ")
+                .append(exceptionType == null || exceptionType.isEmpty() ?
+                        "none captured (may be blocked native call)" : exceptionType)
+                .append('\\n')
+                .append("Stop worker still running: ").append(videoStopWorkerRunning)
+                .append('\\n');
+        if (stack != null && stack.length > 0) {
+            report.append("Java stack (up to 30 frames):\\n");
+            for (int i = 0; i < Math.min(stack.length, 30); i++)
+                report.append("  at ").append(stack[i]).append('\\n');
+        } else {
+            report.append("Java stack: unavailable\\n");
+        }
+        report.append("No recorded media, contacts, messages or private file URIs attached.\\n");
+        return report.toString();
+    }
+
+    /** User-initiated from Video recorder > Recording failed > Report. */
+    void shareLastVideoDiagnostic() {
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_SUBJECT, "C2 Reborn video stop diagnostic");
+        send.putExtra(Intent.EXTRA_TEXT, lastVideoDiagnostic);
+        try {
+            startActivity(Intent.createChooser(send, "Share video diagnostic"));
+            android.util.Log.i("C2Camera", "VIDEO_DIAGNOSTIC chooser opened by user");
+        } catch (Exception ex) {
+            android.util.Log.e("C2Camera", "VIDEO_DIAGNOSTIC chooser unavailable", ex);
+            if (phoneView != null)
+                phoneView.onCameraCaptureFailed("No app available to share report");
+        }
+    }
+
     boolean isNativeVideoStopWorkerRunning() { return videoStopWorkerRunning; }
 
     String lastNativeVideoFailureStage() { return lastVideoFailureStage; }
@@ -263,6 +322,7 @@ public class MainActivity extends Activity {
         videoStopWorkerRunning = true;
         videoSaveTimedOut = false;
         lastVideoFailureStage = "";
+        lastVideoDiagnostic = "Recording stop started but no failure has been observed.";
         videoFinaliseStage = "recorder.stop";
         videoSaveHandler.postDelayed(videoStopTimeout, 12_000L);
         final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
@@ -298,6 +358,8 @@ public class MainActivity extends Activity {
             Uri saved = null;
             boolean sharedPublished = false;
             String failure = null;
+            StackTraceElement[] publicationFailureFrames = null;
+            String publicationFailureType = "";
             if (pending == null || !valid) {
                 if (pending != null) C2MediaProvider.discard(this, pending);
                 String stopError = cameraPreview == null ? "" :
@@ -327,6 +389,8 @@ public class MainActivity extends Activity {
                     }
                 } catch (Exception ex) {
                     android.util.Log.e("C2Camera", "Unable to publish recorded video", ex);
+                    publicationFailureFrames = ex.getStackTrace();
+                    publicationFailureType = ex.getClass().getSimpleName();
                     failure = "Unable to save recorded video";
                 }
             }
@@ -338,6 +402,15 @@ public class MainActivity extends Activity {
             final boolean publishedToMovies = sharedPublished;
             final String error = failure;
             final String failedAtStage = valid ? videoFinaliseStage : "recorder.stop";
+            if (saved == null && !videoSaveTimedOut) {
+                String stoppedWith = !valid && cameraPreview != null ?
+                        cameraPreview.lastStopFailure() : publicationFailureType;
+                StackTraceElement[] frames = !valid && cameraPreview != null ?
+                        cameraPreview.lastStopExceptionStack() : publicationFailureFrames;
+                lastVideoDiagnostic = formatVideoDiagnostic(
+                        error == null ? "Video saving failed" : error,
+                        failedAtStage, stoppedWith, frames);
+            }
             runOnUiThread(() -> {
                 videoSaveHandler.removeCallbacks(videoStopTimeout);
                 boolean recoveredFromTimeout = videoSaveTimedOut;
@@ -363,6 +436,8 @@ public class MainActivity extends Activity {
         videoFinaliserThread = worker;
         worker.setUncaughtExceptionHandler((thread, error) -> {
             lastVideoFailureStage = videoFinaliseStage;
+            lastVideoDiagnostic = formatVideoDiagnostic("Unexpected video finaliser failure",
+                    videoFinaliseStage, error.getClass().getSimpleName(), error.getStackTrace());
             android.util.Log.e("C2Camera", "VIDEO_STOP_UNCAUGHT stage=" +
                     videoFinaliseStage, error);
             runOnUiThread(() -> {
