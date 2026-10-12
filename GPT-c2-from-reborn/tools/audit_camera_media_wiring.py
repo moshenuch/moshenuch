@@ -52,11 +52,20 @@ checks = {
 
     "Captured media rotates bounded C2 Gallery without deleting source file": (
         "boolean addCaptured(boolean video, Uri uri)" in gallery
+        and "while (list.size() >= 150)" in gallery
         and "list.remove(oldest);" in gallery
         and "return add(video, Collections.singletonList(uri)) > 0;" in gallery
         and "boolean indexed = galleryStore.addCaptured(video, uri);" in view
         and "showCapturedPhoto(uri);" in view
+        and "CAPTURE_RESULT page=" in view
         and "if (!indexed) showNotice(" in view
+    ),
+    "CI saturates real camera capture against 153 seeded Gallery entries": (
+        (root / "tools/smoke_gallery_capacity_emulator.sh").exists()
+        and "gallery-capacity-results.txt" in
+            (root / "tools/smoke_gallery_capacity_emulator.sh").read_text(encoding="utf-8")
+        and "gallery-capacity-final.xml" in
+            (root / "tools/smoke_gallery_capacity_emulator.sh").read_text(encoding="utf-8")
     ),
     "Late finalized video can be indexed after Gallery reaches capacity": (
         "galleryStore.addCaptured(true, uri)" in view
