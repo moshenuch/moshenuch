@@ -1,3 +1,29 @@
+GPT c2 from reborn — APK source v1.64.0 / HTML reference v6.343
+
+v1.64.0 — Embedded video recording (source implementation, device audit pending)
+
+- Video recorder now routes Record/Stop into an in-app MediaRecorder using the
+  live legacy Camera preview, rather than launching a stock camera application.
+- Request microphone permission on first video recording attempt. The user
+  retries Record after granting permission so the preview can resume safely.
+- Record to a temporary private MPEG-4 file, validate/finalise it on Stop,
+  Back, End, backgrounding or preview surface loss, then publish the MP4 to
+  Android Movies/C2 Reborn via MediaStore on Android 10+.
+- Retain the app-private video if Android shared Movies publication fails.
+  Never claim a corrupt or too-short video was successfully saved.
+- Show Record/Stop on the Nokia centre softkey and navigate to C2 Gallery
+  after successful recording.
+- Gate builds with tools/audit_native_video_wiring.py. This checks source
+  integration only; it cannot prove camera/audio encoding or gallery playback.
+- Android 6-9 shared video publication, actual device compatibility, audio,
+  capture orientation, play-back and recording under phone-call interruption
+  remain to be tested or implemented.
+- Debug APK is built and published by the GitHub Actions workflow after push;
+  do not infer a working/downloadable APK solely from this source version.
+- Native Android Java/Canvas application; no WebView.
+
+---
+
 GPT c2 from reborn — APK v1.42.0 / HTML reference v6.343
 
 v1.42.0 — Contacts-first reliability
