@@ -100,6 +100,23 @@ public final class C2CameraPreview extends SurfaceView implements SurfaceHolder.
             recorder.setAudioChannels(profile.audioChannels);
             recorder.setAudioEncoder(profile.audioCodec);
             recorder.setOrientationHint(sensorOrientation);
+            recorder.setMaxDuration(120_000);
+            // Match the private-media validation limit, avoiding unbounded writes.
+            try {
+                recorder.setMaxFileSize(150L * 1024L * 1024L);
+            } catch (RuntimeException unsupported) {
+                Log.w("C2Camera", "Recorder file-size limit unsupported", unsupported);
+            }
+            recorder.setOnInfoListener((mr, what, extra) -> {
+                if ((what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED ||
+                        what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) &&
+                        getContext() instanceof MainActivity) {
+                    MainActivity host = (MainActivity) getContext();
+                    host.runOnUiThread(() -> {
+                        if (recording) host.finishNativeVideoCapture();
+                    });
+                }
+            });
             recorder.setOutputFile(output.getAbsolutePath());
             recorder.setPreviewDisplay(getHolder().getSurface());
             recorder.prepare();
