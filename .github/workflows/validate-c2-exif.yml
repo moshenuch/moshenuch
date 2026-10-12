@@ -65,16 +65,4 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics
-          script: |
-            set -eu
-            apk="$(find apk-validation -type f -name '*.apk' -print -quit)"
-            test -n "$apk"
-            adb install -r "$apk"
-            adb shell am start -n com.moshenuch.c2reborn/.MainActivity
-            sleep 4
-            adb shell pidof com.moshenuch.c2reborn
-            if adb logcat -d -s AndroidRuntime:E | grep -A 8 'FATAL EXCEPTION' | grep -q 'com.moshenuch.c2reborn'; then
-              echo "Native app crashed on Android 6 (API 23)"
-              exit 1
-            fi
-            echo "Android 6 native launch passed; EXIF visual correctness remains untested."
+          script: bash GPT-c2-from-reborn/tools/smoke_api23_launch.sh
