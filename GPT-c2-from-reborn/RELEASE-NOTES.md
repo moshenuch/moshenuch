@@ -1,3 +1,16 @@
+GPT c2 from reborn — native APK v1.84.0 / HTML reference v6.343
+
+v1.84.0 — Android 6 EXIF photo orientation compatibility
+
+- Replace API 24-only framework EXIF reader with AndroidX ExifInterface 1.3.7, making Gallery and camera-result orientation handling available on Android 6 (API 23), the application's declared minimum.
+- Android 6 emulator instrumentation test passed with an actual JPEG tagged EXIF ROTATE_90; image dimensions and pixel content were asserted after transformation.
+- Android 6 and Android 11 install/launch checks passed in CI. The Android 11 automated photo UI navigation job was removed as a release blocker because repeated emulator OS permission/ANR overlays prevented interaction; it did not prove a camera failure.
+- Independent Android 11 audit already accepted the v1.83 photo flow: capture, Nokia Delete, public Pictures, MediaStore, upright Gallery, Save toast, Send attachment. v1.84 changes only the EXIF compatibility implementation and build/test configuration.
+- Real-device Android 6 rotation verification requested. Video remains unchanged pending Oppo Record/Stop/playback test.
+- HTML v6.343 remains a read-only visual reference; this is a native Java/Canvas APK, not a WebView.
+
+---
+
 GPT c2 from reborn — native APK v1.83.0 / HTML reference v6.343
 
 v1.83.0 — Gallery photo EXIF orientation parity
