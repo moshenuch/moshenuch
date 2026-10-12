@@ -36,6 +36,14 @@ public class MainActivity extends Activity {
     private static final int REQ_VIDEO_MIC = 409;
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
+    private final Handler videoSaveHandler = new Handler(Looper.getMainLooper());
+    private final Runnable videoSaveSlowNotice = () -> {
+        if (videoFinalising) {
+            android.util.Log.w("C2Camera", "VIDEO_SAVE slow: finalisation exceeded 15 seconds");
+            if (phoneView != null) phoneView.onCameraCaptureFailed(
+                    "Video still saving - please wait");
+        }
+    };
     private static MainActivity foreground;
     static void notifyCallUpdated() {
         MainActivity a = foreground;
@@ -220,6 +228,7 @@ public class MainActivity extends Activity {
     void finishNativeVideoCapture() {
         if (videoFinalising || cameraPreview == null || !cameraPreview.isRecording()) return;
         videoFinalising = true; // Block duplicate Stop, Back, End and new Record.
+        videoSaveHandler.postDelayed(videoSaveSlowNotice, 15_000L);
         final long finaliseStarted = android.os.SystemClock.elapsedRealtime();
         android.util.Log.i("C2Camera", "VIDEO_STOP queued on worker");
         final Uri pending = pendingNativeVideo;
@@ -283,6 +292,7 @@ public class MainActivity extends Activity {
             final boolean publishedToMovies = sharedPublished;
             final String error = failure;
             runOnUiThread(() -> {
+                videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
                 videoFinalising = false;
                 if (phoneView == null || isFinishing() || isDestroyed()) return;
                 if (finishedUri == null) {
@@ -713,6 +723,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        videoSaveHandler.removeCallbacks(videoSaveSlowNotice);
         stopSmsObservation();
         if (phoneView != null) phoneView.onAppDestroyed();
         if (foreground == this) foreground = null;
