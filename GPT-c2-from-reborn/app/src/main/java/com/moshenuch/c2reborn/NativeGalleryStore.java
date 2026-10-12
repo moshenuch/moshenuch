@@ -127,6 +127,20 @@ final class NativeGalleryStore {
         return true;
     }
 
+    /** Remove an exact deleted media URI without disturbing other Gallery entries. */
+    boolean removeUri(boolean video, String uri) {
+        if (uri == null || uri.isEmpty()) return false;
+        List<Entry> list = entries(video);
+        for (int i = 0; i < list.size(); i++) {
+            if (uri.equals(list.get(i).uri)) {
+                list.remove(i);
+                persist(video);
+                return true;
+            }
+        }
+        return false;
+    }
+
     void clear(boolean video) {
         entries(video).clear();
         persist(video);
