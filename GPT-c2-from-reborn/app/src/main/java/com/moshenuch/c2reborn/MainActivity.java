@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private boolean cameraActivityResumed;
     private static final int REQ_CAMERA_PREVIEW = 408;
     private static final int REQ_VIDEO_MIC = 409;
+    private static final int REQ_VIDEO_LIBRARY = 410;
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
@@ -761,6 +762,11 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_CAMERA_PREVIEW && results.length > 0 &&
                 results[0] == PackageManager.PERMISSION_GRANTED && phoneView != null &&
                 phoneView.isInCameraViewfinder()) showNativeCameraPreview(true);
+        if (requestCode == REQ_VIDEO_LIBRARY && phoneView != null) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.refreshDeviceVideos();
+            else phoneView.onGalleryPickerError();
+        }
         if (requestCode == REQ_VIDEO_MIC && phoneView != null) {
             // The runtime permission sheet may destroy the SurfaceView.
             // Do not attempt recorder.prepare() until the user retries from
@@ -791,6 +797,15 @@ public class MainActivity extends Activity {
     }
 
     /** Uses Android's scoped Storage Access Framework. No broad storage permission. */
+    public void requestVideoLibraryPermission() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        String permission = Build.VERSION.SDK_INT >= 33 ?
+                Manifest.permission.READ_MEDIA_VIDEO :
+                Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{permission}, REQ_VIDEO_LIBRARY);
+    }
+
     public void requestGalleryFiles(boolean video) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
