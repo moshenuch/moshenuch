@@ -304,7 +304,8 @@ jobs:
           name: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}
           path: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
 
-      - name: Prevent overwriting a numbered APK release
+      - name: Check numbered release immutability
+        id: numbered_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -313,11 +314,14 @@ jobs:
           set -euo pipefail
           tag="c2-native-v${VERSION}"
           if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>&1; then
-            echo "::error::Numbered release ${tag} already exists. Bump versionName and versionCode before publishing."
-            exit 1
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${tag} exists; validating build only. Never overwrite its APK."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish immutable versioned APK release
+        if: steps.numbered_release.outputs.publish == 'true'
         uses: ncipollo/release-action@v1
         with:
           tag: c2-native-v${{ steps.version.outputs.version }}
@@ -334,6 +338,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish/update public APK release
+        if: steps.numbered_release.outputs.publish == 'true'
         uses: ncipollo/release-action@v1
         with:
           tag: c2-native-latest
@@ -353,6 +358,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify published APK assets
+        if: steps.numbered_release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
