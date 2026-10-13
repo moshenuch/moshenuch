@@ -52,6 +52,14 @@ done
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
+# Do not count touches delivered to Android Home or a permission dialog as
+# evidence that the Nokia recorder was opened.
+foreground="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true)"
+echo "Foreground before Nokia navigation: $foreground" >> "$result"
+if [[ "$foreground" != *"$package/"* ]]; then
+  echo "FAIL probe precondition: C2 Activity is not foreground; recorder was never tested" | tee -a "$result"
+  exit 1
+fi
 adb logcat -c || true
 
 # Fresh install starts with Home's Menu on centre OK.
