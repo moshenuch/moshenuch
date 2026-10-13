@@ -1260,10 +1260,23 @@ public class MainActivity extends Activity {
         if (hasFocus) hideSystemUi();
     }
 
+    // Intercept the Android Back key before VideoView or the overlay consumes
+    // the key-up event. Route it exactly as the Nokia right softkey.
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (videoPlayerOverlay != null &&
+                event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_UP &&
+                    !event.isCanceled()) handleVideoPlayerNokiaKey("RSK");
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (videoPlayerOverlay != null) { closeGalleryVideo(); return; }
+        if (videoPlayerOverlay != null) { handleVideoPlayerNokiaKey("RSK"); return; }
         if (phoneView == null || !phoneView.handleAndroidBack()) {
             super.onBackPressed();
         }
