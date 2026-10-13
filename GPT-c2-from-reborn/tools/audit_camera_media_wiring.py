@@ -144,6 +144,25 @@ checks = {
         and "if (sharedPublished)" in activity
         and "deleteCapturedPhoto(privateCopy);" in activity
     ),
+    "Nokia player uses the same close action for native RSK and Android Back": (
+        'boolean handleVideoPlayerNokiaKey(String key)' in activity
+        and 'if ("RSK".equals(key) || "END".equals(key))' in activity
+        and 'closeGalleryVideo();' in activity
+        and 'handleVideoPlayerNokiaKey("RSK");' in activity
+        and 'phoneView.onNativeVideoViewerClosed()' in activity
+        and '"galleryVideos".equals(page)' in view
+    ),
+    "C2Back diagnostics remain available for real hardware": (
+        '"C2Back", "DISPATCH keyBack action="' in activity
+        and '"C2Back", "ON_BACK_PRESSED playerBack"' in activity
+        and '"C2Back", "NOKIA_RSK_VIDEO_CLOSE"' in activity
+    ),
+    "Gallery video and photo browsers stay Nokia-native": (
+        'go("galleryVideoBrowser");' in view
+        and 'go("galleryImageBrowser");' in view
+        and 'MediaStore.Video.Media.EXTERNAL_CONTENT_URI' in view
+        and 'MediaStore.Images.Media.EXTERNAL_CONTENT_URI' in view
+    ),
 }
 
 for name, ok in checks.items():
