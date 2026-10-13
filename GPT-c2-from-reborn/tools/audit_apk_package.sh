@@ -33,6 +33,11 @@ with zipfile.ZipFile(apk) as z:
 PY
 unzip -Z1 "$apk" | grep -Fx 'AndroidManifest.xml' >/dev/null
 unzip -Z1 "$apk" | grep -Fx 'classes.dex' >/dev/null
+# The Nokia font is a product requirement. NokiaFontFaces silently falls back
+# to Android's default typeface when these assets are absent, so a build that
+# loses them must fail here, before publication, not in a visual review.
+unzip -Z1 "$apk" | grep -Fx 'assets/nokia_font/regular.ttf' >/dev/null
+unzip -Z1 "$apk" | grep -Fx 'assets/nokia_font/bold.ttf' >/dev/null
 
 sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 [[ -n "$sdk_root" && -d "$sdk_root/build-tools" ]] || {
@@ -54,7 +59,7 @@ package_line="$(grep '^package: ' <<< "$badging")"
 "$build_tools/apksigner" verify --verbose "$apk" >/dev/null
 
 sha="$(sha256sum "$apk" | cut -d' ' -f1)"
-echo "PASS APK ZIP, AndroidManifest.xml, classes.dex, package/version, alignment, signature"
+echo "PASS APK ZIP, AndroidManifest.xml, classes.dex, Nokia font assets, package/version, alignment, signature"
 echo "APK VERSION=$expected_version SIZE=$bytes SHA256=$sha"
 {
   echo "### APK packaging validation"
@@ -62,6 +67,6 @@ echo "APK VERSION=$expected_version SIZE=$bytes SHA256=$sha"
   echo "Version: `$expected_version`"
   echo "Size: `$bytes` bytes"
   echo "SHA-256: `$sha`"
-  echo "ZIP, manifest, DEX, package/version, zipalign and apksigner: PASS"
+  echo "ZIP, manifest, DEX, Nokia font assets, package/version, zipalign and apksigner: PASS"
   echo "These checks do not prove that a third-party emulator upload interface accepts this APK."
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
