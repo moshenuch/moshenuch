@@ -313,11 +313,16 @@ jobs:
         run: |
           set -euo pipefail
           tag="c2-native-v${VERSION}"
-          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>&1; then
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>/tmp/c2-release-lookup.err; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "::notice::${tag} exists; validating build only. Never overwrite its APK."
-          else
+          elif grep -Eq 'HTTP 404|Not Found.*404' /tmp/c2-release-lookup.err; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${tag} does not exist; new version may be published."
+          else
+            echo "::error::Cannot verify whether ${tag} already exists; refusing to publish."
+            cat /tmp/c2-release-lookup.err >&2
+            exit 1
           fi
 
       - name: Publish immutable versioned APK release
