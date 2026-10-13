@@ -140,4 +140,31 @@ if grep -q 'VIDEO_SAVE result=shared' "$report_dir/video-camera-log.txt"; then
 else
   echo "WARN shared-publication log was not observed" | tee -a "$result"
 fi
+# A successful save returns to Nokia Gallery > Video clips with the new
+# recording selected. Verify Android's actual Back key from the native player;
+# never count an event sent while still on the Gallery list as a pass.
+adb logcat -c || true
+tap "Open saved Gallery video" 0
+sleep 3
+adb logcat -d -v brief -s C2Gallery:I '*:S' > "$report_dir/video-playback-log.txt" || true
+if ! grep -q 'VIDEO_PREPARED size=' "$report_dir/video-playback-log.txt"; then
+  echo "FAIL Android Back probe precondition: in-house Gallery video player did not report VIDEO_PREPARED" | tee -a "$result"
+  exit 1
+fi
+echo "PASS in-house video player prepared selected recording" | tee -a "$result"
+adb shell input keyevent KEYCODE_BACK
+sleep 2
+adb logcat -d -v brief -s C2Back:I '*:S' > "$report_dir/video-back-log.txt" || true
+if grep -q 'NOKIA_RSK_VIDEO_CLOSE' "$report_dir/video-back-log.txt"; then
+  echo "PASS Android KEYCODE_BACK routed to Nokia Gallery player close" | tee -a "$result"
+else
+  echo "FAIL Android Back did not produce Nokia player close diagnostic" | tee -a "$result"
+  exit 1
+fi
+foreground="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true)"
+if [[ "$foreground" != *"$package/"* ]]; then
+  echo "FAIL app lost foreground after Android Back: $foreground" | tee -a "$result"
+  exit 1
+fi
+echo "PASS C2 remains foreground after Android Back" | tee -a "$result"
 echo "Scope: emulated video file only; cannot establish real microphone content or Appetize compatibility." | tee -a "$result"
