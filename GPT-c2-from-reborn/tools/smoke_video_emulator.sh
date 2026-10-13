@@ -52,6 +52,20 @@ done
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
+# The install smoke test may leave a first-launch permission sheet, and
+# Android can return to Launcher. Clear only the emulator's known Android
+# permission UI; never send Nokia navigation while another Activity is active.
+for attempt in 1 2 3 4 5; do
+  foreground="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true)"
+  echo "Preflight $attempt: $foreground" >> "$result"
+  [[ "$foreground" == *"$package/"* ]] && break
+  if [[ "$foreground" == *"permissioncontroller"* ]]; then
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+  fi
+  adb shell am start -W -n "$package/.MainActivity" >> "$result"
+  sleep 1
+done
 # Do not count touches delivered to Android Home or a permission dialog as
 # evidence that the Nokia recorder was opened.
 foreground="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true)"
