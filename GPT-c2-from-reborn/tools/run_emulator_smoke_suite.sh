@@ -7,8 +7,20 @@ results="GPT-c2-from-reborn/build/emulator-smoke"
 bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh "$apk" "$results"
 # Recording hardware may be unsupported by emulated camera; always retain
 # video logs but don't lose a successfully built/distributed APK as a result.
-if ! bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh "$results"; then
+if bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh "$results"; then
+  echo "PASS: Emulator recorded, finalized and independently decoded an MP4." | tee "$results/video-suite-status.txt"
+else
+  echo "FAIL (non-blocking): Emulator recording/finalization/MP4 validation did not pass. Oppo hardware remains UNTESTED." | tee "$results/video-suite-status.txt"
   echo "::warning::Native video probe failed; inspect video-results.txt and video-camera-log.txt"
+fi
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo "### C2 video recording acceptance"
+    echo
+    cat "$results/video-suite-status.txt"
+    echo
+    echo "This emulator outcome does not establish Oppo recording, microphone audio or Android system Back behaviour."
+  } >> "$GITHUB_STEP_SUMMARY"
 fi
 # A photo can be present in private app storage but absent from Gallery.
 # Explicitly capture another image, query its public MediaStore row and
