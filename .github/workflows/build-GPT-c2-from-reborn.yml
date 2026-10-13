@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
     paths:
       - "GPT-c2-from-reborn/**"
+      # Documentation-only commits must not rebuild/replace a released APK.
+      - "!GPT-c2-from-reborn/**/*.md"
+      - "!GPT-c2-from-reborn/*.md"
       - ".github/workflows/build-GPT-c2-from-reborn.yml"
   workflow_dispatch:
 
