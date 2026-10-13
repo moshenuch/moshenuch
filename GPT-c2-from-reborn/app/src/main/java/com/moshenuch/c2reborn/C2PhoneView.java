@@ -3919,6 +3919,8 @@ public class C2PhoneView extends View {
 
     private void press(String key) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        if (getContext() instanceof MainActivity &&
+                ((MainActivity) getContext()).handleVideoPlayerNokiaKey(key)) return;
         if ("videoError".equals(page)) {
             if ("RSK".equals(key) || "END".equals(key)) exitVideoError();
             else if ("LSK".equals(key)) {
