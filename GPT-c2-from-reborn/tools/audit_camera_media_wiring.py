@@ -144,6 +144,21 @@ checks = {
         and "if (sharedPublished)" in activity
         and "deleteCapturedPhoto(privateCopy);" in activity
     ),
+    "Nokia video Pause and Play use the in-house player": (
+        'if ("LSK".equals(key) || "OK".equals(key))' in activity
+        and 'videoPlayerPlaySoftkey.performClick();' in activity
+        and 'play.setOnClickListener(v -> {' in activity
+        and 'if (player.isPlaying()) {' in activity
+        and 'player.pause();' in activity
+        and 'player.start();' in activity
+        and 'status.setText("Paused");' in activity
+        and 'status.setText("Playing");' in activity
+    ),
+    "Nokia Gallery resumes after closing the player": (
+        'back.setOnClickListener(v -> closeGalleryVideo());' in activity
+        and 'if (player != null && phoneView != null) phoneView.onNativeVideoViewerClosed();' in activity
+        and 'player.stopPlayback();' in activity
+    ),
     "Nokia player uses the same close action for native RSK and Android Back": (
         'boolean handleVideoPlayerNokiaKey(String key)' in activity
         and 'if ("RSK".equals(key) || "END".equals(key))' in activity
