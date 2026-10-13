@@ -27,6 +27,17 @@ with zipfile.ZipFile(apk) as z:
         raise SystemExit("FAIL: unsupported ZIP compression methods: " + str(unexpected))
     if "AndroidManifest.xml" not in names or "classes.dex" not in names:
         raise SystemExit("FAIL: required APK members missing")
+    # An entry name alone does not establish that the bundled font is usable.
+    for font in ("assets/nokia_font/regular.ttf", "assets/nokia_font/bold.ttf"):
+        if font not in names:
+            raise SystemExit("FAIL: Nokia font missing: " + font)
+        info = z.getinfo(font)
+        if info.file_size < 1000:
+            raise SystemExit("FAIL: Nokia font is unexpectedly small: " + font)
+        with z.open(font) as stream:
+            signature = stream.read(4)
+        if signature not in (b"\\x00\\x01\\x00\\x00", b"true", b"OTTO"):
+            raise SystemExit("FAIL: Nokia font has invalid sfnt signature: " + font)
     print("PASS ZIP methods: stored/deflated; members:", len(names))
     print("ZIP compressed:", sum(e.compress_size for e in infos),
           "uncompressed:", sum(e.file_size for e in infos))
