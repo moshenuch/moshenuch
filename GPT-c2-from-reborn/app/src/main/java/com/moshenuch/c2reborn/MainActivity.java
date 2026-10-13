@@ -950,6 +950,7 @@ public class MainActivity extends Activity {
         videoPlayerState = null;
         videoPlayerPlaySoftkey = null;
         videoPlayerSurfaceFrame = null;
+        hideSystemUi();
         if (Build.VERSION.SDK_INT >= 33 && videoBackCallback != null) {
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(videoBackCallback);
             videoBackCallback = null;
@@ -1026,6 +1027,7 @@ public class MainActivity extends Activity {
             videoPlayerState = status;
             videoPlayerPlaySoftkey = play;
             phoneFrame.addView(overlay, lcdBounds);
+            hideSystemUi(); // Reveal Android navigation for actual system Back.
             if (Build.VERSION.SDK_INT >= 33) {
                 videoBackCallback = () -> handleVideoPlayerNokiaKey("RSK");
                 getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
@@ -1257,13 +1259,17 @@ public class MainActivity extends Activity {
     }
 
     private void hideSystemUi() {
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        // Android's navigation Back is a system-bar action, not a key delivered
+        // to Activity.dispatchKeyEvent. Keep its bar available during playback.
+        // Preserve the layout-behind-bars flags so the Nokia LCD does not move.
+        int flags = View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+        if (videoPlayerOverlay == null)
+            flags |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
     }
 
     @Override
