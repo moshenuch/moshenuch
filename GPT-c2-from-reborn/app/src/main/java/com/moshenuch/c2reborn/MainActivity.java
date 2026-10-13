@@ -924,6 +924,7 @@ public class MainActivity extends Activity {
     private android.widget.VideoView videoPlayerView;
     private android.widget.TextView videoPlayerState;
     private android.widget.TextView videoPlayerPlaySoftkey;
+    private android.window.OnBackInvokedCallback videoBackCallback;
     private android.widget.FrameLayout videoPlayerSurfaceFrame;
 
     private android.widget.TextView videoPlayerLabel(String value, boolean bold) {
@@ -949,6 +950,10 @@ public class MainActivity extends Activity {
         videoPlayerState = null;
         videoPlayerPlaySoftkey = null;
         videoPlayerSurfaceFrame = null;
+        if (Build.VERSION.SDK_INT >= 33 && videoBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(videoBackCallback);
+            videoBackCallback = null;
+        }
         if (player != null && phoneView != null) phoneView.onNativeVideoViewerClosed();
     }
 
@@ -1020,6 +1025,12 @@ public class MainActivity extends Activity {
             videoPlayerState = status;
             videoPlayerPlaySoftkey = play;
             phoneFrame.addView(overlay, lcdBounds);
+            if (Build.VERSION.SDK_INT >= 33) {
+                videoBackCallback = () -> handleVideoPlayerNokiaKey("RSK");
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                        videoBackCallback);
+            }
             // The handset's centre key and Back/End work without Android
             // playback controls; touch controls remain available as fallback.
             overlay.setFocusableInTouchMode(true);
@@ -1258,6 +1269,27 @@ public class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemUi();
+    }
+
+    // Android 11 key dispatch fallback for views that take focus during video.
+    @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+                videoPlayerOverlay != null) {
+            event.startTracking();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+                videoPlayerOverlay != null) {
+            handleVideoPlayerNokiaKey("RSK");
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
     }
 
     // Intercept the Android Back key before VideoView or the overlay consumes
