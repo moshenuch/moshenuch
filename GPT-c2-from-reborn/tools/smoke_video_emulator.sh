@@ -57,7 +57,11 @@ sleep 2
 foreground="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true)"
 echo "Foreground before Nokia navigation: $foreground" >> "$result"
 if [[ "$foreground" != *"$package/"* ]]; then
-  echo "FAIL probe precondition: C2 Activity is not foreground; recorder was never tested" | tee -a "$result"
+  if [[ "$foreground" == *"permissioncontroller"* ]]; then
+    echo "FAIL probe setup: Android runtime permission dialog covers C2. Grant/dismiss permission prompt before navigating to Video camera." | tee -a "$result"
+  else
+    echo "FAIL probe precondition: C2 Activity is not foreground; recorder was never tested" | tee -a "$result"
+  fi
   exit 1
 fi
 adb logcat -c || true
