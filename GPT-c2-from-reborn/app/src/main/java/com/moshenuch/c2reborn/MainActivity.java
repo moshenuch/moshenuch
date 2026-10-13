@@ -961,6 +961,7 @@ public class MainActivity extends Activity {
     boolean handleVideoPlayerNokiaKey(String key) {
         if (videoPlayerOverlay == null) return false;
         if ("RSK".equals(key) || "END".equals(key)) {
+            android.util.Log.i("C2Back", "NOKIA_RSK_VIDEO_CLOSE");
             closeGalleryVideo();
             return true;
         }
@@ -1286,6 +1287,7 @@ public class MainActivity extends Activity {
     public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
         if (keyCode == android.view.KeyEvent.KEYCODE_BACK &&
                 videoPlayerOverlay != null) {
+            android.util.Log.i("C2Back", "ON_KEY_UP playerBack");
             handleVideoPlayerNokiaKey("RSK");
             return true;
         }
@@ -1296,6 +1298,9 @@ public class MainActivity extends Activity {
     // the key-up event. Route it exactly as the Nokia right softkey.
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (videoPlayerOverlay != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK)
+            android.util.Log.i("C2Back", "DISPATCH keyBack action=" + event.getAction() +
+                    " canceled=" + event.isCanceled());
         if (videoPlayerOverlay != null &&
                 event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
             if (event.getAction() == android.view.KeyEvent.ACTION_UP &&
@@ -1308,7 +1313,11 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (videoPlayerOverlay != null) { handleVideoPlayerNokiaKey("RSK"); return; }
+        if (videoPlayerOverlay != null) {
+            android.util.Log.i("C2Back", "ON_BACK_PRESSED playerBack");
+            handleVideoPlayerNokiaKey("RSK");
+            return;
+        }
         if (phoneView == null || !phoneView.handleAndroidBack()) {
             super.onBackPressed();
         }
