@@ -3,40 +3,23 @@
 set -euo pipefail
 apk="GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk"
 results="GPT-c2-from-reborn/build/emulator-smoke"
-# Installation and native Activity startup are required to pass.
 bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh "$apk" "$results"
-# Recording hardware may be unsupported by emulated camera; always retain
-# video logs but don't lose a successfully built/distributed APK as a result.
 if bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh "$results"; then
   echo "PASS: Emulator recorded, finalized and independently decoded an MP4." | tee "$results/video-suite-status.txt"
 else
   echo "FAIL (non-blocking): Emulator recording/finalization/MP4 validation did not pass. Oppo hardware remains UNTESTED." | tee "$results/video-suite-status.txt"
-  echo "::warning::Native video probe failed; inspect video-results.txt and video-camera-log.txt"
 fi
-if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-  {
-    echo "### C2 video recording acceptance"
-    echo
-    cat "$results/video-suite-status.txt"
-    echo
-    echo "This emulator outcome does not establish Oppo recording, microphone audio or Android system Back behaviour."
-  } >> "$GITHUB_STEP_SUMMARY"
-fi
-# A photo can be present in private app storage but absent from Gallery.
-# Explicitly capture another image, query its public MediaStore row and
-# independently decode the JPEG saved under shared Pictures.
 if ! bash GPT-c2-from-reborn/tools/smoke_photo_emulator.sh "$results"; then
-  echo "::warning::Native photo or Gallery-index probe failed; inspect photo-results.txt and photo-camera-log.txt"
+  echo "::warning::Native photo or Gallery-index probe failed"
 fi
-
-# Stress the native 150-row Gallery cap using 153 synthetic legacy index
-# entries plus a genuine emulator JPEG. This does not simulate 153 captures.
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
-  echo "::warning::Gallery index-capacity fixture failed; see gallery-capacity-results.txt and gallery-capacity-log.txt"
+  echo "::warning::Gallery capacity fixture failed"
 fi
-
-# Verify Nokia's actual Report softkey sends a privacy-limited synthetic
-# failure report to a separate Android app. No camera failure is induced.
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
-  echo "::warning::No-PC video diagnostic Report/receiver test failed; see video-report-results.txt and video-report-receiver-log.txt"
+  echo "::warning::Video report receiver test failed"
+fi
+# This probe is diagnostic until it is paired with a deterministic player-open
+# fixture. It must not turn an unavailable navigation fixture into an app failure.
+if ! bash GPT-c2-from-reborn/tools/smoke_android_back_emulator.sh "$results"; then
+  echo "::warning::Android Back diagnostic failed"
 fi
