@@ -304,6 +304,19 @@ jobs:
           name: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}
           path: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
 
+      - name: Prevent overwriting a numbered APK release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="c2-native-v${VERSION}"
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>&1; then
+            echo "::error::Numbered release ${tag} already exists. Bump versionName and versionCode before publishing."
+            exit 1
+          fi
+
       - name: Publish immutable versioned APK release
         uses: ncipollo/release-action@v1
         with:
@@ -314,9 +327,9 @@ jobs:
             HTML reference v${{ steps.html.outputs.version }}.
             Native Android application; verify device behaviour separately.
           artifacts: GPT-c2-from-reborn-HTML-v${{ steps.html.outputs.version }}-APK-v${{ steps.version.outputs.version }}.apk
-          allowUpdates: true
+          allowUpdates: false
           removeArtifacts: false
-          replacesArtifacts: true
+          replacesArtifacts: false
           makeLatest: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
