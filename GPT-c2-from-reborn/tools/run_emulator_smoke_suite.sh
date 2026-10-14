@@ -49,6 +49,13 @@ else
   echo "::error::Add to contact core acceptance failed; see add-to-contact-results.txt"
   add_to_contact_core_failed=1
 fi
+# Mirror the probe report into the job log so failures are diagnosable
+# without downloading the artifact.
+if [[ -s "$results/add-to-contact-results.txt" ]]; then
+  echo "===== add-to-contact-results.txt ====="
+  cat "$results/add-to-contact-results.txt"
+  echo "===== end add-to-contact-results.txt ====="
+fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
 fi
