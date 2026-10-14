@@ -1,3 +1,13 @@
+## Add to contact UK duplicate forms, blocking emulator acceptance — 14 October 2026
+
+- **Fix (audit):** duplicate detection now treats UK trunk-0 and +44 / 0044 international forms as the same number, so dialling 07555000000 when the contact stores +447555000000 is refused as a duplicate instead of adding a second row.
+- The app now logs C2Contacts markers (picker open, refusal reason, successful insert) so the emulator probe asserts each step instead of inferring state from the provider alone.
+- Emulator probe extended and made BLOCKING for the core sections: UK-form duplicate refusal, dialer add, exact duplicate refusal, picker Back cancel, and WRITE_CONTACTS-revoked refusal. Seeding now requires exactly one new raw contact (before/after id diff).
+- Conversations coverage (sender add from the thread list, alphanumeric sender refused before the picker) runs in the same probe but is reported separately while SMS shell seeding remains unreliable on the CI image; the probe now logs the provider's answer for diagnosis.
+- APK **v2.03.2** / pinned HTML **v6.343**.
+
+---
+
 ## Add to contact hardening and Conversations menu fix — 14 October 2026
 
 - **Fix (real defect):** the Conversations Options menu never actually listed **Add to contact**, so the v2.03.0 conversations entry point was unreachable from the menu. It is now listed right after Call.
