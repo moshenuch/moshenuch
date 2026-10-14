@@ -92,7 +92,9 @@ marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
 require_marker() {
   if ! marker_seen "$1"; then
     echo "FAIL expected app log marker: $1" | tee -a "$result"
-    adb logcat -d -s C2Contacts:I > "$out/add-to-contact-section-log.txt" 2>/dev/null || true
+    echo "--- C2Contacts logcat at failure ---" | tee -a "$result"
+    adb logcat -d -s C2Contacts:I 2>/dev/null | tee -a "$result" > "$out/add-to-contact-section-log.txt" || true
+    echo "--- end logcat ---" | tee -a "$result"
     exit 1
   fi
 }
@@ -229,8 +231,10 @@ expect_foreground
 # --- E. WRITE_CONTACTS revoked must refuse the write ------------------------
 # Revoking a runtime permission kills the app process, so relaunch before
 # driving the UI again.
-adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 sleep 1
+perm_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(WRITE|READ)_CONTACTS' | head -4 | tr -d '\r')"
+echo "permission state after revoke: $perm_state" | tee -a "$result"
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
