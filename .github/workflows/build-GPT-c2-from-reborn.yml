@@ -340,6 +340,35 @@ jobs:
             exit 1
           fi
 
+      - name: Check versionCode strictly increases
+        if: steps.numbered_release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(awk '/versionCode/ {print $2; exit}' GPT-c2-from-reborn/app/build.gradle)
+          prev_tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100"             --jq '[.[] | select(.tag_name | startswith("c2-native-v"))] | sort_by(.published_at) | last | .tag_name // empty')
+          if [[ -z "$prev_tag" ]]; then
+            echo "No previous c2-native release; nothing to compare."
+            exit 0
+          fi
+          work=$(mktemp -d)
+          gh release download "$prev_tag" --repo "${GITHUB_REPOSITORY}" --pattern '*.apk' --dir "$work" --clobber
+          apk=$(ls "$work"/*.apk | head -1)
+          aapt=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          previous=$("$aapt" dump badging "$apk" | sed -n "s/^package: name='[^']*' versionCode='\([0-9]*\)'.*/\1/p")
+          echo "Previous release $prev_tag has versionCode $previous; this build has $current."
+          if ! [[ "$previous" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not read versionCode from $prev_tag APK; refusing to publish."
+            exit 1
+          fi
+          if (( current <= previous )); then
+            echo "::error::versionCode $current must be greater than $prev_tag's $previous. Bump versionCode in app/build.gradle."
+            exit 1
+          fi
+          echo "versionCode check passed: $current > $previous."
+
       - name: Publish immutable versioned APK release
         if: steps.numbered_release.outputs.publish == 'true'
         uses: ncipollo/release-action@v1
