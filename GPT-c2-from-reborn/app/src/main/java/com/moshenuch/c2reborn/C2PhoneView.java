@@ -605,6 +605,7 @@ public class C2PhoneView extends View {
         loadStringList("calendar", calendar);
         loadStringList("sms_templates_v1", savedSmsTemplates);
         loadDrafts();
+        loadMsgRecipients();
         loadLongSet("sms_local_read", localReadSmsIds);
         loadLongSet("sms_local_unread", localUnreadSmsIds);
         loadLongSet("sms_hidden", hiddenSmsIds);
@@ -663,6 +664,66 @@ public class C2PhoneView extends View {
         } catch (Exception ignored) {
             // Retain the original stored values; do not overwrite on parse error.
         }
+    }
+
+    /** One recent-SMS-recipient entry for Log > Msg. recipients. */
+    private static class MsgRecipient {
+        final String number;
+        final long ts;
+        MsgRecipient(String number, long ts) {
+            this.number = number;
+            this.ts = ts;
+        }
+    }
+
+    private final ArrayList<MsgRecipient> msgRecipients = new ArrayList<>();
+
+    private void loadMsgRecipients() {
+        msgRecipients.clear();
+        try {
+            JSONArray array = new JSONArray(prefs.getString("msg_recipients_v1", "[]"));
+            for (int i = 0; i < array.length() && i < 100; i++) {
+                JSONObject obj = array.optJSONObject(i);
+                if (obj == null) continue;
+                String number = obj.optString("number", "");
+                if (number.isEmpty()) continue;
+                msgRecipients.add(new MsgRecipient(number, obj.optLong("ts", 0L)));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void saveMsgRecipients() {
+        JSONArray array = new JSONArray();
+        try {
+            for (MsgRecipient entry : msgRecipients) {
+                JSONObject obj = new JSONObject();
+                obj.put("number", entry.number);
+                obj.put("ts", entry.ts);
+                array.put(obj);
+            }
+            prefs.edit().putString("msg_recipients_v1", array.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Log > Msg. recipients: most recent first, one row per number, cap 100. */
+    private void recordMsgRecipient(String number) {
+        String digits = digitsOnly(number);
+        if (digits.length() < 3) return;
+        for (int i = msgRecipients.size() - 1; i >= 0; i--)
+            if (digits.equals(digitsOnly(msgRecipients.get(i).number)))
+                msgRecipients.remove(i);
+        msgRecipients.add(0, new MsgRecipient(number, System.currentTimeMillis()));
+        while (msgRecipients.size() > 100) msgRecipients.remove(msgRecipients.size() - 1);
+        saveMsgRecipients();
+    }
+
+    private String formatMsgRecipientTime(long ts) {
+        if (ts <= 0) return "";
+        SimpleDateFormat day = new SimpleDateFormat("yyyy-MM-dd", Locale.UK);
+        String fmt = day.format(new Date(ts)).equals(day.format(new Date())) ? "HH:mm" : "dd-MM-yyyy";
+        return new SimpleDateFormat(fmt, Locale.UK).format(new Date(ts));
     }
 
     private void saveDrafts() {
@@ -2236,6 +2297,7 @@ public class C2PhoneView extends View {
                 "calllog".equals(page) || "missed".equals(page) ||
                 "received".equals(page) || "dialled".equals(page))
             return new String[]{"Options", "Details", "Back"};
+        if ("recipients".equals(page)) return new String[]{"", "Call", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
@@ -2507,6 +2569,7 @@ public class C2PhoneView extends View {
             case "addToContactPicker": return "Add to contact";
             case "speedDialAssign": return "Select speed dial";
             case "log": return "Log";
+            case "recipients": return "Message recipients";
             case "settings": return "Settings";
             case "demoTools": return "Demo data (debug)";
             case "callsettings": return "Call settings";
@@ -2705,6 +2768,15 @@ public class C2PhoneView extends View {
             }
             case "log":
                 return new String[]{"All calls","Missed calls","Received calls","Dialled numbers","Msg. recipients","Clear log lists","Video & voice calls","Internet call durat.","Data counter","Pack. data timer","Message log","Positioning","Sync log","Simulate missed call"};
+            case "recipients": {
+                String[] rows = new String[msgRecipients.size()];
+                for (int i = 0; i < rows.length; i++) {
+                    MsgRecipient entry = msgRecipients.get(i);
+                    String time = formatMsgRecipientTime(entry.ts);
+                    rows[i] = contactNameFor(entry.number) + (time.isEmpty() ? "" : "  " + time);
+                }
+                return rows;
+            }
             case "calllog":
                 return callItemsFor(0);
             case "missed":
@@ -3163,12 +3235,27 @@ public class C2PhoneView extends View {
         if ("log".equals(page)) {
             String[] routes = {"calllog","missed","received","dialled"};
             if (sel >= 0 && sel < 4) go(routes[sel]);
+            else if (sel == 4) {
+                if (msgRecipients.isEmpty()) {
+                    android.util.Log.i("C2Log", "MSG_RECIPIENTS_EMPTY");
+                    showNotice("No numbers");
+                } else {
+                    android.util.Log.i("C2Log", "MSG_RECIPIENTS_OPEN count=" + msgRecipients.size());
+                    go("recipients");
+                }
+            }
             else if (sel == 10) showSmsMessageLog();
             else {
                 detailTitle = itemsFor(page)[Math.max(0, Math.min(sel, itemsFor(page).length - 1))];
                 detailText = "Not implemented in this native APK.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("recipients".equals(page)) {
+            if (sel >= 0 && sel < msgRecipients.size())
+                startCall(msgRecipients.get(sel).number);
             return;
         }
 
@@ -3864,6 +3951,7 @@ public class C2PhoneView extends View {
             showNotice("SMS permission required");
             return;
         }
+        recordMsgRecipient(recipient.trim());
         if (editingDraftIndex >= 0 && editingDraftIndex < drafts.size()) {
             drafts.remove(editingDraftIndex);
             saveDrafts();
