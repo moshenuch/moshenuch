@@ -15,7 +15,12 @@ fi
 
 # Independent destructive test touches only a newly captured emulator JPEG.
 # Run after photo Send so the share receiver does not interrupt deletion.
-if ! bash GPT-c2-from-reborn/tools/smoke_photo_delete_emulator.sh "$results"; then
+if bash GPT-c2-from-reborn/tools/smoke_photo_delete_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS Delete Yes removed exact newly captured JPEG' "$results/photo-delete-results.txt" ||
+     ! grep -Fq 'PASS pre-existing JPEG listing unchanged' "$results/photo-delete-results.txt"; then
+    echo "::warning::Photo Delete Yes probe completed without full acceptance evidence"
+  fi
+else
   echo "::warning::Photo Delete Yes acceptance failed; see photo-delete-results.txt"
 fi
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
@@ -35,6 +40,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$results/video-suite-status.txt"
     echo
     cat "$results/android-back-results.txt"
+    echo
+    echo "### C2 Photo Delete Yes acceptance"
+    echo
+    if [[ -s "$results/photo-delete-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/photo-delete-results.txt" || true
+    else
+      echo "UNVERIFIED: photo deletion probe did not produce a report."
+    fi
     echo
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
