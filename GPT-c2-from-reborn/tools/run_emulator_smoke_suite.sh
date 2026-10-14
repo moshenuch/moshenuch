@@ -18,8 +18,18 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
 fi
-# This probe is diagnostic until it is paired with a deterministic player-open
-# fixture. It must not turn an unavailable navigation fixture into an app failure.
-if ! bash GPT-c2-from-reborn/tools/smoke_android_back_emulator.sh "$results"; then
-  echo "::warning::Android Back diagnostic failed"
+# The video probe records a fresh clip, opens it in the in-house Gallery
+# player, dispatches Android KEYCODE_BACK, and checks the player close log
+# and foreground Activity. Summarize that same run; never send a second Back.
+bash GPT-c2-from-reborn/tools/smoke_android_back_emulator.sh "$results"
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo "### C2 Android 11 video and Back acceptance"
+    echo
+    cat "$results/video-suite-status.txt"
+    echo
+    cat "$results/android-back-results.txt"
+    echo
+    echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
+  } >> "$GITHUB_STEP_SUMMARY"
 fi
