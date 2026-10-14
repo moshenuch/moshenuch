@@ -29,6 +29,15 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
   echo "::warning::Gallery capacity fixture failed"
 fi
+if bash GPT-c2-from-reborn/tools/smoke_add_to_contact_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS Add to contact appended exact dialled number' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS pre-existing contact number' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after Add to contact' "$results/add-to-contact-results.txt"; then
+    echo "::warning::Add to contact probe completed without full acceptance evidence"
+  fi
+else
+  echo "::warning::Add to contact acceptance failed; see add-to-contact-results.txt"
+fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
 fi
@@ -43,6 +52,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$results/video-suite-status.txt"
     echo
     cat "$results/android-back-results.txt"
+    echo
+    echo "### C2 Add to contact acceptance"
+    echo
+    if [[ -s "$results/add-to-contact-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/add-to-contact-results.txt" || true
+    else
+      echo "UNVERIFIED: Add to contact probe did not produce a report."
+    fi
     echo
     echo "### C2 Photo Delete Yes acceptance"
     echo
