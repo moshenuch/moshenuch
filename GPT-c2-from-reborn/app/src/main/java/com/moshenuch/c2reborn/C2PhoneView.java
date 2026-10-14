@@ -7178,11 +7178,8 @@ public class C2PhoneView extends View {
     }
 
     private String ukNormalisedDigits(String number) {
-        // Moti's handset is UK: a leading +44 / 0044 / 44 international form and
-        // the trunk 0 form are the same subscriber number for duplicate checks.
-        String digits = digitsOnly(number);
-        if (digits.length() == 12 && digits.startsWith("44")) return "0" + digits.substring(2);
-        return digits;
+        // Pure, smoke-tested helper: trunk 0 and +44 / 0044 / 44 forms match.
+        return UkPhoneNumbers.ukNormalisedDigits(number);
     }
 
     private void forwardSmsCopy(AndroidBackend.DeviceSms message) {
