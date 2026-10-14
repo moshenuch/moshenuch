@@ -1,3 +1,13 @@
+## Photo confirmation foreground acceptance — 14 October 2026
+
+- [GitHub Actions run #38548067223](https://github.com/moshenuch/moshenuch/actions/runs/38548067223) passed on commit `590abd86881a09a68cc0b28956339e81af1ab44f`.
+- Android 11 emulator confirmed Delete > No retained the JPEG and C2 stayed foreground; Delete > Yes removed only the new JPEG and C2 stayed foreground.
+- All pre-existing JPEGs were preserved. The video player Android Back acceptance also passed in the same run.
+- This closes the emulator confirmation/foreground regression checks; actual Oppo hardware video with microphone speech and physical Back remain unverified.
+- Source APK v2.02.0 / pinned HTML v6.343 remain unchanged. No new APK release.
+
+---
+
 ## Photo Delete No/Yes complete emulator acceptance — 14 October 2026
 
 - [GitHub Actions run #38544230613](https://github.com/moshenuch/moshenuch/actions/runs/38544230613) succeeded on commit `c9145feb2ce679bb58869682a06e139249db7ca6`.
