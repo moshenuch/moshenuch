@@ -3108,6 +3108,9 @@ public class C2PhoneView extends View {
                                 alreadySaved = true;
                                 break;
                             }
+                    long writeRawId = -1;
+                    if (!alreadySaved && backend.has(Manifest.permission.WRITE_CONTACTS))
+                        writeRawId = backend.writableRawContactId(target.contactId);
                     if (alreadySaved) {
                         android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=duplicate");
                         back();
@@ -3116,9 +3119,13 @@ public class C2PhoneView extends View {
                         android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=no_write_permission");
                         back();
                         showNotice("Contacts write permission unavailable");
-                    } else if (backend.addNumberToContact(target.rawContactId,
+                    } else if (writeRawId <= 0) {
+                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=read_only_contact");
+                        back();
+                        showNotice("Contact is read-only");
+                    } else if (backend.addNumberToContact(writeRawId,
                             pendingAddToContactNumber)) {
-                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_INSERTED rawContactId=" + target.rawContactId);
+                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_INSERTED rawContactId=" + writeRawId);
                         back();
                         refreshContactsFromPhone();
                         showNotice("Number added to " + target.name);
