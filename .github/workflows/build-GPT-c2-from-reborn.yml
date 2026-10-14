@@ -76,6 +76,17 @@ jobs:
             tools/NativeSmsDetailsSmokeTest.java
           java -cp build/parser-smoke com.moshenuch.c2reborn.NativeSmsDetailsSmokeTest
 
+      - name: Test UK phone-number duplicate normalisation
+        working-directory: GPT-c2-from-reborn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/uk-phone-smoke
+          javac -d build/uk-phone-smoke \
+            app/src/main/java/com/moshenuch/c2reborn/UkPhoneNumbers.java \
+            tools/NativeUkPhoneNumbersSmokeTest.java
+          java -cp build/uk-phone-smoke com.moshenuch.c2reborn.NativeUkPhoneNumbersSmokeTest
+
       - name: Test Nokia native main menu navigation
         working-directory: GPT-c2-from-reborn
         shell: bash
