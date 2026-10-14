@@ -1,3 +1,16 @@
+## Verified Android 11 video player Back acceptance — 14 October 2026
+
+- Baseline APK: **v2.02.0**, pinned HTML reference **v6.343**; this is a CI/documentation milestone, not a new APK release.
+- GitHub Actions [run #38527802727](https://github.com/moshenuch/moshenuch/actions/runs/38527802727) passed on commit `583902d6493e81f416cdddc174c58804cb544cd2`.
+- In the Android 11 emulator, `smoke_video_emulator.sh` recorded a new clip, finalized and independently decoded its MP4, then opened the selected clip in the in-app Gallery player.
+- Log evidence: `PASS in-house video player prepared selected recording`, `PASS C2 remains foreground after Android Back`, and `PASS: Android Back closed the prepared Nokia video player and C2 stayed foreground.`
+- The `smoke_android_back_emulator.sh` summary consumes the same player's logs. It intentionally **does not** send a second Back event after playback has closed.
+- CI now displays recording/Back acceptance in the job summary and retains individual logs in the Android 11 smoke artifact.
+- **Still unverified:** physical Oppo Record/Stop, audible microphone recording, physical Back gesture/key, and camera Photo > Delete > Yes deleting the actual shared image.
+- Avoid changes to `MediaRecorder.stop()` based solely on the old virtual-camera hang, and do not claim Oppo acceptance from emulator results.
+
+---
+
 Oppo video acceptance procedure (v1.85.0; no code change):
 
 - Prerequisite: use the v1.85.0 APK and grant Camera and Microphone permissions when requested. Launch Media > Video recorder.
