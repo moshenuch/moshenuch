@@ -57,6 +57,9 @@ tap() {
   adb shell input tap "$x" "$y"
   sleep 1
 }
+shot() { # shot <name>: PNG screenshot into the artifact dir for visual review
+  adb exec-out screencap -p > "$out/$1.png" 2>/dev/null || true
+}
 capture_evidence() {
   adb logcat -d -v brief -s C2Contacts:I AndroidRuntime:E '*:S' > "$out/add-to-contact-log.txt" || true
   adb shell screencap -p /sdcard/c2-add-to-contact.png 2>/dev/null || true
@@ -208,12 +211,17 @@ dial_number "$new_number"
 adb logcat -c || true
 tap LSK
 tap DOWN; tap DOWN; tap DOWN
+shot add-to-contact-options
 tap OK
 sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
+sleep 1
+shot add-to-contact-picker
 tap OK
 sleep 2
 require_marker 'ADD_TO_CONTACT_INSERTED rawContactId='
+sleep 1
+shot add-to-contact-inserted-notice
 rows="$(phone_rows)"
 echo "$rows" > "$out/add-to-contact-provider.txt"
 if grep -Fq 'Permission Denial' <<< "$rows"; then
@@ -242,6 +250,8 @@ require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK                          # pick the same contact again
 sleep 2
 require_marker 'ADD_TO_CONTACT_REFUSED reason=duplicate'
+sleep 1
+shot add-to-contact-duplicate-notice
 if [[ "$(count_phone_rows "$new_number")" != "1" ]]; then
   echo "FAIL duplicate Add to contact wrote another row: $(count_phone_rows "$new_number") rows for $new_number" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
