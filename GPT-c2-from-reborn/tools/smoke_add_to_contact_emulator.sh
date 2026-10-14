@@ -243,11 +243,22 @@ adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
 sheet_clear=0
-for attempt in 1 2 3 4 5; do
+empty_dumps=0
+# grep exits 1 on no match; without the trailing || true the assignment would
+# trip set -e and kill the probe silently (run 38595627823).
+for attempt in 1 2 3 4 5 6 7 8; do
   adb shell uiautomator dump /sdcard/c2-ui.xml >/dev/null 2>&1 || true
-  deny_bounds="$(adb shell cat /sdcard/c2-ui.xml 2>/dev/null | tr -d '\r'     | grep -o 'text="Deny"[^>]*' | head -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]')"
-  if [[ -z "$deny_bounds" ]]; then sheet_clear=1; break; fi
-  nums="$(grep -o '[0-9]*' <<< "$deny_bounds" | tr '\n' ' ')"
+  deny_bounds="$(adb shell cat /sdcard/c2-ui.xml 2>/dev/null | tr -d '\r' | grep -o 'text="Deny"[^>]*' | head -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]' || true)"
+  if [[ -z "$deny_bounds" ]]; then
+    empty_dumps=$((empty_dumps + 1))
+    # Two consecutive sheet-free dumps before declaring the sheet gone: the
+    # dialog can appear a beat after the cold launch.
+    if [[ "$empty_dumps" -ge 2 ]]; then sheet_clear=1; break; fi
+    sleep 1
+    continue
+  fi
+  empty_dumps=0
+  nums="$(grep -o '[0-9]*' <<< "$deny_bounds" | tr '\n' ' ' || true)"
   read -r x1 y1 x2 y2 <<< "$nums"
   echo "TAP permission-sheet Deny $(( (x1+x2)/2 )),$(( (y1+y2)/2 )) (attempt $attempt)" | tee -a "$result"
   adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
