@@ -1,3 +1,14 @@
+## Add to contact from dialer and Conversations — 14 October 2026
+
+- Dialer Options > **Add to contact** and Conversations Options > **Add to contact** now add the typed/sender number to an existing Android contact chosen from a Nokia-style picker, replacing the previous "not implemented" notice.
+- New `AndroidBackend.addNumberToContact` inserts one phone data row on the selected raw contact via ContactsContract (requires WRITE_CONTACTS); the contact list is refreshed after a successful add.
+- The picker lists current phone contacts only. Demo-mode contacts stay read-only, app-local contacts cannot receive added numbers, and a number already saved on the chosen contact is refused with a notice.
+- New static CI wiring audit `tools/audit_add_to_contact_wiring.py`, run by the APK workflow.
+- New Android 11 emulator probe `tools/smoke_add_to_contact_emulator.sh` (non-blocking, like the photo probes): seeds one contact, dials a new number, drives Options > Add to contact with tap navigation, then verifies the exact dialled number on the seeded raw contact in the Contacts provider, preservation of its existing number, and C2 foreground. Oppo hardware behaviour remains separately unverified.
+- APK **v2.03.0** / pinned HTML **v6.343**.
+
+---
+
 ## Photo confirmation foreground acceptance — 14 October 2026
 
 - [GitHub Actions run #38548067223](https://github.com/moshenuch/moshenuch/actions/runs/38548067223) passed on commit `590abd86881a09a68cc0b28956339e81af1ab44f`.
