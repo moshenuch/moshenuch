@@ -1,3 +1,12 @@
+## UK 0044 duplicate form and blocking probe coverage — 14 October 2026
+
+- **Fix (audit):** the UK duplicate check now also normalises the 0044 international form, so dialling 00447555000000 when the contact stores +447555000000 is refused as a duplicate. All four forms (trunk 0, +44, 0044, bare 44) compare equal; the normalisation lives in a new pure, smoke-tested UkPhoneNumbers class.
+- New pure-Java CI smoke test covers all four forms plus formatting, non-UK and truncated-number safety. The wiring audit now statically asserts the 0044 branch rather than only the +44 one.
+- Emulator probe extended: the 0044-form duplicate refusal runs as a second blocking UK section.
+- APK **v2.03.3** / pinned HTML **v6.343**.
+
+---
+
 ## Add to contact UK duplicate forms, blocking emulator acceptance — 14 October 2026
 
 - **Fix (audit):** duplicate detection now treats UK trunk-0 and +44 / 0044 international forms as the same number, so dialling 07555000000 when the contact stores +447555000000 is refused as a duplicate instead of adding a second row.
