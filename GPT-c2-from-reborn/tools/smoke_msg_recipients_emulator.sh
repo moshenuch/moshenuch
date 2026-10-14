@@ -117,7 +117,7 @@ done
   evidence r1-home
   open_log_page r1
   open_recipients_row r1
-  sleep 1
+  # The notice auto-dismisses after 1800ms; capture ~1s after the OK tap.
   shot msg-recipients-empty
   require_marker 'MSG_RECIPIENTS_EMPTY' r1 || exit 1
   echo "PASS empty Msg. recipients stays on Log with No numbers notice" | tee -a "$result"
@@ -135,16 +135,21 @@ done
     '<map>' \
     "    <string name=\"msg_recipients_v1\">[{\"number\":\"$seed_number\",\"ts\":$seed_ts}]</string>" \
     '</map>' > "$out/c2_state_seed.xml"
-  adb push "$out/c2_state_seed.xml" /data/local/tmp/c2_state_seed.xml >> "$result" 2>&1
-  adb shell run-as "$package" sh -c "mkdir -p $prefs_dir && cp /data/local/tmp/c2_state_seed.xml $prefs_dir/c2_state.xml" || true
-  adb shell rm -f /data/local/tmp/c2_state_seed.xml || true
-  echo "SEEDED prefs: $(adb shell run-as "$package" cat $prefs_dir/c2_state.xml 2>/dev/null | tr -d '\r' | grep -o 'msg_recipients_v1' || echo MISSING)" >> "$result"
+  # Same seeding shape as the video-report fixture probe: the whole remote
+  # command is one quoted adb-shell argument, content piped over stdin.
+  adb shell run-as "$package" mkdir -p "$prefs_dir" 2>/dev/null || true
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$out/c2_state_seed.xml"
+  seed_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -o 'msg_recipients_v1' || echo MISSING)"
+  echo "SEEDED prefs: $seed_check" >> "$result"
+  if [[ "$seed_check" == "MISSING" ]]; then
+    echo "FAIL[R2] could not seed msg_recipients_v1 into app prefs" | tee -a "$result"
+    exit 1
+  fi
   adb logcat -c || true
   launch
   evidence r2-home
   open_log_page r2
   open_recipients_row r2
-  sleep 1
   shot msg-recipients-page
   require_marker 'MSG_RECIPIENTS_OPEN count=1' r2 || exit 1
   echo "PASS seeded Msg. recipients page opened with 1 entry" | tee -a "$result"
