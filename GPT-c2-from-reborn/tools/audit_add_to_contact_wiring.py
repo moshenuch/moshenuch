@@ -60,7 +60,13 @@ check("Picker adds the pending number through the backend and refreshes",
 check("Picker never writes in demo mode or to app-local contacts",
       '"DEMO: Contacts are read-only"' in open_selected and "!target.device" in open_selected)
 check("Picker refuses numbers already saved on the chosen contact",
-      '"Number already saved for "' in open_selected)
+      '"Number already saved for "' in open_selected
+      and "pendingDigits.equals(digitsOnly(savedNumber))" in open_selected)
+check("Entry rejects senders without a usable phone number",
+      "digitsOnly(number).length() < 3" in begin
+      and '"This sender cannot be saved as a phone number"' in begin)
+check("Conversations options list offers Add to contact (menu item reachable)",
+      '"Call","Add to contact","Conversation details"' in view)
 
 items = method(view, "private String[] itemsFor(String pg)")
 check("Picker page lists current contacts",
