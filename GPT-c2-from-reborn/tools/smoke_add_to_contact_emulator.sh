@@ -218,10 +218,9 @@ require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 sleep 1
 shot add-to-contact-picker
 tap OK
+shot add-to-contact-inserted-notice   # ~1s after OK; the notice lives 1800ms
 sleep 2
 require_marker 'ADD_TO_CONTACT_INSERTED rawContactId='
-sleep 1
-shot add-to-contact-inserted-notice
 rows="$(phone_rows)"
 echo "$rows" > "$out/add-to-contact-provider.txt"
 if grep -Fq 'Permission Denial' <<< "$rows"; then
@@ -248,10 +247,10 @@ tap OK
 sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK                          # pick the same contact again
+shot add-to-contact-duplicate-notice   # ~1s after OK, inside the notice window
 sleep 2
 require_marker 'ADD_TO_CONTACT_REFUSED reason=duplicate'
-sleep 1
-shot add-to-contact-duplicate-notice
+
 if [[ "$(count_phone_rows "$new_number")" != "1" ]]; then
   echo "FAIL duplicate Add to contact wrote another row: $(count_phone_rows "$new_number") rows for $new_number" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
