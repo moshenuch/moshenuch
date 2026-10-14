@@ -29,14 +29,25 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
   echo "::warning::Gallery capacity fixture failed"
 fi
+add_to_contact_core_failed=0
 if bash GPT-c2-from-reborn/tools/smoke_add_to_contact_emulator.sh "$results"; then
   if ! grep -Fq 'PASS Add to contact appended exact dialled number' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS pre-existing contact number' "$results/add-to-contact-results.txt" ||
-     ! grep -Fq 'PASS C2 remains foreground after Add to contact' "$results/add-to-contact-results.txt"; then
-    echo "::warning::Add to contact probe completed without full acceptance evidence"
+     ! grep -Fq 'PASS C2 remains foreground after Add to contact' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS UK international-form duplicate refused' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS duplicate Add to contact refused' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS picker cancel via Back left provider unchanged' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS Add to contact refused without WRITE_CONTACTS' "$results/add-to-contact-results.txt"; then
+    echo "::error::Add to contact core acceptance incomplete; see add-to-contact-results.txt"
+    add_to_contact_core_failed=1
+  fi
+  if ! grep -Fq 'PASS Conversations Add to contact appended sender number' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS alphanumeric SMS sender refused before picker' "$results/add-to-contact-results.txt"; then
+    echo "::warning::Conversations Add to contact coverage incomplete (SMS shell seeding is best-effort); see add-to-contact-results.txt"
   fi
 else
-  echo "::warning::Add to contact acceptance failed; see add-to-contact-results.txt"
+  echo "::error::Add to contact core acceptance failed; see add-to-contact-results.txt"
+  add_to_contact_core_failed=1
 fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
@@ -71,4 +82,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
+fi
+if [[ "${add_to_contact_core_failed:-0}" == "1" ]]; then
+  exit 1
 fi
