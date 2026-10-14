@@ -2270,16 +2270,20 @@ public class C2PhoneView extends View {
     }
 
     private void drawOptions(Canvas c) {
+        // The handset keeps its status strip (signal/battery/clock) visible
+        // above an open Options panel: the SDK evidence and the HTML
+        // reference both leave the strip untouched, so the overlay starts
+        // below y=20 instead of covering the whole LCD.
         p.setColor(Color.rgb(17,25,35));
-        c.drawRect(0, 0, 240, 286, p);
+        c.drawRect(0, 20, 240, 286, p);
 
         p.setColor(Color.BLACK);
-        c.drawRect(0, 0, 240, 28, p);
+        c.drawRect(0, 20, 240, 47, p);
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.LEFT);
         p.setTypeface(fontRegular);
         p.setTextSize(18);
-        c.drawText(optionSubmenuTitle.isEmpty() ? "Options" : optionSubmenuTitle, 6, 21, p);
+        c.drawText(optionSubmenuTitle.isEmpty() ? "Options" : optionSubmenuTitle, 6, 40, p);
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(13);
         // Nokia reference popup header contains only "Options".
@@ -2289,7 +2293,7 @@ public class C2PhoneView extends View {
         int start = Math.max(0, Math.min(optionSel - (visible - 1), Math.max(0, optionItems.length - visible)));
         for (int row = 0; row < visible && start + row < optionItems.length; row++) {
             int idx = start + row;
-            float y = 29 + row * 40;
+            float y = 48 + row * 40;
             if (idx == optionSel) {
                 p.setColor(Color.WHITE);
                 c.drawRect(0, y, 240, y + 38, p);
