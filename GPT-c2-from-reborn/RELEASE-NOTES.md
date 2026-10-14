@@ -1,3 +1,14 @@
+## Add to contact hardening and Conversations menu fix — 14 October 2026
+
+- **Fix (real defect):** the Conversations Options menu never actually listed **Add to contact**, so the v2.03.0 conversations entry point was unreachable from the menu. It is now listed right after Call.
+- Duplicate detection now compares digit-normalised numbers, so an already-saved number is refused even when formatting differs (spaces, +44 vs 0). Display formatting is untouched.
+- Add to contact now refuses senders without a usable phone number (alphanumeric SMS senders) with the notice "This sender cannot be saved as a phone number" instead of inserting an invalid row.
+- Emulator probe `tools/smoke_add_to_contact_emulator.sh` fixed (v2.03.0 probe never seeded its contact: `content insert` requires at least one `--bind`, and `adb shell` re-splits multi-word values) and extended: duplicate-attempt refusal, picker Back cancel, and the Conversations entry path. Still non-blocking this cycle.
+- Wiring audit extended to 16 checks covering the new validation, normalised duplicate comparison, and the Conversations menu item.
+- APK **v2.03.1** / pinned HTML **v6.343**.
+
+---
+
 ## Add to contact from dialer and Conversations — 14 October 2026
 
 - Dialer Options > **Add to contact** and Conversations Options > **Add to contact** now add the typed/sender number to an existing Android contact chosen from a Nokia-style picker, replacing the previous "not implemented" notice.
