@@ -86,11 +86,15 @@ adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || t
 # the raw contact carries a harmless starred=0 bind. All values are single
 # tokens: adb shell re-joins arguments and the remote tokenizer splits on
 # spaces, so a name containing a space would fail as an unsupported argument.
-raw_uri="$(adb shell content insert --uri content://com.android.contacts/raw_contacts \
+# The API 30 `content` tool prints nothing on a successful insert (only the
+# inserted row's existence proves success), so read the new raw id back.
+seed_out="$(adb shell content insert --uri content://com.android.contacts/raw_contacts \
   --bind starred:i:0 2>&1 | tr -d '\r')"
-raw_id="${raw_uri##*/}"
+echo "seed raw_contacts insert output: ${seed_out:-<empty (success on API 30)>}" >> "$result"
+raw_id="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
+  --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n | tail -1 || true)"
 if [[ ! "$raw_id" =~ ^[0-9]+$ ]]; then
-  echo "UNVERIFIED could not seed raw contact: $raw_uri" | tee -a "$result"; exit 1
+  echo "UNVERIFIED could not seed raw contact: ${seed_out:-<empty>}" | tee -a "$result"; exit 1
 fi
 seed_out="$(adb shell content insert --uri content://com.android.contacts/data \
   --bind raw_contact_id:i:"$raw_id" \
