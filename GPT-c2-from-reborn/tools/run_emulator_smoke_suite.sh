@@ -17,7 +17,9 @@ fi
 # Run after photo Send so the share receiver does not interrupt deletion.
 if bash GPT-c2-from-reborn/tools/smoke_photo_delete_emulator.sh "$results"; then
   if ! grep -Fq 'PASS Delete No retained exact newly captured JPEG' "$results/photo-delete-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after Delete No' "$results/photo-delete-results.txt" ||
      ! grep -Fq 'PASS Delete Yes removed exact newly captured JPEG' "$results/photo-delete-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after Delete Yes' "$results/photo-delete-results.txt" ||
      ! grep -Fq 'PASS all pre-existing JPEGs preserved' "$results/photo-delete-results.txt"; then
     echo "::warning::Photo Delete Yes probe completed without full acceptance evidence"
   fi
