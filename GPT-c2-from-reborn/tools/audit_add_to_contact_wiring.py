@@ -58,8 +58,14 @@ check("Entry opens the dedicated contact picker",
 open_selected = method(view, "private void openSelected()")
 check("Picker adds the pending number through the backend and refreshes",
       'if ("addToContactPicker".equals(page))' in open_selected
-      and "backend.addNumberToContact(target.rawContactId," in open_selected
+      and "backend.addNumberToContact(writeRawId," in open_selected
       and "refreshContactsFromPhone()" in open_selected)
+check("Picker writes to a writable raw contact of the aggregate, never its first raw id",
+      "writableRawContactId(target.contactId)" in open_selected
+      and "RAW_CONTACT_IS_READ_ONLY" in backend
+      and "RawContacts.DELETED" in backend
+      and '"ADD_TO_CONTACT_REFUSED reason=read_only_contact"' in open_selected
+      and "addNumberToContact(target.rawContactId" not in open_selected)
 check("Picker never writes in demo mode or to app-local contacts",
       '"DEMO: Contacts are read-only"' in open_selected and "!target.device" in open_selected)
 check("Picker refuses numbers already saved on the chosen contact",
