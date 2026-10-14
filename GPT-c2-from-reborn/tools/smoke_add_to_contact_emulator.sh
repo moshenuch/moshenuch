@@ -24,6 +24,7 @@ target_name="AAAC2AddTarget"
 target_existing="+447555000000"
 uk_local="07555000000"
 new_number="07900001234"
+perm_number="07600000000"
 sms_sender="07777000111"
 sms_alpha="C2ALERTS"
 
@@ -41,9 +42,9 @@ oy=(h-780*scale)/2
 named={
  'LSK':(90,414),'RSK':(270,414),'OK':(180,474),'DOWN':(180,505),'RIGHT':(212,474),
  '0':(180,716),'1':(90,557),'2':(180,557),'3':(270,557),
- '4':(90,610),'5':(180,610),'7':(90,663),'9':(270,663),
+ '4':(90,610),'5':(180,610),'6':(270,610),'7':(90,663),'9':(270,663),
 }
-for name in ['LSK','RSK','OK','DOWN','RIGHT','0','1','2','3','4','5','7','9']:
+for name in ['LSK','RSK','OK','DOWN','RIGHT','0','1','2','3','4','5','6','7','9']:
  x,y=named[name]
  print(f"{name} {round(ox+x*scale)} {round(oy+y*scale)}")
 PY
@@ -235,7 +236,8 @@ adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
 fg="$(foreground_package)"
 [[ "$fg" == *"$package/"* ]] || { echo "UNVERIFIED C2 not foreground after permission revoke: $fg" | tee -a "$result"; exit 1; }
-dial_number "$new_number"
+# A fresh number: an already-saved one would hit the duplicate refusal first.
+dial_number "$perm_number"
 adb logcat -c || true
 tap LSK
 tap DOWN; tap DOWN; tap DOWN
@@ -245,8 +247,8 @@ require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK
 sleep 2
 require_marker 'ADD_TO_CONTACT_REFUSED reason=no_write_permission'
-if [[ "$(count_phone_rows "$new_number")" != "1" ]]; then
-  echo "FAIL write-permission-denied Add to contact wrote a row" | tee -a "$result"
+if [[ "$(count_phone_rows "$perm_number")" != "0" ]]; then
+  echo "FAIL write-permission-denied Add to contact wrote a row for $perm_number" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
   adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
   exit 1
