@@ -2,7 +2,7 @@
 # Android 11 acceptance for Add to contact (v2.03.2). Core sections are
 # BLOCKING in the suite:
 #  UK. The seeded contact's existing number is stored in +44 form; dialling
-#      its trunk-0 form must be refused as a duplicate.
+#      its trunk-0 or 0044 form must be refused as a duplicate.
 #  A.  Dialer: dial a new number, Options > Add to contact, pick the seeded
 #      contact; the number must land on that contact and nothing else moves.
 #  B.  Duplicate: repeating the same add must be refused with no provider write.
@@ -23,6 +23,7 @@ package=com.moshenuch.c2reborn
 target_name="AAAC2AddTarget"
 target_existing="+447555000000"
 uk_local="07555000000"
+uk_0044="00447555000000"
 new_number="07900001234"
 perm_number="07600000000"
 sms_sender="07777000111"
@@ -164,6 +165,25 @@ fi
 echo "PASS UK international-form duplicate refused: dialled $uk_local equals seeded $target_existing" | tee -a "$result"
 expect_foreground
 for i in $(seq 12); do tap RSK; done   # clear the dial, land back on home
+
+# --- UK2. 0044-form dial of the same number must also be refused ----------
+dial_number "$uk_0044"
+adb logcat -c || true
+tap LSK
+tap DOWN; tap DOWN; tap DOWN   # dialer options: Call, Save, Send message, Add to contact
+tap OK
+sleep 1
+require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
+tap OK                          # picker: the seeded contact is the only entry
+sleep 2
+require_marker 'ADD_TO_CONTACT_REFUSED reason=duplicate'
+if [[ "$(count_phone_rows "$uk_0044")" != "0" ]]; then
+  echo "FAIL UK 0044-form duplicate wrote a row for $uk_0044" | tee -a "$result"
+  exit 1
+fi
+echo "PASS UK 0044-form duplicate refused: dialled $uk_0044 equals seeded $target_existing" | tee -a "$result"
+expect_foreground
+for i in $(seq 16); do tap RSK; done   # clear the dial, land back on home
 
 # --- A. Dialer add ---------------------------------------------------------
 dial_number "$new_number"
