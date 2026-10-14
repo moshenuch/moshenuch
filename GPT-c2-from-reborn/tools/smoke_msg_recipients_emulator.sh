@@ -86,8 +86,9 @@ launch() {
   adb shell am start -W -n "$package/.MainActivity" >> "$result"
   sleep 2
 }
-open_log_page() { # from home: Menu > grid Down Down (Contacts->Gallery->Log) > OK
-  tap LSK
+open_log_page() { # from home: CENTRE(OK) opens the menu (LSK is Go to, RSK is Names);
+  # grid Down Down (Contacts->Gallery->Log) > OK
+  tap OK
   evidence "$1-menu"
   tap DOWN
   tap DOWN
