@@ -91,6 +91,14 @@ marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
   adb logcat -d -s C2Contacts:I 2>/dev/null | grep -qF "$1"
 }
 require_marker() {
+  # Logcat and tap delivery lag on a loaded emulator; give the marker a few
+  # seconds before failing (run 38600187599 flaked section A on a slow open).
+  local tries=0
+  while ! marker_seen "$1"; do
+    tries=$((tries + 1))
+    if [[ "$tries" -ge 6 ]]; then break; fi
+    sleep 1
+  done
   if ! marker_seen "$1"; then
     echo "FAIL expected app log marker: $1" | tee -a "$result"
     echo "--- C2Contacts logcat at failure ---" | tee -a "$result"
@@ -167,6 +175,7 @@ expect_foreground
 for i in $(seq 12); do tap RSK; done   # clear the dial, land back on home
 
 # --- UK2. 0044-form dial of the same number must also be refused ----------
+uk2_rows_before="$(phone_rows)"
 dial_number "$uk_0044"
 adb logcat -c || true
 tap LSK
@@ -181,7 +190,12 @@ if [[ "$(count_phone_rows "$uk_0044")" != "0" ]]; then
   echo "FAIL UK 0044-form duplicate wrote a row for $uk_0044" | tee -a "$result"
   exit 1
 fi
-echo "PASS UK 0044-form duplicate refused: dialled $uk_0044 equals seeded $target_existing" | tee -a "$result"
+if [[ "$(phone_rows)" != "$uk2_rows_before" ]]; then
+  echo "FAIL UK 0044-form duplicate changed the provider row set" | tee -a "$result"
+  phone_rows >> "$out/add-to-contact-provider.txt"
+  exit 1
+fi
+echo "PASS UK 0044-form duplicate refused: dialled $uk_0044 equals seeded $target_existing, provider row set unchanged" | tee -a "$result"
 expect_foreground
 for i in $(seq 16); do tap RSK; done   # clear the dial, land back on home
 
