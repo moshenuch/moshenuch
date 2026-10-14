@@ -197,7 +197,11 @@ if [[ "$(phone_rows)" != "$uk2_rows_before" ]]; then
 fi
 echo "PASS UK 0044-form duplicate refused: dialled $uk_0044 equals seeded $target_existing, provider row set unchanged" | tee -a "$result"
 expect_foreground
-for i in $(seq 16); do tap RSK; done   # clear the dial, land back on home
+# Clear exactly the 14 dialled digits. RSK is Clear while digits remain and
+# Back once the dial is empty, so extra taps walk back off the dial page;
+# two extra Backs background the app and every later tap hits the launcher
+# (section A failed that way on runs 38600187599 and 38602540415).
+for i in $(seq 14); do tap RSK; done
 
 # --- A. Dialer add ---------------------------------------------------------
 dial_number "$new_number"
