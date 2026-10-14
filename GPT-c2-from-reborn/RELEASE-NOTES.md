@@ -1,3 +1,13 @@
+## Writable raw-contact targeting and probe hardening — 14 October 2026
+
+- **Fix (audit, real defect):** Add to contact wrote to the aggregate's first raw contact id, which can belong to a read-only account when an aggregate merges several raw contacts. The picker now resolves the aggregate's first writable raw contact (skipping read-only and deleted rows) and refuses with "Contact is read-only" when the aggregate has nothing writable.
+- **Fix (probe):** marker checks now poll for a few seconds instead of a single logcat dump; emulator tap/logcat latency flaked section A on run 38600187599 even though UK and UK2 passed in the same run.
+- UK normalisation smoke test gains boundary cases: truncated and over-long 0044/44 forms must not false-match, spaced 0044 must match, short +44 keeps digits only.
+- UK2 probe section now compares the whole provider phone-row set before/after, not only the dialled value.
+- APK **v2.03.4** / pinned HTML **v6.343**.
+
+---
+
 ## UK 0044 duplicate form and blocking probe coverage — 14 October 2026
 
 - **Fix (audit):** the UK duplicate check now also normalises the 0044 international form, so dialling 00447555000000 when the contact stores +447555000000 is refused as a duplicate. All four forms (trunk 0, +44, 0044, bare 44) compare equal; the normalisation lives in a new pure, smoke-tested UkPhoneNumbers class.
