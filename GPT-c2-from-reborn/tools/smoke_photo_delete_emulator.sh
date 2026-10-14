@@ -71,6 +71,12 @@ if ! list_jpegs | grep -Fxq "$created"; then
   exit 1
 fi
 echo 'PASS Delete No retained exact newly captured JPEG' | tee -a "$result"
+after_no="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -1 || true)"
+if [[ "$after_no" != *"$package/"* ]]; then
+  echo "FAIL C2 lost foreground after Delete No: $after_no" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS C2 remains foreground after Delete No' | tee -a "$result"
 tap 'Photo Options again' 2
 tap 'Select Delete row again' 3
 tap 'Open Delete again' 0
@@ -82,6 +88,12 @@ if list_jpegs | grep -Fxq "$created"; then
   exit 1
 fi
 echo 'PASS Delete Yes removed exact newly captured JPEG' | tee -a "$result"
+after_yes="$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -1 || true)"
+if [[ "$after_yes" != *"$package/"* ]]; then
+  echo "FAIL C2 lost foreground after Delete Yes: $after_yes" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS C2 remains foreground after Delete Yes' | tee -a "$result"
 # Other probes or Android's media scanner may add files during this test.
 # Only deletion of a pre-existing file is a safety failure; additions are fine.
 list_jpegs > "$out/photo-delete-after.txt"
