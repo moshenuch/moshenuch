@@ -86,6 +86,43 @@ launch() {
   adb shell am start -W -n "$package/.MainActivity" >> "$result"
   sleep 2
 }
+
+# The probe replaces the app's private c2_state.xml to control
+# msg_recipients_v1. On anything but a fresh CI install that file holds real
+# app state, so the original is backed up and restored on exit (audit #7).
+prefs_dir="/data/data/$package/shared_prefs"
+backup="$out/c2_state_backup.xml"
+restore_needed=0
+seed_prefs() { # seed_prefs <local-xml>: whole remote command is ONE quoted
+               # adb-shell argument, content piped over stdin (video-report shape)
+  adb shell run-as "$package" mkdir -p "$prefs_dir" 2>/dev/null || true
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$1"
+}
+verify_seed() { # verify_seed <section>: the seeded key must be present
+  local check
+  check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -o 'msg_recipients_v1' || echo MISSING)"
+  echo "SEEDED[$1] prefs: $check" >> "$result"
+  if [[ "$check" == "MISSING" ]]; then
+    echo "FAIL[$1] could not seed msg_recipients_v1 into app prefs" | tee -a "$result"
+    return 1
+  fi
+}
+cleanup_prefs() {
+  adb shell am force-stop "$package" || true
+  if [[ "$restore_needed" == "1" ]]; then
+    adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$backup" || true
+    echo "PASS original c2_state.xml restored after probe" | tee -a "$result"
+  else
+    adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
+    echo "PASS recipients prefs fixture removed after probe" | tee -a "$result"
+  fi
+}
+trap cleanup_prefs EXIT
+adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' > "$backup" || true
+if [[ -s "$backup" ]] && grep -q '<map>' "$backup"; then
+  restore_needed=1
+  echo "BACKUP existing c2_state.xml captured for restore" >> "$result"
+fi
 open_log_page() { # from home: CENTRE(OK) opens the menu (LSK is Go to, RSK is Names);
   # grid Down Down (Contacts->Gallery->Log) > OK
   tap OK
@@ -112,6 +149,13 @@ done
 (
   section="R1"
   adb shell am force-stop "$package" || true
+  # Deterministic empty store (audit #7): never assume the key is absent.
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
+    '<map>' \
+    '    <string name="msg_recipients_v1">[]</string>' \
+    '</map>' > "$out/c2_state_empty.xml"
+  seed_prefs "$out/c2_state_empty.xml"
+  verify_seed R1 || exit 1
   adb logcat -c || true
   launch
   evidence r1-home
@@ -128,23 +172,12 @@ done
   section="R2"
   adb shell am force-stop "$package" || true
   seed_ts="$(adb shell date +%s | tr -d '\r')000"
-  prefs_dir="/data/data/$package/shared_prefs"
-  # Build the prefs XML locally, push as the shell user, then copy it in as the
-  # app user: run-as cannot write /data/local/tmp but can read it.
   printf '%s\n' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
     '<map>' \
     "    <string name=\"msg_recipients_v1\">[{\"number\":\"$seed_number\",\"ts\":$seed_ts}]</string>" \
     '</map>' > "$out/c2_state_seed.xml"
-  # Same seeding shape as the video-report fixture probe: the whole remote
-  # command is one quoted adb-shell argument, content piped over stdin.
-  adb shell run-as "$package" mkdir -p "$prefs_dir" 2>/dev/null || true
-  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$out/c2_state_seed.xml"
-  seed_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -o 'msg_recipients_v1' || echo MISSING)"
-  echo "SEEDED prefs: $seed_check" >> "$result"
-  if [[ "$seed_check" == "MISSING" ]]; then
-    echo "FAIL[R2] could not seed msg_recipients_v1 into app prefs" | tee -a "$result"
-    exit 1
-  fi
+  seed_prefs "$out/c2_state_seed.xml"
+  verify_seed R2 || exit 1
   adb logcat -c || true
   launch
   evidence r2-home
@@ -155,8 +188,4 @@ done
   echo "PASS seeded Msg. recipients page opened with 1 entry" | tee -a "$result"
 ) || failures=$((failures + 1))
 
-# --- restore clean state ------------------------------------------------
-adb shell am force-stop "$package" || true
-adb shell run-as "$package" rm -f "/data/data/$package/shared_prefs/c2_state.xml" || true
-echo "PASS recipients prefs fixture removed after probe" | tee -a "$result"
 exit "$((failures > 0))"
