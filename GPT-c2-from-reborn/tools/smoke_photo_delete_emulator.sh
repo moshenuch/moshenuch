@@ -82,8 +82,13 @@ if list_jpegs | grep -Fxq "$created"; then
   exit 1
 fi
 echo 'PASS Delete Yes removed exact newly captured JPEG' | tee -a "$result"
-if ! diff -u "$before" <(list_jpegs) >> "$result"; then
-  echo 'FAIL unrelated JPEG listing changed after targeted deletion' | tee -a "$result"
+# Other probes or Android's media scanner may add files during this test.
+# Only deletion of a pre-existing file is a safety failure; additions are fine.
+list_jpegs > "$out/photo-delete-after.txt"
+comm -23 "$before" "$out/photo-delete-after.txt" > "$out/photo-delete-missing.txt"
+if [[ -s "$out/photo-delete-missing.txt" ]]; then
+  echo 'FAIL one or more pre-existing JPEGs went missing' | tee -a "$result"
+  cat "$out/photo-delete-missing.txt" | tee -a "$result"
   exit 1
 fi
-echo 'PASS pre-existing JPEG listing unchanged' | tee -a "$result"
+echo 'PASS all pre-existing JPEGs preserved' | tee -a "$result"
