@@ -230,7 +230,11 @@ expect_foreground
 
 # --- E. WRITE_CONTACTS revoked must refuse the write ------------------------
 # Revoking a runtime permission kills the app process, so relaunch before
-# driving the UI again.
+# driving the UI again. On relaunch MainActivity re-requests the missing
+# permission with the SYSTEM sheet, which would swallow keypad taps (an
+# earlier run re-granted WRITE_CONTACTS through a blind tap on Allow and the
+# insert went through). Answer the sheet with a deliberate Deny first; a
+# chained media sheet can follow the phone-permission result.
 adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 sleep 1
 perm_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(WRITE|READ)_CONTACTS' | head -4 | tr -d '\r')"
@@ -238,6 +242,21 @@ echo "permission state after revoke: $perm_state" | tee -a "$result"
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
+sheet_clear=0
+for attempt in 1 2 3 4 5; do
+  adb shell uiautomator dump /sdcard/c2-ui.xml >/dev/null 2>&1 || true
+  deny_bounds="$(adb shell cat /sdcard/c2-ui.xml 2>/dev/null | tr -d '\r'     | grep -o 'text="Deny"[^>]*' | head -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]')"
+  if [[ -z "$deny_bounds" ]]; then sheet_clear=1; break; fi
+  nums="$(grep -o '[0-9]*' <<< "$deny_bounds" | tr '\n' ' ')"
+  read -r x1 y1 x2 y2 <<< "$nums"
+  echo "TAP permission-sheet Deny $(( (x1+x2)/2 )),$(( (y1+y2)/2 )) (attempt $attempt)" | tee -a "$result"
+  adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
+  sleep 1
+done
+adb shell rm -f /sdcard/c2-ui.xml 2>/dev/null || true
+if [[ "$sheet_clear" != "1" ]]; then
+  echo "UNVERIFIED could not clear the permission sheet after revoke" | tee -a "$result"; exit 1
+fi
 fg="$(foreground_package)"
 [[ "$fg" == *"$package/"* ]] || { echo "UNVERIFIED C2 not foreground after permission revoke: $fg" | tee -a "$result"; exit 1; }
 # A fresh number: an already-saved one would hit the duplicate refusal first.
