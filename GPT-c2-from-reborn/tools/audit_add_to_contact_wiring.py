@@ -61,7 +61,16 @@ check("Picker never writes in demo mode or to app-local contacts",
       '"DEMO: Contacts are read-only"' in open_selected and "!target.device" in open_selected)
 check("Picker refuses numbers already saved on the chosen contact",
       '"Number already saved for "' in open_selected
-      and "pendingDigits.equals(digitsOnly(savedNumber))" in open_selected)
+      and "pendingDigits.equals(ukNormalisedDigits(savedNumber))" in open_selected)
+check("Duplicate check treats UK trunk 0 and +44/0044 forms as the same number",
+      'digits.length() == 12 && digits.startsWith("44")' in view
+      and "ukNormalisedDigits(pendingAddToContactNumber)" in open_selected)
+check("Probe markers: picker open, refusal reasons and insert are logged",
+      '"ADD_TO_CONTACT_PICKER_OPEN"' in view
+      and '"ADD_TO_CONTACT_REFUSED reason=duplicate"' in open_selected
+      and '"ADD_TO_CONTACT_REFUSED reason=no_write_permission"' in open_selected
+      and '"ADD_TO_CONTACT_REFUSED reason=invalid_sender"' in view
+      and '"ADD_TO_CONTACT_INSERTED rawContactId="' in open_selected)
 check("Entry rejects senders without a usable phone number",
       "digitsOnly(number).length() < 3" in begin
       and '"This sender cannot be saved as a phone number"' in begin)
