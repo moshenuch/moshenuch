@@ -3100,7 +3100,15 @@ public class C2PhoneView extends View {
                     showNotice("Only contacts stored on the phone can receive added numbers");
                 } else {
                     ArrayList<String> existing = contactNumbersById.get(target.contactId);
-                    if (existing != null && existing.contains(pendingAddToContactNumber)) {
+                    String pendingDigits = digitsOnly(pendingAddToContactNumber);
+                    boolean alreadySaved = false;
+                    if (existing != null && !pendingDigits.isEmpty())
+                        for (String savedNumber : existing)
+                            if (pendingDigits.equals(digitsOnly(savedNumber))) {
+                                alreadySaved = true;
+                                break;
+                            }
+                    if (alreadySaved) {
                         back();
                         showNotice("Number already saved for " + target.name);
                     } else if (!backend.has(Manifest.permission.WRITE_CONTACTS)) {
@@ -5516,7 +5524,7 @@ public class C2PhoneView extends View {
         }
         else if ("conversations".equals(page))
             // Both actions remain available when marked threads have mixed unread states.
-            optionItems = new String[]{"Call","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all",
+            optionItems = new String[]{"Call","Add to contact","Conversation details","Delete conversation","Inbox view >","New message >","Mark >","Mark all","Unmark all",
                     "Mark as read","Mark as unread"};
         else if ("conversation".equals(page)) {
             AndroidBackend.DeviceSms target = conversationMessageAt(sel);
@@ -5815,6 +5823,10 @@ public class C2PhoneView extends View {
     private void beginAddToContact(String number) {
         if (number == null || number.trim().isEmpty()) {
             showNotice("No phone number selected");
+            return;
+        }
+        if (digitsOnly(number).length() < 3) {
+            showNotice("This sender cannot be saved as a phone number");
             return;
         }
         refreshContactsFromPhone();
