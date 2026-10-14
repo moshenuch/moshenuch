@@ -14,6 +14,9 @@ view = (root / "app/src/main/java/com/moshenuch/c2reborn/C2PhoneView.java").read
 backend = (root / "app/src/main/java/com/moshenuch/c2reborn/AndroidBackend.java").read_text(
     encoding="utf-8"
 )
+ukphone = (root / "app/src/main/java/com/moshenuch/c2reborn/UkPhoneNumbers.java").read_text(
+    encoding="utf-8"
+)
 
 def method(src: str, signature: str) -> str:
     i = src.find(signature)
@@ -62,8 +65,10 @@ check("Picker never writes in demo mode or to app-local contacts",
 check("Picker refuses numbers already saved on the chosen contact",
       '"Number already saved for "' in open_selected
       and "pendingDigits.equals(ukNormalisedDigits(savedNumber))" in open_selected)
-check("Duplicate check treats UK trunk 0 and +44/0044 forms as the same number",
-      'digits.length() == 12 && digits.startsWith("44")' in view
+check("Duplicate check treats UK trunk 0 and +44/0044/44 forms as the same number",
+      'digits.length() == 14 && digits.startsWith("0044")' in ukphone
+      and 'digits.length() == 12 && digits.startsWith("44")' in ukphone
+      and "UkPhoneNumbers.ukNormalisedDigits(number)" in view
       and "ukNormalisedDigits(pendingAddToContactNumber)" in open_selected)
 check("Probe markers: picker open, refusal reasons and insert are logged",
       '"ADD_TO_CONTACT_PICKER_OPEN"' in view
