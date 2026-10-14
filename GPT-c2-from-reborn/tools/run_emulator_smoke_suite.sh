@@ -12,6 +12,12 @@ fi
 if ! bash GPT-c2-from-reborn/tools/smoke_photo_emulator.sh "$results"; then
   echo "::warning::Native photo or Gallery-index probe failed"
 fi
+
+# Independent destructive test touches only a newly captured emulator JPEG.
+# Run after photo Send so the share receiver does not interrupt deletion.
+if ! bash GPT-c2-from-reborn/tools/smoke_photo_delete_emulator.sh "$results"; then
+  echo "::warning::Photo Delete Yes acceptance failed; see photo-delete-results.txt"
+fi
 if ! bash GPT-c2-from-reborn/tools/smoke_gallery_capacity_emulator.sh "$results"; then
   echo "::warning::Gallery capacity fixture failed"
 fi
