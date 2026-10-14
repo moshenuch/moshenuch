@@ -35,6 +35,7 @@ if bash GPT-c2-from-reborn/tools/smoke_add_to_contact_emulator.sh "$results"; th
      ! grep -Fq 'PASS pre-existing contact number' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS C2 remains foreground after Add to contact' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS UK international-form duplicate refused' "$results/add-to-contact-results.txt" ||
+     ! grep -Fq 'PASS UK 0044-form duplicate refused' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS duplicate Add to contact refused' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS picker cancel via Back left provider unchanged' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS Add to contact refused without WRITE_CONTACTS' "$results/add-to-contact-results.txt"; then
