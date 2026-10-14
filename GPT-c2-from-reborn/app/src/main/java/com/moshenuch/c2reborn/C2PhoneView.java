@@ -118,6 +118,7 @@ public class C2PhoneView extends View {
     private final HashMap<Integer,String> speedDialNumbers = new HashMap<>();
     private int speedDialSlot = 2;
     private String speedDialAssignment = "";
+    private String pendingAddToContactNumber = "";
     private boolean speedDiallingEnabled = false;
     private static final long SPEED_DIAL_HOLD_MS = 700L;
     private static final float KEYPAD_DRAG_TOLERANCE = 12f;
@@ -2499,6 +2500,7 @@ public class C2PhoneView extends View {
             case "groupContactAssign": return "Choose group";
             case "speedDials": return "Speed dials";
             case "speedDialPicker": return "Choose contact";
+            case "addToContactPicker": return "Add to contact";
             case "speedDialAssign": return "Select speed dial";
             case "log": return "Log";
             case "settings": return "Settings";
@@ -2688,6 +2690,11 @@ public class C2PhoneView extends View {
             case "speedDialAssign":
                 return speedDialSlots();
             case "speedDialPicker": {
+                String[] a = new String[contacts.size()];
+                for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
+                return a;
+            }
+            case "addToContactPicker": {
                 String[] a = new String[contacts.size()];
                 for (int i = 0; i < contacts.size(); i++) a[i] = contacts.get(i).name;
                 return a;
@@ -3079,6 +3086,37 @@ public class C2PhoneView extends View {
                 back();
                 if ("speedDials".equals(page)) sel = speedDialSlot - 2;
             } else showNotice("Add a contact first");
+            return;
+        }
+
+        if ("addToContactPicker".equals(page)) {
+            if (sel >= 0 && sel < contacts.size()) {
+                Contact target = contacts.get(sel);
+                if (demoMode) {
+                    back();
+                    showNotice("DEMO: Contacts are read-only");
+                } else if (!target.device) {
+                    back();
+                    showNotice("Only contacts stored on the phone can receive added numbers");
+                } else {
+                    ArrayList<String> existing = contactNumbersById.get(target.contactId);
+                    if (existing != null && existing.contains(pendingAddToContactNumber)) {
+                        back();
+                        showNotice("Number already saved for " + target.name);
+                    } else if (!backend.has(Manifest.permission.WRITE_CONTACTS)) {
+                        back();
+                        showNotice("Contacts write permission unavailable");
+                    } else if (backend.addNumberToContact(target.rawContactId,
+                            pendingAddToContactNumber)) {
+                        back();
+                        refreshContactsFromPhone();
+                        showNotice("Number added to " + target.name);
+                    } else {
+                        back();
+                        showNotice("Could not add number to " + target.name);
+                    }
+                }
+            } else showNotice("No contact selected");
             return;
         }
 
@@ -5520,7 +5558,8 @@ public class C2PhoneView extends View {
             optionItems = new String[]{"Select"};
         else if ("speedDials".equals(page))
             optionItems = new String[]{"Details","Call","Assign / Change","Remove","Memory status"};
-        else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page))
+        else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page)
+                || "addToContactPicker".equals(page))
             optionItems = new String[]{"Select"};
         else if ("contactDetail".equals(page))
             optionItems = new String[]{"Add detail >","Call","Edit","Delete","Send message >",
@@ -5773,6 +5812,24 @@ public class C2PhoneView extends View {
         optionItems = menu.toArray(new String[0]);
     }
 
+    private void beginAddToContact(String number) {
+        if (number == null || number.trim().isEmpty()) {
+            showNotice("No phone number selected");
+            return;
+        }
+        refreshContactsFromPhone();
+        if (!deviceContactsActive && !demoMode) {
+            showNotice("Android contacts unavailable; allow Contacts permission");
+            return;
+        }
+        if (contacts.isEmpty()) {
+            showNotice("No existing contact. Save the number as a new contact first.");
+            return;
+        }
+        pendingAddToContactNumber = number.trim();
+        go("addToContactPicker");
+    }
+
     private void openNumberContact(String number, boolean openExisting) {
         if (number == null || digitsOnly(number).length() < 3) {
             showNotice("No usable phone number");
@@ -5978,8 +6035,10 @@ public class C2PhoneView extends View {
                 messageBody = "";
                 composeFocus = 0;
                 go("compose");
-            } else if ("Add to contact".equals(choice) ||
-                    "Copy contact".equals(choice) || "Move contact".equals(choice) ||
+            } else if ("Add to contact".equals(choice)) {
+                if (sel >= 0 && sel < smsThreads.size()) beginAddToContact(smsThreads.get(sel).address);
+                else showNotice("No conversation selected");
+            } else if ("Copy contact".equals(choice) || "Move contact".equals(choice) ||
                     "Merge contact".equals(choice)) {
                 showNotice(choice + " not yet implemented");
             } else if ("Mark >".equals(choice)) {
@@ -6221,7 +6280,8 @@ public class C2PhoneView extends View {
                         + "\nAndroid system speed dials are unchanged";
                 go("itemDetail");
             }
-        } else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page)) {
+        } else if ("speedDialPicker".equals(page) || "speedDialAssign".equals(page)
+                || "addToContactPicker".equals(page)) {
             if ("Select".equals(choice)) openSelected();
         } else if ("blackpool".equals(page) || "whitepool".equals(page)) {
             if ("Remove".equals(choice)) openSelected();
@@ -6589,7 +6649,7 @@ public class C2PhoneView extends View {
                 messageBody = "";
                 composeFocus = 1;
                 go("compose");
-            } else if ("Add to contact".equals(choice)) showNotice("Adding a number to an existing contact is not implemented");
+            } else if ("Add to contact".equals(choice)) beginAddToContact(dial);
         } else if ("call".equals(page)) {
             if ("Loudspeaker".equals(choice)) {
                 toggleSpeaker();
