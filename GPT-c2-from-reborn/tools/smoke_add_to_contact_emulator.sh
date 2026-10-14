@@ -226,8 +226,16 @@ echo "PASS picker cancel via Back left provider unchanged" | tee -a "$result"
 expect_foreground
 
 # --- E. WRITE_CONTACTS revoked must refuse the write ------------------------
+# Revoking a runtime permission kills the app process, so relaunch before
+# driving the UI again.
 adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
 sleep 1
+adb shell am force-stop "$package"
+adb shell am start -W -n "$package/.MainActivity" >> "$result"
+sleep 2
+fg="$(foreground_package)"
+[[ "$fg" == *"$package/"* ]] || { echo "UNVERIFIED C2 not foreground after permission revoke: $fg" | tee -a "$result"; exit 1; }
+dial_number "$new_number"
 adb logcat -c || true
 tap LSK
 tap DOWN; tap DOWN; tap DOWN
