@@ -54,6 +54,21 @@ else
   echo "::error::Add to contact core acceptance failed; see add-to-contact-results.txt"
   add_to_contact_core_failed=1
 fi
+msg_recipients_failed=0
+if bash GPT-c2-from-reborn/tools/smoke_msg_recipients_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS empty Msg. recipients stays on Log with No numbers notice' "$results/msg-recipients-results.txt" ||
+     ! grep -Fq 'PASS seeded Msg. recipients page opened with 1 entry' "$results/msg-recipients-results.txt"; then
+    echo "::error::Msg. recipients acceptance incomplete; see msg-recipients-results.txt"
+    msg_recipients_failed=1
+  fi
+else
+  echo "::error::Msg. recipients acceptance failed; see msg-recipients-results.txt"
+  msg_recipients_failed=1
+fi
+if [[ -s "$results/msg-recipients-results.txt" ]]; then
+  echo "===== msg-recipients-results.txt ====="
+  cat "$results/msg-recipients-results.txt" || true
+fi
 # Mirror the probe report into the job log so failures are diagnosable
 # without downloading the artifact.
 if [[ -s "$results/add-to-contact-results.txt" ]]; then
@@ -76,6 +91,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo
     cat "$results/android-back-results.txt"
     echo
+    echo "### C2 Msg. recipients acceptance"
+    echo
+    if [[ -s "$results/msg-recipients-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/msg-recipients-results.txt" || true
+    else
+      echo "UNVERIFIED: Msg. recipients probe did not produce a report."
+    fi
+    echo
     echo "### C2 Add to contact acceptance"
     echo
     if [[ -s "$results/add-to-contact-results.txt" ]]; then
@@ -95,6 +118,6 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-if [[ "${add_to_contact_core_failed:-0}" == "1" ]]; then
+if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" ]]; then
   exit 1
 fi
