@@ -3100,22 +3100,25 @@ public class C2PhoneView extends View {
                     showNotice("Only contacts stored on the phone can receive added numbers");
                 } else {
                     ArrayList<String> existing = contactNumbersById.get(target.contactId);
-                    String pendingDigits = digitsOnly(pendingAddToContactNumber);
+                    String pendingDigits = ukNormalisedDigits(pendingAddToContactNumber);
                     boolean alreadySaved = false;
                     if (existing != null && !pendingDigits.isEmpty())
                         for (String savedNumber : existing)
-                            if (pendingDigits.equals(digitsOnly(savedNumber))) {
+                            if (pendingDigits.equals(ukNormalisedDigits(savedNumber))) {
                                 alreadySaved = true;
                                 break;
                             }
                     if (alreadySaved) {
+                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=duplicate");
                         back();
                         showNotice("Number already saved for " + target.name);
                     } else if (!backend.has(Manifest.permission.WRITE_CONTACTS)) {
+                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=no_write_permission");
                         back();
                         showNotice("Contacts write permission unavailable");
                     } else if (backend.addNumberToContact(target.rawContactId,
                             pendingAddToContactNumber)) {
+                        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_INSERTED rawContactId=" + target.rawContactId);
                         back();
                         refreshContactsFromPhone();
                         showNotice("Number added to " + target.name);
@@ -5826,6 +5829,7 @@ public class C2PhoneView extends View {
             return;
         }
         if (digitsOnly(number).length() < 3) {
+            android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=invalid_sender");
             showNotice("This sender cannot be saved as a phone number");
             return;
         }
@@ -5839,6 +5843,7 @@ public class C2PhoneView extends View {
             return;
         }
         pendingAddToContactNumber = number.trim();
+        android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_PICKER_OPEN");
         go("addToContactPicker");
     }
 
@@ -7170,6 +7175,14 @@ public class C2PhoneView extends View {
             if (Character.isDigit(ch)) b.append(ch);
         }
         return b.toString();
+    }
+
+    private String ukNormalisedDigits(String number) {
+        // Moti's handset is UK: a leading +44 / 0044 / 44 international form and
+        // the trunk 0 form are the same subscriber number for duplicate checks.
+        String digits = digitsOnly(number);
+        if (digits.length() == 12 && digits.startsWith("44")) return "0" + digits.substring(2);
+        return digits;
     }
 
     private void forwardSmsCopy(AndroidBackend.DeviceSms message) {
