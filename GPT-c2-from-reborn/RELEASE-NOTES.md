@@ -1,3 +1,14 @@
+## Photo Delete Yes — Android 11 emulator accepted (14 October 2026)
+
+- GitHub Actions [run #38533059509](https://github.com/moshenuch/moshenuch/actions/runs/38533059509) passed for commit `c88d7a69177e1040c7ad0913a8e658473a271704`.
+- A **fresh, dedicated test JPEG** was captured in shared `Pictures/C2 Reborn`. Nokia Photo > Options > Delete > Yes removed that exact on-disk JPEG.
+- The emulator verified its pre-existing JPEG listing was unchanged; it did not delete unrelated photos.
+- This is actual emulator UI/media deletion acceptance, not merely a static source audit. It does not establish the same action on physical Oppo hardware.
+- This milestone changes documentation only. Production v2.02.0 and pinned HTML v6.343 remain unchanged.
+- Remaining hardware priority: Oppo short video Record/Stop, playable public MP4 with audible speech, and physical Android Back behaviour.
+
+---
+
 ## Verified Android 11 video player Back acceptance — 14 October 2026
 
 - Baseline APK: **v2.02.0**, pinned HTML reference **v6.343**; this is a CI/documentation milestone, not a new APK release.
