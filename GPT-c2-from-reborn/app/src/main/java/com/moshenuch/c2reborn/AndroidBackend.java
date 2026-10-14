@@ -247,6 +247,25 @@ public final class AndroidBackend {
         }
     }
 
+    /** Append an additional phone-number row to an existing writable raw contact. */
+    public boolean addNumberToContact(long rawContactId, String number) {
+        if (!has(Manifest.permission.WRITE_CONTACTS) ||
+                rawContactId <= 0 || number == null || number.trim().isEmpty()) return false;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
+            values.put(ContactsContract.Data.MIMETYPE,
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
+            values.put(ContactsContract.CommonDataKinds.Phone.NUMBER, number.trim());
+            values.put(ContactsContract.CommonDataKinds.Phone.TYPE,
+                    ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE);
+            Uri uri = resolver.insert(ContactsContract.Data.CONTENT_URI, values);
+            return uri != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
         public boolean deleteContact(long contactId) {
         if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
         try {
