@@ -1,3 +1,13 @@
+## Photo Delete No/Yes complete emulator acceptance — 14 October 2026
+
+- [GitHub Actions run #38544230613](https://github.com/moshenuch/moshenuch/actions/runs/38544230613) succeeded on commit `c9145feb2ce679bb58869682a06e139249db7ca6`.
+- On a newly captured Android 11 emulator JPEG, **Photo > Options > Delete > No** retained the exact saved file; **Delete > Yes** subsequently removed it.
+- The test independently checked that **every JPEG present before the test still existed afterward**. Unrelated new captures are not incorrectly counted as photo loss.
+- The same run confirmed Android system Back closed the prepared in-app video player while leaving C2 foreground.
+- No production source modifications, APK version increase or release replacement. Oppo physical recording with audible speech and physical Back gesture remain unverified.
+
+---
+
 ## Photo Delete Yes — Android 11 emulator accepted (14 October 2026)
 
 - GitHub Actions [run #38533059509](https://github.com/moshenuch/moshenuch/actions/runs/38533059509) passed for commit `c88d7a69177e1040c7ad0913a8e658473a271704`.
