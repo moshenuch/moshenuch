@@ -266,6 +266,29 @@ public final class AndroidBackend {
         }
     }
 
+    /** First writable raw contact of an aggregate, skipping read-only and
+     *  deleted rows; -1 when the aggregate has nothing writable. An aggregate
+     *  can merge raw contacts from read-only accounts, and its first raw id
+     *  is not necessarily one this app may write to. */
+    public long writableRawContactId(long contactId) {
+        if (!has(Manifest.permission.WRITE_CONTACTS) || contactId <= 0) return -1;
+        Cursor c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.RawContacts.CONTENT_URI,
+                    new String[]{ContactsContract.RawContacts._ID},
+                    ContactsContract.RawContacts.CONTACT_ID + "=? AND "
+                            + ContactsContract.RawContacts.DELETED + "=0 AND "
+                            + ContactsContract.RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0",
+                    new String[]{String.valueOf(contactId)}, null);
+            if (c != null && c.moveToFirst()) return c.getLong(0);
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        return -1;
+    }
+
         public boolean deleteContact(long contactId) {
         if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
         try {
