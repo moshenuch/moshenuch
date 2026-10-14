@@ -60,10 +60,21 @@ for attempt in $(seq 1 20); do
 done
 [[ -n "$created" ]] || { echo 'FAIL dedicated JPEG was not captured' | tee -a "$result"; exit 1; }
 echo "PASS captured dedicated JPEG $created" | tee -a "$result"
+# Exercise both confirmation branches against the same newly captured file.
 tap 'Photo Options' 2
 tap 'Select Delete row' 3
 tap 'Open Delete' 0
-# Confirmation opens with Yes on left Nokia softkey; No is on right.
+# Confirmation No is on the right Nokia softkey. It must preserve the photo.
+tap 'Confirm No' 1
+if ! list_jpegs | grep -Fxq "$created"; then
+  echo 'FAIL Delete No unexpectedly removed captured JPEG' | tee -a "$result"
+  exit 1
+fi
+echo 'PASS Delete No retained exact newly captured JPEG' | tee -a "$result"
+tap 'Photo Options again' 2
+tap 'Select Delete row again' 3
+tap 'Open Delete again' 0
+# Confirmation Yes is on the left Nokia softkey.
 tap 'Confirm Yes' 2
 sleep 3
 if list_jpegs | grep -Fxq "$created"; then
