@@ -369,7 +369,9 @@ tap OK                          # From phone to SIM
 sleep 1
 require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
 shot movecopy-rollback-confirm
-two_id="$(adb shell content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 --where "data1='$mov_two'" 2>&1 | tr -d '\r' | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
+two_id="$(adb shell content query --uri content://com.android.contacts/data \
+  --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
+  | grep -E "data1=$mov_two\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
 if [[ ! "$two_id" =~ ^[0-9]+$ ]]; then
   echo "UNVERIFIED could not resolve $mov_two raw id for the failure fixture" | tee -a "$result"
   exit 1
@@ -389,7 +391,8 @@ if [[ "$f_provider" != "$((baseline_total + 3))" ]]; then
   echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 3)) (baseline + mov_one re-added + multi + extra-data)" | tee -a "$result"
   exit 1
 fi
-if ! adb shell content query --uri content://com.android.contacts/data --projection data1 --where "data1='$mov_one'" 2>&1 | tr -d '\r' | grep -qF "data1=$mov_one"; then
+if ! adb shell content query --uri content://com.android.contacts/data \
+     --projection data1 2>&1 | tr -d '\r' | grep -qE "data1=$mov_one\$"; then
   echo "FAIL rollback did not restore $mov_one to the provider" | tee -a "$result"
   exit 1
 fi
@@ -429,13 +432,13 @@ if [[ "$after_move" != "$((multi_total + 1))" ]]; then
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 --where "data1='$mov_multi'" 2>&1 \
-     | tr -d '\r' | grep -qF "data1=$mov_multi"; then
+     --projection data1 2>&1 \
+     | tr -d '\r' | grep -qE "data1=$mov_multi\$"; then
   echo "FAIL multi-number contact $mov_multi is gone after Move" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 --where "data1='$email_extra'" 2>&1 \
+     --projection data1 2>&1 \
      | tr -d '\r' | grep -qF "data1=$email_extra"; then
   echo "FAIL extra-data contact $mov_extra lost its email row after Move" | tee -a "$result"
   exit 1
@@ -507,7 +510,7 @@ if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 --where "data1='$email_extra'" 2>&1 \
+     --projection data1 2>&1 \
      | tr -d '\r' | grep -qF "data1=$email_extra"; then
   echo "FAIL Copy disturbed the extra-data contact original (email row gone)" | tee -a "$result"
   exit 1
