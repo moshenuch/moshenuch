@@ -7,9 +7,11 @@
 #      contact; the number must land on that contact and nothing else moves.
 #  B.  Duplicate: repeating the same add must be refused with no provider write.
 #  C.  Cancel: leaving the picker with Back must not write.
-#  E.  Permission: with WRITE_CONTACTS revoked the picker must refuse the write.
-# Conversations coverage is reported separately (non-blocking): the SMS
-# provider refuses shell seeding on some images.
+#  E.  Permission: with WRITE_CONTACTS revoked the picker must refuse the
+#      write (blocking; the probe verifies the denied state before driving).
+# Conversations coverage is reported separately: the SMS provider refuses
+# shell seeding, so the probe tries as root and stays UNVERIFIED when even
+# root cannot seed on this image.
 #  D1. Conversations: an SMS sender can be added to an existing contact.
 #  D2. An alphanumeric SMS sender is refused without opening the picker.
 # The only contact present is the one this probe seeds; verification reads the
@@ -287,10 +289,18 @@ expect_foreground
 # (runs 38590863441, 38605594546), which is a probe-orchestration race, not an
 # app bypass - the refusal branch itself is covered by the wiring audit.
 section_e() {
+# Deterministic pre-state: revoke, relaunch, answer the startup sheet with
+# Deny, then VERIFY the permission is still denied. The sheet race can
+# re-grant WRITE_CONTACTS through a mistimed tap on Allow (runs 38590863441,
+# 38605594546); on a re-grant the whole round is retried (bounded), and if no
+# round lands a verified-denied state the section FAILS instead of testing
+# the wrong state.
+denied_ready=0
+for round in 1 2 3; do
 adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 sleep 1
 perm_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(WRITE|READ)_CONTACTS' | head -4 | tr -d '\r')"
-echo "permission state after revoke: $perm_state" | tee -a "$result"
+echo "permission state after revoke (round $round): $perm_state" | tee -a "$result"
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sleep 2
@@ -312,16 +322,27 @@ for attempt in 1 2 3 4 5 6 7 8; do
   empty_dumps=0
   nums="$(grep -o '[0-9]*' <<< "$deny_bounds" | tr '\n' ' ' || true)"
   read -r x1 y1 x2 y2 <<< "$nums"
-  echo "TAP permission-sheet Deny $(( (x1+x2)/2 )),$(( (y1+y2)/2 )) (attempt $attempt)" | tee -a "$result"
+  echo "TAP permission-sheet Deny $(( (x1+x2)/2 )),$(( (y1+y2)/2 )) (round $round attempt $attempt)" | tee -a "$result"
   adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
   sleep 1
 done
 adb shell rm -f /sdcard/c2-ui.xml 2>/dev/null || true
 if [[ "$sheet_clear" != "1" ]]; then
-  echo "UNVERIFIED could not clear the permission sheet after revoke" | tee -a "$result"; exit 1
+  echo "round $round: could not clear the permission sheet after revoke" | tee -a "$result"
+  continue
+fi
+post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r')"
+if grep -q 'granted=false' <<< "$post_state"; then
+  denied_ready=1
+  break
+fi
+echo "round $round: WRITE_CONTACTS re-granted by the sheet race, retrying" | tee -a "$result"
+done
+if [[ "$denied_ready" != "1" ]]; then
+  echo "FAIL could not keep WRITE_CONTACTS denied after 3 revoke rounds" | tee -a "$result"; exit 1
 fi
 fg="$(foreground_package)"
-[[ "$fg" == *"$package/"* ]] || { echo "UNVERIFIED C2 not foreground after permission revoke: $fg" | tee -a "$result"; exit 1; }
+[[ "$fg" == *"$package/"* ]] || { echo "FAIL C2 not foreground after permission revoke: $fg" | tee -a "$result"; exit 1; }
 # A fresh number: an already-saved one would hit the duplicate refusal first.
 dial_number "$perm_number"
 adb logcat -c || true
@@ -344,17 +365,26 @@ echo "PASS Add to contact refused without WRITE_CONTACTS, provider unchanged" | 
 expect_foreground
 }
 # Subshell: section E contains exit statements; they must end the subshell,
-# not the probe.
-if ( section_e ); then
-  :
-else
+# not the probe. Blocking since v2.03.10: the revoke/verify loop above makes
+# the denied state deterministic before the UI is driven, so a failure here
+# is a real signal.
+if ! ( section_e ); then
   adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
-  echo "WARN section E (WRITE_CONTACTS denied) failed; warning-only per timebox, core release unaffected" | tee -a "$result"
+  exit 1
 fi
 
 # --- D. Conversations entry (reported separately, non-blocking) ------------
 # Threads are ordered newest first; give the phone-number sender the newer
 # message so it is the selected thread, the alphanumeric sender the older one.
+# The SMS provider refuses shell writes (default-SMS-app role), so seed as
+# root like the call-log probes; if even root cannot seed on this image the
+# section stays UNVERIFIED with the exact provider answer in the log.
+if ! adb root 2>&1 | grep -qi 'root'; then
+  echo "UNVERIFIED conversations section skipped: adb root unavailable on this emulator image" | tee -a "$result"
+  exit 0
+fi
+sleep 3
+adb wait-for-device
 now_ms="$(date +%s)000"
 sms_out="$(adb shell content insert --uri content://sms \
   --bind address:s:"$sms_alpha" --bind body:s:Alert \
@@ -368,7 +398,8 @@ sms_check="$(adb shell content query --uri content://sms \
   --projection address:body 2>&1 | tr -d '\r' || true)"
 echo "sms provider dump: $sms_check" >> "$result"
 if ! grep -Fq "address=$sms_sender" <<< "$sms_check" || ! grep -Fq "address=$sms_alpha" <<< "$sms_check"; then
-  echo "UNVERIFIED conversations section skipped: SMS provider seeding unreadable from shell" | tee -a "$result"
+  echo "UNVERIFIED conversations section skipped: SMS provider seeding unreadable even as root" | tee -a "$result"
+  adb unroot >/dev/null 2>&1 || true
   exit 0
 fi
 
@@ -429,3 +460,14 @@ if marker_seen 'ADD_TO_CONTACT_PICKER_OPEN'; then
 fi
 echo "PASS alphanumeric SMS sender refused before picker, provider unchanged" | tee -a "$result"
 expect_foreground
+# Remove the seeded SMS rows (still root) so later runs start clean; a
+# leftover is reported, not failed on.
+for addr in "$sms_sender" "$sms_alpha"; do
+  adb shell content delete --uri content://sms --where "address='$addr'" >/dev/null 2>&1 || true
+done
+sms_left="$(adb shell content query --uri content://sms --projection address 2>&1 | tr -d '\r' || true)"
+if grep -qE "address=($sms_sender|$sms_alpha)" <<< "$sms_left"; then
+  echo "WARN seeded SMS rows still present after cleanup" | tee -a "$result"
+fi
+adb unroot >/dev/null 2>&1 || true
+adb wait-for-device || true
