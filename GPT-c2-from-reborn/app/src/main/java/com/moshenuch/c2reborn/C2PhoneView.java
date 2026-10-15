@@ -3043,16 +3043,22 @@ public class C2PhoneView extends View {
             useSelectedSmsTemplate();
             return;
         }
-        if ("deletemessages".equals(page) && sel == 0) {
-            // HTML v6.343 confirmdelete flow: in-house "Delete all messages?"
-            // question box, Yes/No softkeys. Other rows keep their detail page.
-            refreshSmsFromPhone();
-            requestConfirm("deleteAllMessages", "Delete all messages?");
-            android.util.Log.i("C2Messages",
-                    "DELETE_ALL_MESSAGES_CONFIRM visible=" + deviceSms.size());
+        if ("deletemessages".equals(page)) {
+            if (sel == 0) {
+                // HTML v6.343 confirmdelete flow: in-house "Delete all messages?"
+                // question box, Yes/No softkeys.
+                refreshSmsFromPhone();
+                requestConfirm("deleteAllMessages", "Delete all messages?");
+                android.util.Log.i("C2Messages",
+                        "DELETE_ALL_MESSAGES_CONFIRM visible=" + deviceSms.size());
+            } else {
+                // HTML v6.343 routes its By message / By folder rows to the
+                // inbox and folder pages; per-message handling lives there.
+                go(new String[]{"", "savedmessages", "inbox", "sent", "drafts"}[sel]);
+            }
             return;
         }
-        if (Arrays.asList("outbox","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
+        if (Arrays.asList("outbox","reports","email","ims","voicemessages","infomessages","servicecommands","messagesettings").contains(page)) {
             detailTitle = itemsFor(page)[sel];
             if ("outbox".equals(page)) detailText = "Outbox records loaded: "
                     + countSmsType(Telephony.Sms.MESSAGE_TYPE_OUTBOX)
@@ -3066,8 +3072,6 @@ public class C2PhoneView extends View {
             else if ("voicemessages".equals(page)) detailText = "Voice mailbox service.";
             else if ("infomessages".equals(page)) detailText = "Network information message settings.";
             else if ("servicecommands".equals(page)) detailText = "Enter a service command for the network.";
-            else if ("deletemessages".equals(page)) detailText =
-                    "Bulk system SMS deletion is not implemented.\nPhone SMS records are unchanged.";
             else if ("messagesettings".equals(page)) detailText = "Messaging configuration.";
             else detailText = "Saved message.";
             go("itemDetail");
