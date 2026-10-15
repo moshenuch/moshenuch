@@ -113,6 +113,27 @@ if [[ -s "$results/delete-all-contacts-results.txt" ]]; then
   cat "$results/delete-all-contacts-results.txt"
   echo "===== end delete-all-contacts-results.txt ====="
 fi
+if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS Delete all messages cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete all messages provider unchanged (hide-only)' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete all messages No left provider unchanged' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after Delete all messages Yes' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after Delete all messages No' "$results/delete-all-messages-results.txt"; then
+    echo "::error::Delete all messages acceptance incomplete; see delete-all-messages-results.txt"
+    delete_all_messages_failed=1
+  fi
+  if ! grep -Fq 'PASS Delete all messages Yes hid every seeded SMS' "$results/delete-all-messages-results.txt"; then
+    echo "::warning::Delete all messages SMS-provider coverage incomplete (SMS shell seeding is best-effort); see delete-all-messages-results.txt"
+  fi
+else
+  echo "::error::Delete all messages acceptance failed; see delete-all-messages-results.txt"
+  delete_all_messages_failed=1
+fi
+if [[ -s "$results/delete-all-messages-results.txt" ]]; then
+  echo "===== delete-all-messages-results.txt ====="
+  cat "$results/delete-all-messages-results.txt"
+  echo "===== end delete-all-messages-results.txt ====="
+fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
 fi
@@ -160,6 +181,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
       echo "UNVERIFIED: Delete all contacts probe did not produce a report."
     fi
     echo
+    echo "### C2 Delete messages acceptance"
+    echo
+    if [[ -s "$results/delete-all-messages-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/delete-all-messages-results.txt" || true
+    else
+      echo "UNVERIFIED: Delete messages probe did not produce a report."
+    fi
+    echo
     echo "### C2 Photo Delete Yes acceptance"
     echo
     if [[ -s "$results/photo-delete-results.txt" ]]; then
@@ -171,6 +200,6 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" || "${clear_log_lists_failed:-0}" == "1" || "${delete_all_contacts_failed:-0}" == "1" ]]; then
+if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" || "${clear_log_lists_failed:-0}" == "1" || "${delete_all_contacts_failed:-0}" == "1" || "${delete_all_messages_failed:-0}" == "1" ]]; then
   exit 1
 fi
