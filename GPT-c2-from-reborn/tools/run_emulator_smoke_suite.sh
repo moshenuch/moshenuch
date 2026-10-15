@@ -139,10 +139,12 @@ if [[ -s "$results/delete-all-messages-results.txt" ]]; then
   echo "===== end delete-all-messages-results.txt ====="
 fi
 if bash GPT-c2-from-reborn/tools/smoke_move_copy_contacts_emulator.sh "$results"; then
-  if ! grep -Fq 'PASS Move phone->SIM emptied provider and SIM list holds all' "$results/move-copy-contacts-results.txt" ||
-     ! grep -Fq 'PASS Move from empty phone memory refused with Selected memory empty' "$results/move-copy-contacts-results.txt" ||
+  if ! grep -Fq 'PASS Duplicate destination refused with the HTML wording and changed nothing' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Move phone->SIM rolled back after a mid-batch failure' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Copy from empty SIM memory refused with Selected memory empty' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'multi-number contact untouched in provider' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS Move SIM->phone restored provider and emptied SIM list' "$results/move-copy-contacts-results.txt" ||
-     ! grep -Fq 'PASS Copy phone->SIM kept provider and copied' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Copy phone->SIM copied' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS Copy contacts No left provider and SIM list unchanged' "$results/move-copy-contacts-results.txt"; then
     echo "::error::Move/Copy contacts acceptance incomplete; see move-copy-contacts-results.txt"
     move_copy_contacts_failed=1
