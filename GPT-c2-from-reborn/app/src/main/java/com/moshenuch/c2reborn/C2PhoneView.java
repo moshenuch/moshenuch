@@ -7384,6 +7384,25 @@ public class C2PhoneView extends View {
                 // source entries would both transfer into duplicates the
                 // prototype cannot represent. Wording drops "destination"
                 // from the HTML string; no HTML source, disclosed.
+                // Counts-only diagnostic (CI acceptance found the destination
+                // refusal not firing; this pinpoints fixture-load vs
+                // name-empty vs normalization without logging contact data).
+                int preflightMatches = 0;
+                boolean emptySourceNames = false;
+                for (Contact c : source) {
+                    if (c.name.isEmpty()) emptySourceNames = true;
+                    for (Contact d : destination) {
+                        if (c.name.equals(d.name)
+                                && normalizeSimNumber(c.number).equals(normalizeSimNumber(d.number)))
+                            preflightMatches++;
+                    }
+                }
+                android.util.Log.i("C2Contacts",
+                        (move ? "MOVE" : "COPY") + "_PREFLIGHT dir=" + dirName
+                                + " source=" + source.size()
+                                + " destination=" + destination.size()
+                                + " matches=" + preflightMatches
+                                + " empty_names=" + (emptySourceNames ? 1 : 0));
                 boolean sourceDuplicate = false;
                 for (int i = 0; i < source.size() && !sourceDuplicate; i++) {
                     for (int j = i + 1; j < source.size(); j++) {
