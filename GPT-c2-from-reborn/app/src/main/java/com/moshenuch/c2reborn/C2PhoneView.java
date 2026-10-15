@@ -196,6 +196,7 @@ public class C2PhoneView extends View {
     private String optionSubmenuTitle = "";
     private boolean confirmOpen = false;
     private String confirmText = "";
+    private String lastSoftbarLog = "";
     private String confirmAction = "";
     private boolean locked = false;
     private int unlockStep = 0;
@@ -2250,6 +2251,14 @@ public class C2PhoneView extends View {
             c.drawRect(0, 286, 240, 287, p);
         }
         String[] soft = softLabels();
+        // Probe hook: log softkey labels whenever they change so emulator
+        // sections can assert them (e.g. empty call lists show Back only).
+        String softKey = page + "|" + soft[0] + "|" + soft[1] + "|" + soft[2];
+        if (!softKey.equals(lastSoftbarLog)) {
+            lastSoftbarLog = softKey;
+            android.util.Log.i("C2Log",
+                    "SOFTBAR page=" + page + " soft=" + soft[0] + "/" + soft[1] + "/" + soft[2]);
+        }
         p.setColor(homeBar ? Color.rgb(28, 34, 36) : Color.WHITE);
         p.setTextSize(14);
         p.setTypeface(fontBold);
