@@ -140,8 +140,18 @@ ensure_unroot() {
   adb unroot >/dev/null 2>&1 || true
   adb wait-for-device || true
   sleep 2
+  # audit-#12 item 4: prove root was actually dropped; record when it was not.
+  local uid
+  uid="$(adb shell id -u 2>/dev/null | tr -d '\r' || true)"
+  if [[ "$uid" == "0" ]]; then
+    echo "FAIL unroot did not drop root: id -u still 0" | tee -a "$result"
+    cleanup_status=1
+  elif [[ -z "$uid" ]]; then
+    echo "WARN could not verify effective uid after unroot" | tee -a "$result"
+  fi
 }
 cleanup_state() {
+  local remaining_ids=()
   adb shell am force-stop "$package" || true
   if [[ "$restore_needed" == "1" ]]; then
     adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$backup" || true
@@ -162,27 +172,38 @@ cleanup_state() {
   if [[ -s "$out/c2_inserted_ids.txt" ]]; then
     while IFS= read -r row_id; do
       [[ -n "$row_id" ]] || continue
-      del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" 2>&1 | tr -d '\r')"
+      del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$del_out"; then
         echo "FAIL cleanup: provider delete of _id=$row_id errored: $del_out" | tee -a "$result"
         cleanup_status=1
+        remaining_ids+=("$row_id")
         continue
       fi
-      query_out="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r')"
+      query_out="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$query_out"; then
         echo "FAIL cleanup: provider query after delete errored: $query_out" | tee -a "$result"
         cleanup_status=1
+        remaining_ids+=("$row_id")
         continue
       fi
       leftover="$(printf '%s\n' "$query_out" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -cx "$row_id" || true)"
       if [[ "$leftover" != "0" ]]; then
         echo "FAIL cleanup: seeded call-log row _id=$row_id still present after delete" | tee -a "$result"
         cleanup_status=1
+        remaining_ids+=("$row_id")
       else
         echo "PASS seeded call-log row _id=$row_id deleted (exact id match)" | tee -a "$result"
       fi
     done < "$out/c2_inserted_ids.txt"
-    rm -f "$out/c2_inserted_ids.txt"
+    # audit-#12 item 3: when anything remains, keep the id file - rewritten
+    # to just the remaining ids so a later cleanup pass knows exactly what is
+    # still in the provider. Only remove it once every row is gone.
+    if [[ "${#remaining_ids[@]}" -gt 0 ]]; then
+      printf '%s\n' "${remaining_ids[@]}" > "$out/c2_inserted_ids.txt"
+      echo "WARN cleanup: ${#remaining_ids[@]} seeded call-log id(s) remain; kept in c2_inserted_ids.txt" | tee -a "$result"
+    else
+      rm -f "$out/c2_inserted_ids.txt"
+    fi
   fi
   ensure_unroot
   if [[ "$cleanup_status" != "0" ]]; then
