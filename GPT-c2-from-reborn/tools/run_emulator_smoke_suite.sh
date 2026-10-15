@@ -153,6 +153,10 @@ if bash GPT-c2-from-reborn/tools/smoke_move_copy_contacts_emulator.sh "$results"
      ! grep -Fq 'PASS custom-label contact kept its label row after Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS account-backed contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS nameless contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS non-mobile contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS primary-number contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS number added between confirm and Yes keeps the contact out of Move' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS blank-number SIM entry rejected; batch rolled back cleanly' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS custom-label contact copied to SIM as name+number only' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS rollback failure reported honestly: rolled_back=0' "$results/move-copy-contacts-results.txt"; then
     echo "::error::Move/Copy contacts acceptance incomplete; see move-copy-contacts-results.txt"
