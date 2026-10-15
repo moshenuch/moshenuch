@@ -136,10 +136,13 @@ public final class AndroidBackend {
 
     /** Aggregate contact ids carrying data a SIM name+number entry cannot
      *  hold: other MIME rows (email, address, note, photo, groups, ...),
-     *  more than one raw contact, or a phone row that is not plain MOBILE:
-     *  a custom type/label, another kind (HOME, WORK, ...) or is_primary
-     *  (restore writes plain TYPE_MOBILE, so the kind and primary flag
-     *  would be lost). Move skips these;
+     *  more than one raw contact, a phone row that is not plain MOBILE
+     *  (a custom type/label, another kind (HOME, WORK, ...) or is_primary;
+     *  restore writes plain TYPE_MOBILE, so the kind and primary flag
+     *  would be lost), or a structured name with components beyond the
+     *  display name (given/middle/family/prefix/suffix/phonetic; restore
+     *  writes the bare display name, so the component fidelity would be
+     *  lost - audit #19). Move skips these;
      *  Copy only duplicates name + one number and leaves the original, so
      *  it stays allowed (audit #16/#17).
      *  Returns null when the scan cannot complete (permission gone or a
@@ -216,6 +219,41 @@ public final class AndroidBackend {
         } finally {
             if (c != null) c.close();
         }
+        // Structured-name components the SIM display name cannot hold
+        // (audit #19).
+        c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    new String[]{
+                            ContactsContract.Data.CONTACT_ID,
+                            ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.PREFIX,
+                            ContactsContract.CommonDataKinds.StructuredName.SUFFIX,
+                            ContactsContract.CommonDataKinds.StructuredName.PHONETIC_GIVEN_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.PHONETIC_MIDDLE_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.PHONETIC_FAMILY_NAME},
+                    ContactsContract.Data.MIMETYPE + "=?",
+                    new String[]{
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE},
+                    null);
+            if (c == null) return null;
+            while (c.moveToNext()) {
+                for (int i = 1; i <= 8; i++) {
+                    String v = c.getString(i);
+                    if (v != null && !v.trim().isEmpty()) {
+                        out.add(c.getLong(0));
+                        break;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
         return out;
     }
 
@@ -246,6 +284,33 @@ public final class AndroidBackend {
                 }
                 nums.add(c.getString(1));
             }
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
+        return out;
+    }
+
+    /** Fresh contact-id -> display name map for the Yes-time revalidation
+     *  (audit #19): the confirmed name+number values are compared against
+     *  current provider data, so a same-count mutation cannot be moved as
+     *  stale data while the aggregate is deleted. Same column the contacts
+     *  list loads (Phone.DISPLAY_NAME). Returns null when the scan cannot
+     *  complete so the caller fails CLOSED. */
+    public java.util.HashMap<Long, String> loadContactDisplayNames() {
+        if (!has(Manifest.permission.READ_CONTACTS)) return null;
+        java.util.HashMap<Long, String> out = new java.util.HashMap<>();
+        Cursor c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[]{
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},
+                    null, null, null);
+            if (c == null) return null;
+            while (c.moveToNext()) out.put(c.getLong(0), c.getString(1));
         } catch (Exception ignored) {
             return null;
         } finally {
