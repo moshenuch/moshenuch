@@ -864,14 +864,17 @@ public class C2PhoneView extends View {
     // A contact without a usable name cannot make the SIM round trip: the
     // provider fills an empty display name with the number itself, and the
     // SIM->phone return path refuses a blank name, which would strand the
-    // entry. Move excludes these in both directions (audit #17).
+    // entry. Move excludes these in both directions (audit #17). A SIM entry
+    // with a blank number is malformed instead: the insert fails and the
+    // batch rolls back honestly rather than silently dropping it.
     private boolean contactUnmovable(Contact c) {
         String name = c.name == null ? "" : c.name.trim();
         String number = c.number == null ? "" : c.number.trim();
         // The provider may format the number it substitutes for a missing
         // name, so compare normalized forms, not raw strings.
-        return name.isEmpty() || number.isEmpty()
-                || normalizeSimNumber(name).equals(normalizeSimNumber(number));
+        return name.isEmpty()
+                || (!number.isEmpty()
+                        && normalizeSimNumber(name).equals(normalizeSimNumber(number)));
     }
 
     private int countSimEligible(ArrayList<Contact> source, boolean toSim, boolean move) {
