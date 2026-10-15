@@ -134,14 +134,18 @@ public final class AndroidBackend {
         return out;
     }
 
-    /** Aggregate contact ids carrying data beyond name + phone numbers
-     *  (email, address, note, photo, group rows, ...) or built from more
-     *  than one raw contact. Move to SIM would silently drop that data, so
-     *  the UI skips these contacts on Move; Copy only duplicates name + one
-     *  number and leaves the original, so it stays allowed (audit #16). */
+    /** Aggregate contact ids carrying data a SIM name+number entry cannot
+     *  hold: other MIME rows (email, address, note, photo, groups, ...),
+     *  more than one raw contact, or a phone row with a custom type/label
+     *  (the label text and is_primary would be lost). Move skips these;
+     *  Copy only duplicates name + one number and leaves the original, so
+     *  it stays allowed (audit #16/#17).
+     *  Returns null when the scan cannot complete (permission gone or a
+     *  provider error) so the caller fails CLOSED instead of moving
+     *  unscanned contacts (audit #17). */
     public java.util.HashSet<Long> loadContactsWithExtraData() {
+        if (!has(Manifest.permission.READ_CONTACTS)) return null;
         java.util.HashSet<Long> out = new java.util.HashSet<>();
-        if (!has(Manifest.permission.READ_CONTACTS)) return out;
         Cursor c = null;
         try {
             c = resolver.query(
@@ -154,6 +158,7 @@ public final class AndroidBackend {
                     null);
             while (c != null && c.moveToNext()) out.add(c.getLong(0));
         } catch (Exception ignored) {
+            return null;
         } finally {
             if (c != null) c.close();
         }
@@ -162,19 +167,46 @@ public final class AndroidBackend {
         try {
             c = resolver.query(
                     ContactsContract.RawContacts.CONTENT_URI,
-                    new String[]{ContactsContract.RawContacts.CONTACT_ID},
+                    new String[]{
+                            ContactsContract.RawContacts.CONTACT_ID,
+                            ContactsContract.RawContacts.ACCOUNT_TYPE},
                     ContactsContract.RawContacts.DELETED + "=0", null, null);
             while (c != null && c.moveToNext()) {
                 long id = c.getLong(0);
                 Integer n = rawCounts.get(id);
                 rawCounts.put(id, n == null ? 1 : n + 1);
+                // Account-backed (synced) raws: a local delete propagates
+                // through sync and moving back would recreate the contact
+                // account-less, so Move must skip these (audit #17).
+                if (c.getString(1) != null) out.add(id);
             }
         } catch (Exception ignored) {
+            return null;
         } finally {
             if (c != null) c.close();
         }
         for (java.util.Map.Entry<Long, Integer> e : rawCounts.entrySet())
             if (e.getValue() != null && e.getValue() > 1) out.add(e.getKey());
+        c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[]{
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                            ContactsContract.CommonDataKinds.Phone.TYPE,
+                            ContactsContract.CommonDataKinds.Phone.LABEL},
+                    null, null, null);
+            while (c != null && c.moveToNext()) {
+                String label = c.getString(2);
+                if (c.getInt(1) == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM
+                        || (label != null && !label.trim().isEmpty()))
+                    out.add(c.getLong(0));
+            }
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
         return out;
     }
 
