@@ -7434,6 +7434,7 @@ public class C2PhoneView extends View {
                 // (audit #17): the page-load scan may be stale, and a failed
                 // scan refuses the Move instead of deleting unscanned data.
                 boolean scanFailed = false;
+                boolean changedValues = false;
                 if (move && dir == 0 && deviceContactsActive) {
                     java.util.HashSet<Long> fresh = backend.loadContactsWithExtraData();
                     // Audit #18: multi-number status must also come from
@@ -7442,7 +7443,9 @@ public class C2PhoneView extends View {
                     // after the confirm and Move would lose it.
                     java.util.HashMap<Long, ArrayList<String>> freshNumbers =
                             backend.loadContactNumbersById();
-                    if (fresh == null || freshNumbers == null) {
+                    java.util.HashMap<Long, String> freshNames =
+                            backend.loadContactDisplayNames();
+                    if (fresh == null || freshNumbers == null || freshNames == null) {
                         scanFailed = true;
                     } else {
                         contactsWithExtraData.clear();
@@ -7450,6 +7453,24 @@ public class C2PhoneView extends View {
                         extraDataScanOk = true;
                         contactNumbersById.clear();
                         contactNumbersById.putAll(freshNumbers);
+                        // Audit #19: a same-count mutation - the name or the
+                        // number VALUE changed since the confirm - must
+                        // refuse the batch, not write stale data to the SIM
+                        // list while deleting the aggregate. Contacts that
+                        // vanished are left to the batch (the delete fails
+                        // and rolls back); contacts that gained a number
+                        // are skipped as multi-number below.
+                        for (Contact c : source) {
+                            ArrayList<String> nums = contactNumbersById.get(c.contactId);
+                            String freshName = freshNames.get(c.contactId);
+                            if (nums != null && nums.size() == 1 && freshName != null
+                                    && (!freshName.equals(c.name)
+                                            || !normalizeSimNumber(nums.get(0))
+                                                    .equals(normalizeSimNumber(c.number)))) {
+                                changedValues = true;
+                                break;
+                            }
+                        }
                     }
                 }
                 // Counts-only diagnostic (CI acceptance found the destination
@@ -7501,6 +7522,11 @@ public class C2PhoneView extends View {
                     showNotice("Contacts could not be checked; try again");
                     android.util.Log.i("C2Contacts",
                             "MOVE_CONTACTS_REFUSED reason=scan_incomplete dir=" + dirName);
+                } else if (changedValues) {
+                    // The HTML's own changed-list error (audit #19).
+                    showNotice("Contacts changed; try again");
+                    android.util.Log.i("C2Contacts",
+                            "MOVE_CONTACTS_REFUSED reason=changed dir=" + dirName);
                 } else if (sourceDuplicate) {
                     showNotice("Duplicate contacts not supported in this prototype");
                     android.util.Log.i("C2Contacts",
