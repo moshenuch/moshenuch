@@ -181,9 +181,15 @@ public final class AndroidBackend {
     /** Create the raw contact, name and phone atomically so a failed number
      *  insert cannot leave an orphaned/half-created contact in the device. */
     public boolean addContact(String name, String number) {
+        return addContactReturningRawId(name, number) > 0;
+    }
+
+    /** Same insert, returning the new raw contact id (or -1) so a batch can
+     *  later undo exactly the row it inserted (audit #16). */
+    public long addContactReturningRawId(String name, String number) {
         if (!has(Manifest.permission.WRITE_CONTACTS) ||
                 name == null || name.trim().isEmpty() ||
-                number == null || number.trim().isEmpty()) return false;
+                number == null || number.trim().isEmpty()) return -1;
         try {
             ArrayList<android.content.ContentProviderOperation> changes = new ArrayList<>();
             changes.add(android.content.ContentProviderOperation
@@ -209,9 +215,30 @@ public final class AndroidBackend {
                     .build());
             android.content.ContentProviderResult[] result =
                     resolver.applyBatch(ContactsContract.AUTHORITY, changes);
-            return result != null && result.length == 3 && result[0] != null &&
-                    result[0].uri != null && result[1] != null && result[2] != null;
+            if (result == null || result.length != 3 || result[0] == null ||
+                    result[0].uri == null || result[1] == null || result[2] == null)
+                return -1;
+            try {
+                return android.content.ContentUris.parseId(result[0].uri);
+            } catch (Exception ignored) {
+                return -1;
+            }
         } catch (Exception ignored) {
+            return -1;
+        }
+    }
+
+    /** Delete exactly one raw contact by its raw _id - the row a batch op
+     *  inserted - never an aggregate-wide delete matched by name (audit #16). */
+    public boolean deleteRawContact(long rawContactId) {
+        if (!has(Manifest.permission.WRITE_CONTACTS) || rawContactId <= 0) return false;
+        try {
+            int rows = resolver.delete(
+                    ContactsContract.RawContacts.CONTENT_URI,
+                    ContactsContract.RawContacts._ID + "=?",
+                    new String[]{String.valueOf(rawContactId)});
+            return rows > 0;
+        } catch (Exception e) {
             return false;
         }
     }
