@@ -1,5 +1,3 @@
-TESTLINE1
-TESTLINE2
 #!/usr/bin/env bash
 # Android 11 acceptance for Messaging > Delete messages > All messages.
 # BLOCKING in the suite:
