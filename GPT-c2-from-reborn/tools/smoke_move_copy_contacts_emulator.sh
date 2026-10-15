@@ -142,7 +142,7 @@ raw_count() {
 sim_count() { # entries in the in-app SIM list, from the prefs file
   local line
   line="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -o '<string name="sim_contacts_v1">[^<]*' || true)"
-  if [[ -z "$line" ]]; then echo 0; else grep -o '&quot;name&quot;' <<< "$line" | wc -l; fi
+  if [[ -z "$line" ]]; then echo 0; else { grep -o '&quot;name&quot;' <<< "$line" || true; } | wc -l | tr -d ' '; fi
 }
 seed_contact() { # seed_contact <name> <number>; prints the new raw id
   local name="$1" number="$2" before after new_id
@@ -151,7 +151,7 @@ seed_contact() { # seed_contact <name> <number>; prints the new raw id
     --bind starred:i:0 >/dev/null 2>&1 || true
   after="$(raw_ids)"
   new_id="$(comm -13 <(echo "$before") <(echo "$after") || true)"
-  if [[ "$(grep -c . <<< "$new_id")" != "1" ]]; then
+  if [[ "$(grep -c . <<< "$new_id" || true)" != "1" ]]; then
     echo "UNVERIFIED seed of $name did not add exactly one raw contact (new ids: ${new_id:-none})" | tee -a "$result"
     exit 1
   fi
