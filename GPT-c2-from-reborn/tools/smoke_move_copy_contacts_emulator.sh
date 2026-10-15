@@ -180,15 +180,17 @@ finish() {
     local reseeded=0 name ncount
     while IFS=$'\t' read -r name ncount; do
       [[ -n "$name" ]] || continue
-      if ! provider_dump "$out/.pd-trap-raw.txt" | grep -F "$name	">/dev/null; then
+      # </dev/null: adb consumes the loop's stdin otherwise and every second
+      # baseline line would be skipped (run 38815565784 analysis).
+      if ! provider_dump "$out/.pd-trap-raw.txt" < /dev/null | grep -F "$name	">/dev/null; then
         local rid
         rid="$(adb shell content insert --uri content://com.android.contacts/raw_contacts \
-          --bind starred:i:0 2>&1 | tr -d '\r' | grep -oE 'raw_contact_id=[0-9]+|/[0-9]+$' | grep -oE '[0-9]+' | head -1 || true)"
+          --bind starred:i:0 < /dev/null 2>&1 | tr -d '\r' | grep -oE 'raw_contact_id=[0-9]+|/[0-9]+$' | grep -oE '[0-9]+' | head -1 || true)"
         if [[ "$rid" =~ ^[0-9]+$ ]]; then
           adb shell content insert --uri content://com.android.contacts/data \
             --bind raw_contact_id:i:"$rid" \
             --bind mimetype:s:vnd.android.cursor.item/name \
-            --bind data1:s:"$name" >/dev/null 2>&1 || true
+            --bind data1:s:"$name" < /dev/null >/dev/null 2>&1 || true
           reseeded=$((reseeded + 1))
         fi
       fi
@@ -209,7 +211,7 @@ finish() {
       rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
       [[ "$rid" =~ ^[0-9]+$ ]] || continue
       adb shell content delete --uri content://com.android.contacts/raw_contacts \
-        --where "_id=$rid" >/dev/null 2>&1 || true
+        --where "_id=$rid" < /dev/null >/dev/null 2>&1 || true
     done <<< "$rows"
     echo "PASS seeded Move/Copy contacts removed from provider" | tee -a "$result"
   elif [[ "$row_count" != "0" ]]; then
@@ -996,11 +998,15 @@ fi
 while IFS= read -r rid; do
   [[ "$rid" =~ ^[0-9]+$ ]] || continue
   for try in 1 2 3; do
+    # </dev/null: adb consumes the loop's stdin otherwise and the second
+    # fixture raw is never processed (run 38815565784 root cause).
     del_out="$(adb shell content delete --uri content://com.android.contacts/raw_contacts \
-      --where "_id=$rid" 2>&1 | tr -d '\r' || true)"
+      --where "_id=$rid" < /dev/null 2>&1 | tr -d '\r' || true)"
     echo "  DUPDEL rid=$rid try=$try: $del_out" >> "$result"
+    # Count only a real _id row; an empty-provider message would count as a
+    # line and fake "still present".
     gone="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
-      --projection _id --where "_id=$rid" 2>&1 | tr -d '\r' | grep -c . || true)"
+      --projection _id --where "_id=$rid" < /dev/null 2>&1 | tr -d '\r' | grep -cE "_id=$rid\$" || true)"
     [[ "$gone" == "0" ]] && break
     sleep 1
   done
@@ -1045,7 +1051,7 @@ for attempt in 1 2 3; do
     rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
     [[ "$rid" =~ ^[0-9]+$ ]] || continue
     adb shell content delete --uri content://com.android.contacts/raw_contacts \
-      --where "_id=$rid" >/dev/null 2>&1 || true
+      --where "_id=$rid" < /dev/null >/dev/null 2>&1 || true
   done <<< "$rb_rows"
   sim_json="$(python3 -c '
 import json
@@ -1143,7 +1149,7 @@ while IFS= read -r line; do
   rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
   [[ "$rid" =~ ^[0-9]+$ ]] || continue
   adb shell content delete --uri content://com.android.contacts/raw_contacts \
-    --where "_id=$rid" >/dev/null 2>&1 || true
+    --where "_id=$rid" < /dev/null >/dev/null 2>&1 || true
 done <<< "$rb_rows"
 adb shell am force-stop "$package" || true
 if [[ "$restore_needed" == "1" ]]; then
