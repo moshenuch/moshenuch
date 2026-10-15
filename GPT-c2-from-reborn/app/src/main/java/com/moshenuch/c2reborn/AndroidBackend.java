@@ -134,6 +134,50 @@ public final class AndroidBackend {
         return out;
     }
 
+    /** Aggregate contact ids carrying data beyond name + phone numbers
+     *  (email, address, note, photo, group rows, ...) or built from more
+     *  than one raw contact. Move to SIM would silently drop that data, so
+     *  the UI skips these contacts on Move; Copy only duplicates name + one
+     *  number and leaves the original, so it stays allowed (audit #16). */
+    public java.util.HashSet<Long> loadContactsWithExtraData() {
+        java.util.HashSet<Long> out = new java.util.HashSet<>();
+        if (!has(Manifest.permission.READ_CONTACTS)) return out;
+        Cursor c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    new String[]{ContactsContract.Data.CONTACT_ID},
+                    ContactsContract.Data.MIMETYPE + " NOT IN (?, ?)",
+                    new String[]{
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE},
+                    null);
+            while (c != null && c.moveToNext()) out.add(c.getLong(0));
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        java.util.HashMap<Long, Integer> rawCounts = new java.util.HashMap<>();
+        c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.RawContacts.CONTENT_URI,
+                    new String[]{ContactsContract.RawContacts.CONTACT_ID},
+                    ContactsContract.RawContacts.DELETED + "=0", null, null);
+            while (c != null && c.moveToNext()) {
+                long id = c.getLong(0);
+                Integer n = rawCounts.get(id);
+                rawCounts.put(id, n == null ? 1 : n + 1);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        for (java.util.Map.Entry<Long, Integer> e : rawCounts.entrySet())
+            if (e.getValue() != null && e.getValue() > 1) out.add(e.getKey());
+        return out;
+    }
+
     /** Create the raw contact, name and phone atomically so a failed number
      *  insert cannot leave an orphaned/half-created contact in the device. */
     public boolean addContact(String name, String number) {
