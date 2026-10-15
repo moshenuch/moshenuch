@@ -117,7 +117,7 @@ jobs:
             echo "Limitations: these are CI self-tests, NOT proof the emulator camera works."
           } | tee build/goto-smoke/goto-audit-report.txt
           {
-            echo "## Native Go to — build-side audit"
+            echo "## Native Go to â build-side audit"
             echo 'All checks below must PASS or the APK workflow fails.'
             echo '~~~text'
             cat build/goto-smoke/goto-audit-report.txt
@@ -156,13 +156,13 @@ jobs:
             app/src/main/java/com/moshenuch/c2reborn/NativeAuditFixtures.java \
             tools/NativeSmsBulkSelectionSmokeTest.java
           {
-            echo "Native SMS bulk selection — v1.37.0"
+            echo "Native SMS bulk selection â v1.37.0"
             java -cp build/sms-bulk-smoke com.moshenuch.c2reborn.NativeSmsBulkSelectionSmokeTest
             python3 tools/audit_sms_bulk_wiring.py
             echo "These are source/model checks, not proof of real emulator interaction."
           } | tee build/sms-bulk-smoke/audit.txt
           {
-            echo "## SMS bulk read/unread — build-side audit"
+            echo "## SMS bulk read/unread â build-side audit"
             echo '~~~text'
             cat build/sms-bulk-smoke/audit.txt
             echo '~~~'
@@ -185,13 +185,13 @@ jobs:
             app/src/main/java/com/moshenuch/c2reborn/NativeHomeShortcuts.java \
             tools/NativeHomeShortcutsSmokeTest.java
           {
-            echo "Native My shortcuts — v1.38.0"
+            echo "Native My shortcuts â v1.38.0"
             java -cp build/home-shortcuts-smoke com.moshenuch.c2reborn.NativeHomeShortcutsSmokeTest
             python3 tools/audit_home_shortcuts_wiring.py
             echo "These tests verify code logic and source wiring, not emulator key presses."
           } | tee build/home-shortcuts-smoke/audit.txt
           {
-            echo "## Nokia My shortcuts — build-side audit"
+            echo "## Nokia My shortcuts â build-side audit"
             echo '~~~text'
             cat build/home-shortcuts-smoke/audit.txt
             echo '~~~'
@@ -215,13 +215,13 @@ jobs:
             app/src/main/java/com/moshenuch/c2reborn/NativeAuditFixtures.java \
             tools/NativeConversationRowLayoutSmokeTest.java
           {
-            echo "Nokia 240px Conversations row spacing — v1.39.0"
+            echo "Nokia 240px Conversations row spacing â v1.39.0"
             java -cp build/conversation-row-smoke com.moshenuch.c2reborn.NativeConversationRowLayoutSmokeTest
             python3 tools/audit_conversation_row_layout.py
             echo "Build-side geometry and renderer checks passed; emulator screenshot remains pending."
           } | tee build/conversation-row-smoke/audit.txt
           {
-            echo "## Conversations SMS icon/name overlap — build-side audit"
+            echo "## Conversations SMS icon/name overlap â build-side audit"
             echo '~~~text'
             cat build/conversation-row-smoke/audit.txt
             echo '~~~'
@@ -246,7 +246,7 @@ jobs:
             tools/NativeOverlayLayoutSmokeTest.java \
             tools/NativeNoticeTextSmokeTest.java
           {
-            echo "Nokia measured notice wrapping and Calculator/Phone layout — v1.41.0"
+            echo "Nokia measured notice wrapping and Calculator/Phone layout â v1.41.0"
             java -cp build/overlay-layout-smoke com.moshenuch.c2reborn.NativeOverlayLayoutSmokeTest
             java -cp build/overlay-layout-smoke com.moshenuch.c2reborn.NativeNoticeTextSmokeTest
             python3 tools/audit_overlay_layout.py
@@ -274,7 +274,7 @@ jobs:
         working-directory: GPT-c2-from-reborn
         shell: bash
         run: |
-          bash -n tools/smoke_video_emulator.sh tools/smoke_photo_emulator.sh tools/smoke_gallery_capacity_emulator.sh tools/smoke_video_report_emulator.sh tools/smoke_add_to_contact_emulator.sh tools/smoke_photo_delete_emulator.sh tools/smoke_msg_recipients_emulator.sh tools/smoke_clear_log_lists_emulator.sh tools/run_emulator_smoke_suite.sh
+          bash -n tools/smoke_video_emulator.sh tools/smoke_photo_emulator.sh tools/smoke_gallery_capacity_emulator.sh tools/smoke_video_report_emulator.sh tools/smoke_add_to_contact_emulator.sh tools/smoke_photo_delete_emulator.sh tools/smoke_msg_recipients_emulator.sh tools/smoke_clear_log_lists_emulator.sh tools/smoke_delete_all_contacts_emulator.sh tools/run_emulator_smoke_suite.sh
           python3 -m py_compile tools/check_recorded_mp4.py
 
       - name: Audit camera, Gallery and capture failure handling
