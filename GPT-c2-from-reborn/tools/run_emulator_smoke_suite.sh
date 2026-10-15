@@ -118,7 +118,11 @@ if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results
      ! grep -Fq 'PASS Delete all messages provider unchanged (hide-only)' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS Delete all messages No left provider unchanged' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS C2 remains foreground after Delete all messages Yes' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS C2 remains foreground after Delete all messages No' "$results/delete-all-messages-results.txt"; then
+     ! grep -Fq 'PASS C2 remains foreground after Delete all messages No' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes: byfolder' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes: inbox' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes: sent' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes: drafts' "$results/delete-all-messages-results.txt"; then
     echo "::error::Delete all messages acceptance incomplete; see delete-all-messages-results.txt"
     delete_all_messages_failed=1
   fi
