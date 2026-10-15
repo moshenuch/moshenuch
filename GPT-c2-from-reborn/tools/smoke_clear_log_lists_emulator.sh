@@ -230,12 +230,22 @@ done
   # the CI emulator (google_apis userdebug) allows adb root. Root is held from
   # here to the end of the probe (C3-C5 also touch the provider); the EXIT
   # trap unroots.
-  if ! adb root 2>&1 | grep -qi 'root'; then
-    echo "FAIL[C2] adb root unavailable on this emulator image" | tee -a "$result"
+  root_ok=0
+  for root_try in 1 2 3; do
+    adb wait-for-device || true
+    root_out="$(adb root 2>&1 || true)"
+    echo "C2 adb root attempt $root_try: $root_out" >> "$result"
+    sleep 3
+    adb wait-for-device || true
+    if [[ "$(adb shell id -u 2>/dev/null | tr -d '\r[:space:]')" == "0" ]]; then
+      root_ok=1
+      break
+    fi
+  done
+  if [[ "$root_ok" != "1" ]]; then
+    echo "FAIL[C2] adb root unavailable on this emulator image after 3 attempts" | tee -a "$result"
     exit 1
   fi
-  sleep 3
-  adb wait-for-device
   before_missed="$(adb shell content query --uri content://call_log/calls --projection number:type 2>&1 | tr -d '\r' | grep -c 'type=3' || true)"
   expected_hidden=$((before_missed + 1))
   insert_out="$(adb shell content insert --uri content://call_log/calls \
