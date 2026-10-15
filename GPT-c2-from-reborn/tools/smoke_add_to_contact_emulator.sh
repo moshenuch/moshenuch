@@ -82,6 +82,8 @@ restore_permissions() {
               READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE; do
     adb shell pm grant "$package" "android.permission.$perm" 2>/dev/null || true
   done
+  # Clear any USER_FIXED pin section E set, so later cold starts behave normally.
+  adb shell pm set-permission-flags "$package" android.permission.WRITE_CONTACTS 0 2>/dev/null || true
 }
 expect_foreground() {
   local fg
@@ -319,6 +321,14 @@ echo "WRITE_CONTACTS after revoke (round $round): $pre_state" | tee -a "$result"
 if ! grep -q 'granted=false' <<< "$pre_state"; then
   echo "FAIL WRITE_CONTACTS revoke did not take (round $round)" | tee -a "$result"; exit 1
 fi
+# Pin the denial as USER_SET|USER_FIXED ("don't ask again"): the startup
+# request then resolves instantly with NO sheet. On this emulator image the
+# permission controller otherwise auto-allows the sheet within seconds -
+# runs 38684431984 and 38687531877 both ended granted=true with no USER_SET
+# flag, i.e. a programmatic grant no probe tap produced. Best-effort: if the
+# image lacks the command, the BACK race below still applies.
+adb shell pm set-permission-flags "$package" android.permission.WRITE_CONTACTS 3 >> "$result" 2>&1 || true
+adb shell pm get-permission-flags "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
 sheet_seen=0
@@ -349,6 +359,7 @@ post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WR
 echo "WRITE_CONTACTS after sheet handling (round $round): $post_state" | tee -a "$result"
 if ! grep -q 'granted=false' <<< "$post_state"; then
   echo "round $round: WRITE_CONTACTS granted again (grant flags above identify who), retrying" | tee -a "$result"
+  adb logcat -d -t 250 2>/dev/null | grep -iE 'grant|permission' | tail -15 >> "$result" || true
   continue
 fi
 # Denied - but a BACK that beat the sheet animation can have finished
