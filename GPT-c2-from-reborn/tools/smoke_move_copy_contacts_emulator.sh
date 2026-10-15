@@ -227,9 +227,9 @@ require_marker() {
     exit 1
   fi
 }
-raw_ids() { # one raw-contact _id per line, sorted; empty when provider empty
+raw_ids() { # one raw-contact _id per line, lexicographically sorted for comm
   adb shell content query --uri content://com.android.contacts/raw_contacts \
-    --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+    --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort || true
 }
 raw_count() {
   local ids
@@ -629,6 +629,10 @@ shot movecopy-copy-confirm
 tap LSK                         # Yes
 sleep 2
 require_marker "COPY_CONTACTS dir=phone2sim done=$singles failed=0 skipped=$multi_total skipped_multi=$multi_total skipped_data=0"
+echo '--- SIM prefs content after Copy ---' >> "$result"
+adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | sed 's/^/  /' >> "$result"
+echo '--- C2Contacts logcat after Copy ---' >> "$result"
+adb logcat -d -s C2Contacts:I 2>/dev/null | tail -8 | sed 's/^/  /' >> "$result"
 after_copy="$(raw_count)"
 if [[ "$after_copy" != "$((baseline_total + 7))" ]]; then
   echo "FAIL Copy changed provider count to $after_copy, expected $((baseline_total + 7))" | tee -a "$result"
