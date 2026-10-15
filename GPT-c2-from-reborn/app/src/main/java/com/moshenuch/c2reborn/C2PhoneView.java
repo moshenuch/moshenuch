@@ -2298,6 +2298,7 @@ public class C2PhoneView extends View {
                 "received".equals(page) || "dialled".equals(page))
             return new String[]{"Options", "Details", "Back"};
         if ("recipients".equals(page)) return new String[]{"", "Call", "Back"};
+        if ("clearloglists".equals(page)) return new String[]{"", "Select", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
         if ("conversation".equals(page)) return new String[]{"Options", smsConversationCenterOpens(conversationMessageAt(sel)) ? "Open" : "Reply", "Back"};
         if ("compose".equals(page)) return new String[]{"Options", "Send", "Back"};
@@ -2570,6 +2571,7 @@ public class C2PhoneView extends View {
             case "speedDialAssign": return "Select speed dial";
             case "log": return "Log";
             case "recipients": return "Message recipients";
+            case "clearloglists": return "Clear log lists";
             case "settings": return "Settings";
             case "demoTools": return "Demo data (debug)";
             case "callsettings": return "Call settings";
@@ -2768,6 +2770,8 @@ public class C2PhoneView extends View {
             }
             case "log":
                 return new String[]{"All calls","Missed calls","Received calls","Dialled numbers","Msg. recipients","Clear log lists","Video & voice calls","Internet call durat.","Data counter","Pack. data timer","Message log","Positioning","Sync log","Simulate missed call"};
+            case "clearloglists":
+                return new String[]{"All call lists","Missed calls","Received calls","Dialled numbers","Message recipients"};
             case "recipients": {
                 String[] rows = new String[msgRecipients.size()];
                 for (int i = 0; i < rows.length; i++) {
@@ -3244,6 +3248,7 @@ public class C2PhoneView extends View {
                     go("recipients");
                 }
             }
+            else if (sel == 5) go("clearloglists");
             else if (sel == 10) showSmsMessageLog();
             else {
                 detailTitle = itemsFor(page)[Math.max(0, Math.min(sel, itemsFor(page).length - 1))];
@@ -3256,6 +3261,32 @@ public class C2PhoneView extends View {
         if ("recipients".equals(page)) {
             if (sel >= 0 && sel < msgRecipients.size())
                 startCall(msgRecipients.get(sel).number);
+            return;
+        }
+
+        if ("clearloglists".equals(page)) {
+            if (sel == 4) {
+                if (msgRecipients.isEmpty()) showNotice("No numbers");
+                else requestConfirm("cllRecipients", "Clear the Message recipients list?");
+            } else {
+                int typeFilter = sel == 1 ? CallLog.Calls.MISSED_TYPE :
+                        sel == 2 ? CallLog.Calls.INCOMING_TYPE :
+                        sel == 3 ? CallLog.Calls.OUTGOING_TYPE : 0;
+                int visible = 0;
+                for (AndroidBackend.DeviceCall item : deviceCalls)
+                    if (typeFilter == 0 || item.type == typeFilter) visible++;
+                if (visible == 0) {
+                    showNotice(sel == 1 ? "No missed calls" : sel == 2 ? "No received calls" :
+                            sel == 3 ? "No dialled numbers" : "No visible calls");
+                } else {
+                    requestConfirm(sel == 0 ? "cllAll" : sel == 1 ? "cllMissed" :
+                            sel == 2 ? "cllReceived" : "cllDialled",
+                            sel == 0 ? "Hide all call records in this app? Android call log unchanged." :
+                            sel == 1 ? "Hide all missed call records in this app? Android call log unchanged." :
+                            sel == 2 ? "Hide all received call records in this app? Android call log unchanged." :
+                            "Hide all dialled number records in this app? Android call log unchanged.");
+                }
+            }
             return;
         }
 
@@ -6983,6 +7014,33 @@ public class C2PhoneView extends View {
             saveStringList("calendar", calendar);
             sel = 0;
             showNotice("Calendar notes deleted");
+        } else if ("cllAll".equals(action) || "cllMissed".equals(action) ||
+                "cllReceived".equals(action) || "cllDialled".equals(action)) {
+            int typeFilter = "cllAll".equals(action) ? 0 :
+                    "cllMissed".equals(action) ? CallLog.Calls.MISSED_TYPE :
+                    "cllReceived".equals(action) ? CallLog.Calls.INCOMING_TYPE :
+                    CallLog.Calls.OUTGOING_TYPE;
+            int n = 0;
+            for (AndroidBackend.DeviceCall item : deviceCalls) {
+                if (typeFilter == 0 || typeFilter == item.type) {
+                    hiddenCallKeys.add(callRecordKey(item));
+                    n++;
+                }
+            }
+            persistHiddenCalls();
+            refreshCallsFromPhone();
+            sel = 0;
+            showNotice("cllAll".equals(action) ? "All call lists cleared" :
+                    "cllMissed".equals(action) ? "Missed calls list cleared" :
+                    "cllReceived".equals(action) ? "Received calls list cleared" :
+                    "Dialled numbers list cleared");
+            android.util.Log.i("C2Log", "CLEAR_LOG_LISTS action=" + action + " hidden=" + n);
+        } else if ("cllRecipients".equals(action)) {
+            msgRecipients.clear();
+            saveMsgRecipients();
+            sel = 0;
+            showNotice("Message recipients list cleared");
+            android.util.Log.i("C2Log", "CLEAR_LOG_LISTS action=cllRecipients");
         } else if ("restoreCalls".equals(action)) {
             int n = hiddenCallKeys.size();
             hiddenCallKeys.clear();
