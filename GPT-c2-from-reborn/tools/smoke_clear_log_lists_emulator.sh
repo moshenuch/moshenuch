@@ -22,6 +22,7 @@ seed_number="07900001234"
 missed_number="07123456789"
 section="boot"
 failures=0
+inserted_id_global=""
 
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -1 | tr -d '\r')"
 if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -34,9 +35,9 @@ scale=min(w/360,h/780)
 ox=(w-360*scale)/2
 oy=(h-780*scale)/2
 named={
- 'LSK':(90,414),'RSK':(270,414),'OK':(180,474),'DOWN':(180,505),
+ 'LSK':(90,414),'RSK':(270,414),'OK':(180,474),'DOWN':(180,505),'UP':(180,443),
 }
-for name in ['LSK','RSK','OK','DOWN']:
+for name in ['LSK','RSK','OK','DOWN','UP']:
  x,y=named[name]
  print(f"{name} {round(ox+x*scale)} {round(oy+y*scale)}")
 PY
@@ -98,12 +99,21 @@ cleanup_state() {
   adb shell am force-stop "$package" || true
   if [[ "$restore_needed" == "1" ]]; then
     adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$backup" || true
-    echo "PASS original c2_state.xml restored after probe" | tee -a "$result"
+    if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | cmp -s - "$backup"; then
+      echo "PASS original c2_state.xml restored after probe (bytes verified)" | tee -a "$result"
+    else
+      echo "FAIL restore of c2_state.xml did not verify byte-for-byte" | tee -a "$result"
+      exit 1
+    fi
   else
     adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
     echo "PASS prefs fixture removed after probe" | tee -a "$result"
   fi
-  adb shell content delete --uri content://call_log/calls --where "number='$missed_number'" >/dev/null 2>&1 || true
+  inserted_id_global="$(cat "$out/c2_inserted_id.txt" 2>/dev/null || true)"
+  if [[ -n "$inserted_id_global" ]]; then
+    adb shell content delete --uri content://call_log/calls --where "_id=$inserted_id_global" >/dev/null 2>&1 || true
+    rm -f "$out/c2_inserted_id.txt"
+  fi
 }
 trap cleanup_state EXIT
 adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' > "$backup" || true
@@ -142,12 +152,11 @@ done
   tap OK   # confirm YES
   shot clear-log-lists-cleared
   require_marker 'CLEAR_LOG_LISTS action=cllRecipients' c1 || exit 1
-  # back to Log, open Msg. recipients: must be empty now
+  # Back restores the Log selection (row 5, Clear log lists); step UP once
+  # to row 4 (Msg. recipients) explicitly, then verify the list is empty.
   tap RSK
-  tap DOWN
-  tap DOWN
-  tap DOWN
-  tap DOWN
+  shot clear-log-lists-back-on-log
+  tap UP
   tap OK
   require_marker 'MSG_RECIPIENTS_EMPTY' c1 || exit 1
   echo "PASS Message recipients list cleared via Clear log lists" | tee -a "$result"
@@ -160,11 +169,19 @@ done
   now_ms="$(adb shell date +%s | tr -d '\r')000"
   before_missed="$(adb shell content query --uri content://call_log/calls --projection number:type 2>&1 | tr -d '\r' | grep -c 'type=3' || true)"
   expected_hidden=$((before_missed + 1))
-  adb shell content insert --uri content://call_log/calls \
+  insert_out="$(adb shell content insert --uri content://call_log/calls \
     --bind number:s:$missed_number --bind type:i:3 --bind date:l:$now_ms \
-    --bind duration:l:0 >/dev/null 2>&1 || true
-  seeded="$(adb shell content query --uri content://call_log/calls --projection number:type 2>&1 | tr -d '\r' | grep -c "number=$missed_number" || true)"
-  echo "C2 provider seeded rows: $seeded" >> "$result"
+    --bind duration:l:0 2>&1 | tr -d '\r')"
+  echo "C2 insert output: ${insert_out:-<empty>}" >> "$result"
+  # API 30 prints nothing on success; locate the row by number instead.
+  inserted_id="$(adb shell content query --uri content://call_log/calls --projection _id:number:type 2>&1 | tr -d '\r' \
+    | sed -n "s/.*_id=\([0-9]*\), number=$missed_number,.*/\1/p")"
+  if [[ ! "$inserted_id" =~ ^[0-9]+$ ]]; then
+    echo "FAIL[C2] provider missed-call insert did not produce a readable row" | tee -a "$result"
+    exit 1
+  fi
+  echo "C2 provider seeded _id=$inserted_id (missed rows before: $before_missed)" >> "$result"
+  echo "$inserted_id" > "$out/c2_inserted_id.txt"
   adb logcat -c || true
   launch
   open_log_page
@@ -175,9 +192,10 @@ done
   tap OK   # confirm YES
   shot clear-log-lists-missed-cleared
   require_marker "CLEAR_LOG_LISTS action=cllMissed hidden=$expected_hidden" c2 || exit 1
-  after="$(adb shell content query --uri content://call_log/calls --projection number:type 2>&1 | tr -d '\r' | grep -c "number=$missed_number" || true)"
-  if [[ "$after" != "1" ]]; then
-    echo "FAIL[C2] provider row changed by app-side clear: rows=$after" | tee -a "$result"
+  after="$(adb shell content query --uri content://call_log/calls --projection _id:number:type 2>&1 | tr -d '\r' \
+    | sed -n "s/.*_id=\([0-9]*\), number=$missed_number,.*/\1/p")"
+  if [[ "$after" != "$inserted_id" ]]; then
+    echo "FAIL[C2] provider row _id=$inserted_id changed by app-side clear: now='$after'" | tee -a "$result"
     exit 1
   fi
   # in-app Missed calls page must be empty now
