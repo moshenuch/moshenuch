@@ -111,7 +111,12 @@ cleanup_prefs() {
   adb shell am force-stop "$package" || true
   if [[ "$restore_needed" == "1" ]]; then
     adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$backup" || true
-    echo "PASS original c2_state.xml restored after probe" | tee -a "$result"
+    if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | cmp -s - "$backup"; then
+      echo "PASS original c2_state.xml restored after probe (bytes verified)" | tee -a "$result"
+    else
+      echo "FAIL restore of c2_state.xml did not verify byte-for-byte" | tee -a "$result"
+      exit 1
+    fi
   else
     adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
     echo "PASS recipients prefs fixture removed after probe" | tee -a "$result"
