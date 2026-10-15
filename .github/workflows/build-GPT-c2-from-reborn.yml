@@ -25,7 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     # The old v1.78.0 run remained stuck in apt-get, blocking subsequent
     # release builds through the concurrency group. Bound the whole job too.
-    timeout-minutes: 25
+    # 35: the full smoke suite (Move/Copy grew by four sections for audit
+    # #18) needs ~28 min; keep the bound tight against real stalls.
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
