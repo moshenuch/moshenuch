@@ -10,8 +10,13 @@
 #      CLEAR_LOG_LISTS action=cllMissed hidden=1) while the Android call-log
 #      provider row stays untouched; the Missed calls page is screenshotted
 #      empty afterwards.
-# The app's private c2_state.xml is backed up and restored via trap; the
-# provider row is deleted at the end.
+#  C3. No/cancel on the confirm keeps both lists intact.
+#  C4. Cleared state survives a force-stop + relaunch.
+#  C5. Softkey regression: empty All/Missed/Received/Dialled pages show
+#      Back only; labels return when records exist (SOFTBAR markers).
+# The app's private c2_state.xml is backed up and restored via trap; seeded
+# provider rows are tracked in c2_inserted_ids.txt and deleted at the end
+# with exact-id verification.
 set -uo pipefail
 out="${1:-GPT-c2-from-reborn/build/emulator-smoke}"
 mkdir -p "$out"
@@ -22,7 +27,10 @@ seed_number="07900001234"
 missed_number="07123456789"
 section="boot"
 failures=0
-inserted_id_global=""
+received_number="07234567890"
+dialled_number="07345678901"
+return_number="07456789012"
+rm -f "$out/c2_inserted_ids.txt"
 
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -1 | tr -d '\r')"
 if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -92,6 +100,33 @@ open_clear_page() { # on the Log page: row 5 = Clear log lists
   sleep 1
 }
 
+provider_ids_for() { # exact _id list for a number (number anchored at EOL)
+  adb shell content query --uri content://call_log/calls --projection _id:number 2>&1 | tr -d '\r' \
+    | sed -n "s/.*_id=\([0-9][0-9]*\), number=$1$/\1/p"
+}
+provider_row_count() {
+  adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r' \
+    | grep -c '^Row:' || true
+}
+seed_call_row() { # seed_call_row <number> <type>: insert as root, echo new _id
+  local num="$1" typ="$2" ins_out new_id
+  ins_out="$(adb shell content insert --uri content://call_log/calls \
+    --bind number:s:$num --bind type:i:$typ \
+    --bind date:l:"$(adb shell date +%s | tr -d '\r')000" \
+    --bind duration:l:0 2>&1 | tr -d '\r')"
+  if grep -qiE 'exception|denied|error' <<< "$ins_out"; then
+    echo "FAIL[$section] provider insert for $num errored: $ins_out" >> "$result"
+    exit 1
+  fi
+  new_id="$(provider_ids_for "$num" | tail -1)"
+  if [[ ! "$new_id" =~ ^[0-9]+$ ]]; then
+    echo "FAIL[$section] provider insert for $num produced no readable row" >> "$result"
+    exit 1
+  fi
+  echo "$new_id" >> "$out/c2_inserted_ids.txt"
+  echo "$new_id"
+}
+
 prefs_dir="/data/data/$package/shared_prefs"
 backup="$out/c2_state_backup_cll.xml"
 restore_needed=0
@@ -109,16 +144,31 @@ cleanup_state() {
     adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
     echo "PASS prefs fixture removed after probe" | tee -a "$result"
   fi
-  inserted_id_global="$(cat "$out/c2_inserted_id.txt" 2>/dev/null || true)"
-  if [[ -n "$inserted_id_global" ]]; then
-    adb shell content delete --uri content://call_log/calls --where "_id=$inserted_id_global" >/dev/null 2>&1 || true
-    leftover="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r' | grep -c "_id=$inserted_id_global" || true)"
-    rm -f "$out/c2_inserted_id.txt"
-    if [[ "$leftover" != "0" ]]; then
-      echo "FAIL cleanup: seeded call-log row _id=$inserted_id_global still present after delete" | tee -a "$result"
-      exit 1
-    fi
-    echo "PASS seeded call-log row _id=$inserted_id_global deleted" | tee -a "$result"
+  # Seeded provider rows are tracked one _id per line. Delete each by its
+  # own _id and verify with an EXACT id match: grep -c "_id=N" would
+  # false-positive _id=1 against _id=10, and bare || true swallowed provider
+  # errors, letting a failed delete report as clean.
+  if [[ -s "$out/c2_inserted_ids.txt" ]]; then
+    while IFS= read -r row_id; do
+      [[ -n "$row_id" ]] || continue
+      del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" 2>&1 | tr -d '\r')"
+      if grep -qiE 'exception|denied|error' <<< "$del_out"; then
+        echo "FAIL cleanup: provider delete of _id=$row_id errored: $del_out" | tee -a "$result"
+        exit 1
+      fi
+      query_out="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r')"
+      if grep -qiE 'exception|denied|error' <<< "$query_out"; then
+        echo "FAIL cleanup: provider query after delete errored: $query_out" | tee -a "$result"
+        exit 1
+      fi
+      leftover="$(printf '%s\n' "$query_out" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -cx "$row_id" || true)"
+      if [[ "$leftover" != "0" ]]; then
+        echo "FAIL cleanup: seeded call-log row _id=$row_id still present after delete" | tee -a "$result"
+        exit 1
+      fi
+      echo "PASS seeded call-log row _id=$row_id deleted (exact id match)" | tee -a "$result"
+    done < "$out/c2_inserted_ids.txt"
+    rm -f "$out/c2_inserted_ids.txt"
   fi
   adb unroot >/dev/null 2>&1 || true
   adb wait-for-device || true
@@ -177,8 +227,9 @@ done
   now_ms="$(adb shell date +%s | tr -d '\r')000"
   # The call_log provider refuses the shell user (uid 2000 lacks the call-log
   # permissions) and the app does not declare WRITE_CALL_LOG, so seed as root:
-  # the CI emulator (google_apis userdebug) allows adb root. Root is scoped to
-  # this section; the EXIT trap unroots.
+  # the CI emulator (google_apis userdebug) allows adb root. Root is held from
+  # here to the end of the probe (C3-C5 also touch the provider); the EXIT
+  # trap unroots.
   if ! adb root 2>&1 | grep -qi 'root'; then
     echo "FAIL[C2] adb root unavailable on this emulator image" | tee -a "$result"
     exit 1
@@ -199,7 +250,7 @@ done
     exit 1
   fi
   echo "C2 provider seeded _id=$inserted_id (missed rows before: $before_missed)" >> "$result"
-  echo "$inserted_id" > "$out/c2_inserted_id.txt"
+  echo "$inserted_id" >> "$out/c2_inserted_ids.txt"
   adb logcat -c || true
   launch
   open_log_page
@@ -228,6 +279,205 @@ done
   sleep 1
   shot clear-log-lists-missed-empty
   echo "PASS Missed calls list cleared via Clear log lists, provider unchanged" | tee -a "$result"
+) || failures=$((failures + 1))
+
+# --- C3: No/cancel preserves recipients and missed call -------------------
+(
+  section="C3"
+  adb shell am force-stop "$package" || true
+  # Fresh state: one recipient, no hidden-call flags, so the C2-seeded
+  # provider missed row is visible again.
+  seed_ts="$(adb shell date +%s | tr -d '\r')000"
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
+    '<map>' \
+    "    <string name=\"msg_recipients_v1\">[{\"number\":\"$seed_number\",\"ts\":$seed_ts}]</string>" \
+    '</map>' > "$out/c2_state_seed_cll.xml"
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$out/c2_state_seed_cll.xml"
+  adb logcat -c || true
+  launch
+  open_log_page
+  open_clear_page
+  # row 4 = Message recipients; open the confirm, then answer No (RSK).
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap OK
+  sleep 1
+  tap RSK
+  sleep 2
+  if marker_seen 'CLEAR_LOG_LISTS action=cllRecipients'; then
+    echo "FAIL[C3] recipients cleared despite answering No to the confirm" | tee -a "$result"
+    exit 1
+  fi
+  # Recipients list must still hold the seeded entry.
+  tap RSK
+  tap UP
+  tap OK
+  require_marker 'MSG_RECIPIENTS_OPEN count=1' || exit 1
+  # Missed calls: answer No as well; provider row and visible entry stay.
+  tap RSK
+  tap DOWN
+  tap OK
+  tap DOWN
+  tap OK
+  sleep 1
+  tap RSK
+  sleep 2
+  if marker_seen 'CLEAR_LOG_LISTS action=cllMissed'; then
+    echo "FAIL[C3] missed list cleared despite answering No to the confirm" | tee -a "$result"
+    exit 1
+  fi
+  if [[ -z "$(provider_ids_for "$missed_number")" ]]; then
+    echo "FAIL[C3] provider missed-call row vanished after No/cancel" | tee -a "$result"
+    exit 1
+  fi
+  tap RSK
+  tap UP
+  tap UP
+  tap UP
+  tap UP
+  tap OK
+  require_marker 'SOFTBAR page=missed soft=Options/Details/Back' || exit 1
+  shot clear-log-lists-no-keeps-missed
+  echo "PASS No/cancel on Clear log lists preserves recipients and missed call" | tee -a "$result"
+) || failures=$((failures + 1))
+
+# --- C4: cleared state persists across force-stop/restart -----------------
+(
+  section="C4"
+  # Entering on the Missed page from C3; clear both lists with Yes this time.
+  exp_missed="$(adb shell content query --uri content://call_log/calls --projection _id:type 2>&1 | tr -d '\r' | grep -c 'type=3' || true)"
+  tap RSK
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap OK
+  tap DOWN
+  tap OK
+  tap OK
+  require_marker "CLEAR_LOG_LISTS action=cllMissed hidden=$exp_missed" || exit 1
+  tap RSK
+  tap OK
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap OK
+  tap OK
+  require_marker 'CLEAR_LOG_LISTS action=cllRecipients' || exit 1
+  adb shell am force-stop "$package" || true
+  adb logcat -c || true
+  launch
+  open_log_page
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap DOWN
+  tap OK
+  require_marker 'MSG_RECIPIENTS_EMPTY' || exit 1
+  tap RSK
+  tap UP
+  tap UP
+  tap UP
+  tap OK
+  sleep 1
+  require_marker 'SOFTBAR page=missed soft=//Back' || exit 1
+  shot clear-log-lists-missed-empty-after-restart
+  echo "PASS cleared state persists across force-stop and restart" | tee -a "$result"
+) || failures=$((failures + 1))
+
+# --- C5: empty-list softkey regression ------------------------------------
+(
+  section="C5"
+  adb shell am force-stop "$package" || true
+  # Fresh state (no hidden flags) so every provider row is visible.
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' '<map>' '</map>' \
+    > "$out/c2_state_seed_cll.xml"
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$out/c2_state_seed_cll.xml"
+  recv_id="$(seed_call_row "$received_number" 1)"
+  dial_id="$(seed_call_row "$dialled_number" 2)"
+  if [[ ! "$recv_id" =~ ^[0-9]+$ || ! "$dial_id" =~ ^[0-9]+$ ]]; then
+    echo "FAIL[C5] provider seeding failed (received='$recv_id' dialled='$dial_id')" | tee -a "$result"
+    exit 1
+  fi
+  echo "C5 provider seeded received _id=$recv_id dialled _id=$dial_id" >> "$result"
+  exp_all="$(provider_row_count)"
+  adb logcat -c || true
+  launch
+  open_log_page
+  # Non-empty: every call-list page shows Options/Details/Back.
+  tap OK
+  require_marker 'SOFTBAR page=calllog soft=Options/Details/Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=missed soft=Options/Details/Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=received soft=Options/Details/Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=dialled soft=Options/Details/Back' || exit 1
+  # Clear everything via All call lists.
+  tap RSK
+  tap DOWN
+  tap DOWN
+  tap OK
+  tap OK
+  tap OK
+  require_marker "CLEAR_LOG_LISTS action=cllAll hidden=$exp_all" || exit 1
+  # Empty: every call-list page shows Back only.
+  tap RSK
+  tap UP
+  tap UP
+  tap UP
+  tap UP
+  tap UP
+  tap OK
+  require_marker 'SOFTBAR page=calllog soft=//Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=missed soft=//Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=received soft=//Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=dialled soft=//Back' || exit 1
+  shot clear-log-lists-dialled-empty
+  # Records return -> labels return: seed a fresh missed row and restart.
+  new_missed_id="$(seed_call_row "$return_number" 3)"
+  if [[ ! "$new_missed_id" =~ ^[0-9]+$ ]]; then
+    echo "FAIL[C5] provider return-seed failed ('$new_missed_id')" | tee -a "$result"
+    exit 1
+  fi
+  echo "C5 provider seeded return missed _id=$new_missed_id" >> "$result"
+  adb shell am force-stop "$package" || true
+  adb logcat -c || true
+  launch
+  open_log_page
+  tap OK
+  require_marker 'SOFTBAR page=calllog soft=Options/Details/Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=missed soft=Options/Details/Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=received soft=//Back' || exit 1
+  tap RSK
+  tap DOWN
+  tap OK
+  require_marker 'SOFTBAR page=dialled soft=//Back' || exit 1
+  echo "PASS empty call lists show Back-only and labels return with records" | tee -a "$result"
 ) || failures=$((failures + 1))
 
 exit "$((failures > 0))"
