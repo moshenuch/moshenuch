@@ -547,6 +547,12 @@ if ! adb shell content query --uri content://com.android.contacts/data \
   echo "UNVERIFIED structured-name seed $mov_sname is missing its given/family components" | tee -a "$result"
   exit 1
 fi
+# What did the provider actually store? Auto-filled name components decide
+# whether plain display-only contacts stay Move-eligible (audit #19).
+echo '--- name rows after seeding (mimetype,data1..data9) ---' >> "$result"
+adb shell content query --uri content://com.android.contacts/data \
+  --projection mimetype:data1:data2:data3:data4:data5:data6:data7:data8:data9 2>&1 \
+  | tr -d '\r' | grep -F 'vnd.android.cursor.item/name' | sed 's/^/  /' >> "$result"
 if ! grep -qF "$(printf '(noname)\t1')" "$out/move-copy-post-seed-dump.tsv"; then
   echo "UNVERIFIED nameless seed does not show as a (noname) single-number contact" | tee -a "$result"
   exit 1
