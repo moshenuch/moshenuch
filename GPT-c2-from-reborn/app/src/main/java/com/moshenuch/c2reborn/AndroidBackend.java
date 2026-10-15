@@ -139,10 +139,10 @@ public final class AndroidBackend {
      *  more than one raw contact, a phone row that is not plain MOBILE
      *  (a custom type/label, another kind (HOME, WORK, ...) or is_primary;
      *  restore writes plain TYPE_MOBILE, so the kind and primary flag
-     *  would be lost), or a structured name with components beyond the
-     *  display name (given/middle/family/prefix/suffix/phonetic; restore
-     *  writes the bare display name, so the component fidelity would be
-     *  lost - audit #19). Move skips these;
+     *  would be lost), or a structured name carrying more than the
+     *  display name (phonetic parts, or structural parts that do not
+     *  re-spell the display name; restore writes the bare display name,
+     *  so that fidelity would be lost - audit #19). Move skips these;
      *  Copy only duplicates name + one number and leaves the original, so
      *  it stays allowed (audit #16/#17).
      *  Returns null when the scan cannot complete (permission gone or a
@@ -219,18 +219,22 @@ public final class AndroidBackend {
         } finally {
             if (c != null) c.close();
         }
-        // Structured-name components the SIM display name cannot hold
-        // (audit #19).
+        // Structured-name content the SIM display name cannot hold
+        // (audit #19): phonetic parts are never derivable from the display
+        // name, and structural parts only pass when they merely re-spell
+        // it (the provider may auto-split a one-token display name into
+        // one identical component; that echo loses nothing).
         c = null;
         try {
             c = resolver.query(
                     ContactsContract.Data.CONTENT_URI,
                     new String[]{
                             ContactsContract.Data.CONTACT_ID,
+                            ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME,
+                            ContactsContract.CommonDataKinds.StructuredName.PREFIX,
                             ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
                             ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
                             ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
-                            ContactsContract.CommonDataKinds.StructuredName.PREFIX,
                             ContactsContract.CommonDataKinds.StructuredName.SUFFIX,
                             ContactsContract.CommonDataKinds.StructuredName.PHONETIC_GIVEN_NAME,
                             ContactsContract.CommonDataKinds.StructuredName.PHONETIC_MIDDLE_NAME,
@@ -241,13 +245,28 @@ public final class AndroidBackend {
                     null);
             if (c == null) return null;
             while (c.moveToNext()) {
-                for (int i = 1; i <= 8; i++) {
+                boolean extra = false;
+                for (int i = 7; i <= 9; i++) {
                     String v = c.getString(i);
                     if (v != null && !v.trim().isEmpty()) {
-                        out.add(c.getLong(0));
+                        extra = true;
                         break;
                     }
                 }
+                if (!extra) {
+                    StringBuilder joined = new StringBuilder();
+                    for (int i = 2; i <= 6; i++) {
+                        String v = c.getString(i);
+                        if (v != null && !v.trim().isEmpty()) {
+                            if (joined.length() > 0) joined.append(' ');
+                            joined.append(v.trim());
+                        }
+                    }
+                    String display = c.getString(1);
+                    extra = joined.length() > 0
+                            && !joined.toString().equals(display == null ? "" : display.trim());
+                }
+                if (extra) out.add(c.getLong(0));
             }
         } catch (Exception ignored) {
             return null;
