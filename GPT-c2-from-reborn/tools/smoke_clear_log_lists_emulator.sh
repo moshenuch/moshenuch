@@ -130,6 +130,17 @@ seed_call_row() { # seed_call_row <number> <type>: insert as root, echo new _id
 prefs_dir="/data/data/$package/shared_prefs"
 backup="$out/c2_state_backup_cll.xml"
 restore_needed=0
+# audit-#11 item 3: root release is guaranteed at the END of the EXIT trap
+# on every path - the FAIL branches below record cleanup_status instead of
+# exiting early, so they can no longer skip the unroot. unroot restarts
+# adbd; the wait+sleep stops the NEXT probe's adb root racing the restart
+# (run 38691909508 clear-log C2).
+cleanup_status=0
+ensure_unroot() {
+  adb unroot >/dev/null 2>&1 || true
+  adb wait-for-device || true
+  sleep 2
+}
 cleanup_state() {
   adb shell am force-stop "$package" || true
   if [[ "$restore_needed" == "1" ]]; then
@@ -138,7 +149,7 @@ cleanup_state() {
       echo "PASS original c2_state.xml restored after probe (bytes verified)" | tee -a "$result"
     else
       echo "FAIL restore of c2_state.xml did not verify byte-for-byte" | tee -a "$result"
-      exit 1
+      cleanup_status=1
     fi
   else
     adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
@@ -154,24 +165,29 @@ cleanup_state() {
       del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" 2>&1 | tr -d '\r')"
       if grep -qiE 'exception|denied|error' <<< "$del_out"; then
         echo "FAIL cleanup: provider delete of _id=$row_id errored: $del_out" | tee -a "$result"
-        exit 1
+        cleanup_status=1
+        continue
       fi
       query_out="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r')"
       if grep -qiE 'exception|denied|error' <<< "$query_out"; then
         echo "FAIL cleanup: provider query after delete errored: $query_out" | tee -a "$result"
-        exit 1
+        cleanup_status=1
+        continue
       fi
       leftover="$(printf '%s\n' "$query_out" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -cx "$row_id" || true)"
       if [[ "$leftover" != "0" ]]; then
         echo "FAIL cleanup: seeded call-log row _id=$row_id still present after delete" | tee -a "$result"
-        exit 1
+        cleanup_status=1
+      else
+        echo "PASS seeded call-log row _id=$row_id deleted (exact id match)" | tee -a "$result"
       fi
-      echo "PASS seeded call-log row _id=$row_id deleted (exact id match)" | tee -a "$result"
     done < "$out/c2_inserted_ids.txt"
     rm -f "$out/c2_inserted_ids.txt"
   fi
-  adb unroot >/dev/null 2>&1 || true
-  adb wait-for-device || true
+  ensure_unroot
+  if [[ "$cleanup_status" != "0" ]]; then
+    exit "$cleanup_status"
+  fi
 }
 trap cleanup_state EXIT
 adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' > "$backup" || true
