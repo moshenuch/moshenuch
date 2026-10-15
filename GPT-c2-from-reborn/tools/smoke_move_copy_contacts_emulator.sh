@@ -19,12 +19,14 @@
 #  M2. Move SIM->phone: provider and SIM list swap back.
 #  C.  Copy phone->SIM: provider unchanged; multi-number skipped again.
 #  N.  No on the confirm changes nothing (provider + SIM list).
-#  S.  Fail-closed scan: READ_CONTACTS revoked between confirm and Yes makes
-#     the extra-data safety scan fail; the Move is refused, nothing changes
-#     (audit #17).
 #  L.  A contact whose only number carries a custom label is skipped on Move
 #     and kept intact (label row included); Copy takes it as name+number
 #     (audit #17).
+#  (The fail-closed safety-scan refusal of audit #17 item 1 is NOT probed:
+#  an incomplete scan means the provider errored while the permission is
+#  granted - AppOps denial is not enforced against the contacts provider on
+#  this emulator, and pm revoke kills the app process, so there is no
+#  external injection that reaches that path. Code-audited instead.)
 #  W.  Two identical contacts inside the source batch refuse the whole Move
 #     (duplicate_source; audit #16).
 #  R.  Rollback-failure injection: WRITE_CONTACTS revoked mid-rollback makes
@@ -452,33 +454,6 @@ else
   adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
 fi
 
-# --- S. Move refuses when the safety scan cannot complete ---------------------
-# Deny READ_CONTACTS via AppOps between the confirm and Yes: the commit-time
-# revalidation of the extra-data safety set must fail CLOSED (audit #17).
-# (pm revoke cannot inject this: it kills the app process, destroying the
-# confirm screen; AppOps denial takes effect without a kill.)
-open_contacts_menu
-tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
-tap OK                          # Move contacts submenu
-adb logcat -c || true
-tap OK                          # From phone to SIM
-sleep 1
-require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
-sim_before_s="$(sim_count)"
-# AppOps denial does NOT kill the process (pm revoke would, destroying the
-# confirm screen); checkSelfPermission still reports the permission gone.
-adb shell appops set "$package" READ_CONTACTS deny 2>/dev/null || true
-tap LSK                         # Yes
-sleep 2
-require_marker 'MOVE_CONTACTS_REFUSED reason=scan_incomplete dir=phone2sim'
-adb shell appops set "$package" READ_CONTACTS allow 2>/dev/null || true
-if [[ "$(raw_count)" != "$((baseline_total + 7))" || "$(sim_count)" != "$sim_before_s" ]]; then
-  echo "FAIL scan-incomplete refusal changed state (provider $(raw_count), SIM $(sim_count))" | tee -a "$result"
-  exit 1
-fi
-echo 'PASS Move refused when the extra-data safety scan cannot complete' | tee -a "$result"
-shot movecopy-scan-incomplete
-
 # --- F. Partial failure rolls the batch back ---------------------------------
 # Confirm, then delete mov_two's provider row behind the app's back; the
 # move of mov_two fails and everything already moved in the batch must come
@@ -761,22 +736,26 @@ while IFS= read -r line; do
 done <<< "$dup_rows"
 
 # --- R. Rollback failure is reported honestly ---------------------------------
-# SIM list: 30 valid entries. Move SIM->phone inserts them one by one; the
-# moment the first insert lands in the provider, a watchdog denies
-# WRITE_CONTACTS via AppOps (pm revoke cannot inject this: it kills the app
-# process mid-handler; AppOps denial takes effect without a kill). The next
-# insert fails, the rollback runs, and every reverse delete fails too, so
-# the app must log rolled_back=0 with undone < done and show "Contacts
-# changed; undo incomplete". The probe then asserts the exact post-failure
-# state: provider holds exactly the inserted (stranded) rows, the SIM list
-# still holds all 30 entries, and the app logged the visible notice text.
+# SIM list: 50 valid entries then one with a blank number. Move SIM->phone
+# inserts the valid ones, then the blank-number insert fails (malformed
+# entry; the batch rolls back). A watchdog deletes the LAST inserted row
+# behind the app's back the moment it appears, so that op's reverse delete
+# comes up empty: the app must log rolled_back=0 with undone < done and
+# show "Contacts changed; undo incomplete". The probe asserts the exact
+# post-failure state: provider holds no AAAC2Rb rows (watchdog removed one,
+# the rollback removed the rest), the SIM list still holds all 51 fixture
+# entries, and the app logged the visible notice text. (AppOps denial is
+# not enforced against the contacts provider on this emulator and pm
+# revoke kills the app process mid-handler; external row deletion is the
+# only injection that reaches the rollback-failure path.) The watchdog
+# targets the last insert because the rollback reaches it last; if the app
+# beats the watchdog the attempt rolls back cleanly and retries.
 rb_pass=0
 rb_done=0
 rb_undone=0
 rb_left=0
 for attempt in 1 2 3; do
   echo "rollback-injection attempt $attempt" >> "$result"
-  adb shell appops set "$package" WRITE_CONTACTS allow 2>/dev/null || true
   # Drop stranded inserts from a previous attempt.
   rb_rows="$(adb shell content query --uri content://com.android.contacts/data \
     --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E 'data1=AAAC2Rb' || true)"
@@ -789,7 +768,8 @@ for attempt in 1 2 3; do
   done <<< "$rb_rows"
   sim_json="$(python3 -c '
 import json
-entries = [{"name": f"AAAC2Rb{i:02d}", "number": f"07900006{i:02d}"} for i in range(1, 31)]
+entries = [{"name": f"AAAC2Rb{i:02d}", "number": f"07900006{i:02d}"} for i in range(1, 51)]
+entries.append({"name": "AAAC2RbBad", "number": ""})
 print(json.dumps(entries))
 ')"
   sim_escaped="$(python3 -c 'import sys, html; print(html.escape(sys.stdin.read().strip(), quote=True))' <<< "$sim_json")"
@@ -800,7 +780,7 @@ print(json.dumps(entries))
     "<string name=\"sim_contacts_v1\">$sim_escaped</string>" \
     '</map>' | adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'"
   fixture_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
-  if ! grep -qF 'AAAC2Rb30' <<< "$fixture_check"; then
+  if ! grep -qF 'AAAC2RbBad' <<< "$fixture_check"; then
     echo 'FAIL rollback-fixture prefs write did not land' | tee -a "$result"
     exit 1
   fi
@@ -811,16 +791,19 @@ print(json.dumps(entries))
   tap DOWN                        # From SIM to phone
   tap OK
   sleep 1
-  require_marker 'MOVE_CONTACTS_CONFIRM dir=sim2phone count=30'
-  # Watchdog: as soon as the first inserted row is visible in the provider
-  # (which guarantees done >= 1), deny WRITE_CONTACTS so the next insert
-  # fails and every rollback delete fails too.
+  require_marker 'MOVE_CONTACTS_CONFIRM dir=sim2phone count=51'
+  # Watchdog: the moment the LAST insert (AAAC2Rb50) is visible, delete its
+  # raw contact. The rollback reaches it last, maximising the window.
   (
-    for i in $(seq 1 80); do
-      if adb shell content query --uri content://com.android.contacts/data \
-           --projection data1 2>/dev/null | tr -d '\r' | grep -qE 'data1=AAAC2Rb[0-9]'; then
-        adb shell appops set "$package" WRITE_CONTACTS deny 2>/dev/null || true
-        echo "  attempt $attempt watchdog denied WRITE_CONTACTS after the first insert" >> "$result"
+    for i in $(seq 1 100); do
+      rid="$(adb shell content query --uri content://com.android.contacts/data \
+        --projection raw_contact_id:data1 2>/dev/null | tr -d '\r' \
+        | grep -F 'data1=AAAC2Rb50' | head -1 \
+        | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p')"
+      if [[ "$rid" =~ ^[0-9]+$ ]]; then
+        adb shell content delete --uri content://com.android.contacts/raw_contacts \
+          --where "_id=$rid" >/dev/null 2>&1 || true
+        echo "  attempt $attempt watchdog deleted last insert (raw contact $rid)" >> "$result"
         break
       fi
     done
@@ -828,8 +811,7 @@ print(json.dumps(entries))
   rb_watch_pid=$!
   tap LSK                         # Yes
   wait "$rb_watch_pid" || true
-  sleep 3
-  adb shell appops set "$package" WRITE_CONTACTS allow 2>/dev/null || true
+  sleep 4
   require_marker 'MOVE_CONTACTS dir=sim2phone'
   marker_line="$(adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F 'MOVE_CONTACTS dir=sim2phone' | tail -1)"
   echo "  attempt $attempt marker: $marker_line" >> "$result"
@@ -837,20 +819,25 @@ print(json.dumps(entries))
   rb_undone="$(sed -n 's/.* undone=\([0-9][0-9]*\).*/\1/p' <<< "$marker_line")"
   if ! grep -qF 'rolled_back=0' <<< "$marker_line" \
      || [[ ! "$rb_done" =~ ^[0-9]+$ || ! "$rb_undone" =~ ^[0-9]+$ || "$rb_done" -lt 1 || ! "$rb_undone" -lt "$rb_done" ]]; then
-    echo "  attempt $attempt: injection missed the handler window (clean run); retrying" >> "$result"
+    echo "  attempt $attempt: watchdog missed the rollback window (clean run); retrying" >> "$result"
     continue
   fi
-  # Exact post-failure provider state: every inserted row is stranded.
-  rb_left="$(adb shell content query --uri content://com.android.contacts/data \
-    --projection data1 2>&1 | tr -d '\r' | grep -cE 'data1=AAAC2Rb[0-9]' || true)"
-  if [[ "$rb_left" != "$rb_done" ]]; then
-    echo "FAIL post-failure provider state: $rb_left stranded AAAC2Rb name rows, expected done=$rb_done" | tee -a "$result"
+  if [[ "$rb_done" != "50" || "$rb_undone" != "49" ]]; then
+    echo "FAIL unexpected rollback counts: done=$rb_done undone=$rb_undone (expected done=50 undone=49)" | tee -a "$result"
     exit 1
   fi
-  # Exact post-failure SIM state: all 30 fixture entries are still there.
+  # Exact post-failure provider state: no AAAC2Rb rows remain (the watchdog
+  # removed one, the rollback removed the other 49).
+  rb_left="$(adb shell content query --uri content://com.android.contacts/data \
+    --projection data1 2>&1 | tr -d '\r' | grep -cE 'data1=AAAC2Rb[0-9]' || true)"
+  if [[ "$rb_left" != "0" ]]; then
+    echo "FAIL post-failure provider state: $rb_left stranded AAAC2Rb name rows, expected 0" | tee -a "$result"
+    exit 1
+  fi
+  # Exact post-failure SIM state: all 51 fixture entries are still there.
   rb_sim="$(sim_count)"
-  if [[ "$rb_sim" != "30" ]]; then
-    echo "FAIL post-failure SIM state: $rb_sim entries, expected 30" | tee -a "$result"
+  if [[ "$rb_sim" != "51" ]]; then
+    echo "FAIL post-failure SIM state: $rb_sim entries, expected 51" | tee -a "$result"
     exit 1
   fi
   # The visible notice text, as logged at the moment it was shown.
@@ -861,9 +848,8 @@ print(json.dumps(entries))
   rb_pass=1
   break
 done
-adb shell appops set "$package" WRITE_CONTACTS allow 2>/dev/null || true
 if [[ "$rb_pass" != "1" ]]; then
-  echo 'UNVERIFIED rollback-failure injection never landed: the WRITE_CONTACTS denial missed the handler window on all 3 attempts (markers above)' | tee -a "$result"
+  echo 'UNVERIFIED rollback-failure injection never landed: the watchdog missed the rollback window on all 3 attempts (markers above)' | tee -a "$result"
   exit 1
 fi
 echo "PASS rollback failure reported honestly: rolled_back=0, undone=$rb_undone < done=$rb_done, provider/SIM state exact, notice text verified" | tee -a "$result"
@@ -887,7 +873,7 @@ fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in movecopy-move-submenu movecopy-move-confirm movecopy-dup-refused movecopy-empty-refused movecopy-copy-confirm movecopy-confirm-no movecopy-dup-source-refused movecopy-rollback-incomplete movecopy-scan-incomplete; do
+for f in movecopy-move-submenu movecopy-move-confirm movecopy-dup-refused movecopy-empty-refused movecopy-copy-confirm movecopy-confirm-no movecopy-dup-source-refused movecopy-rollback-incomplete; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
