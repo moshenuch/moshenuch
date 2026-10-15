@@ -377,7 +377,11 @@ done
   tap DOWN
   tap OK
   require_marker 'MSG_RECIPIENTS_EMPTY' || exit 1
-  tap RSK
+  # Empty recipients does not navigate: still on the Log page with the
+  # selection on Msg. recipients (the No numbers notice auto-dismisses).
+  # Step UP to Missed calls directly - no RSK, which would leave for the
+  # menu (run 38684431984).
+  sleep 2
   tap UP
   tap UP
   tap UP
