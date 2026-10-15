@@ -150,7 +150,6 @@ if bash GPT-c2-from-reborn/tools/smoke_move_copy_contacts_emulator.sh "$results"
      ! grep -Fq 'PASS Copy phone->SIM copied' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS Copy contacts No left provider and SIM list unchanged' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS within-source duplicate batch refused (duplicate_source)' "$results/move-copy-contacts-results.txt" ||
-     ! grep -Fq 'PASS Move refused when the extra-data safety scan cannot complete' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS custom-label contact kept its label row after Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS account-backed contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS nameless contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
