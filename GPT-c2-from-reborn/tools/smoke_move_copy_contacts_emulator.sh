@@ -92,8 +92,10 @@ for line in sys.stdin:
         names[rid] = d1
     elif mt.endswith("/phone_v2"):
         nums[rid].add(d1)
-for rid, name in names.items():
-    print(f"{name}\t{len(nums.get(rid, set()))}")
+# Include number-only raw contacts (no name row): the app lists those too.
+for rid in sorted(set(names) | set(nums), key=int):
+    label = names.get(rid) or "(noname)"
+    print(label + "\t" + str(len(nums.get(rid, set()))))
 '
 }
 # EXIT trap owns every cleanup path: evidence, prefs restore (removes any
@@ -249,9 +251,17 @@ echo "provider baseline: $baseline_total contacts ($baseline_multi multi-number)
 seed_contact "$mov_one" "$num_one" >/dev/null
 seed_contact "$mov_two" "$num_two" >/dev/null
 seed_contact "$mov_multi" "$num_multi_a" "$num_multi_b" >/dev/null
-singles=$((baseline_singles + 2))
-multi_total=$((baseline_multi + 1))
-echo "Seeded 2 singles + 1 multi-number; eligible for SIM: $singles; multi: $multi_total" >> "$result"
+provider_dump > "$out/move-copy-post-seed-dump.tsv"
+echo '--- provider dump after seeding (name<TAB>number_count) ---' >> "$result"
+sed 's/^/  /' "$out/move-copy-post-seed-dump.tsv" >> "$result"
+post_total="$(grep -c . < "$out/move-copy-post-seed-dump.tsv" || true)"
+multi_total="$(awk -F '\t' '$2 > 1' "$out/move-copy-post-seed-dump.tsv" | grep -c . || true)"
+singles=$((post_total - multi_total))
+echo "Seeded 2 singles + 1 multi-number; post-seed provider: $post_total contacts, eligible for SIM: $singles, multi: $multi_total" >> "$result"
+if ! grep -qF "$mov_multi	2" "$out/move-copy-post-seed-dump.tsv"; then
+  echo "UNVERIFIED multi-number seed $mov_multi does not show exactly 2 numbers" | tee -a "$result"
+  exit 1
+fi
 
 # From the home display: CENTRE opens the menu grid, OK enters Contacts
 # (index 0), then DOWN x8 = Move contacts / DOWN x9 = Copy contacts.
@@ -273,6 +283,12 @@ printf '%s\n' \
   '<map>' \
   "<string name=\"sim_contacts_v1\">[{&quot;name&quot;:&quot;$mov_one&quot;,&quot;number&quot;:&quot;+44 7900 05011&quot;}]</string>" \
   '</map>' | adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'"
+fixture_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
+if ! grep -qF 'sim_contacts_v1' <<< "$fixture_check" || ! grep -qF '+44 7900 05011' <<< "$fixture_check"; then
+  echo 'UNVERIFIED duplicate-fixture prefs write did not land' | tee -a "$result"
+  echo "$fixture_check" | sed 's/^/  /' >> "$result"
+  exit 1
+fi
 open_contacts_menu
 tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
 tap OK                          # Move contacts submenu
