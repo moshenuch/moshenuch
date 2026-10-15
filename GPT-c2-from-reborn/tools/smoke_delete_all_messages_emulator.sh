@@ -254,8 +254,9 @@ open_delete_messages() {
 
 # --- Y. Yes hides every visible SMS, clears drafts/templates ----------------
 open_delete_messages
+tap OK                          # open the Delete messages submenu (sel 0 = All messages)
 shot delmsg-submenu
-tap OK                          # "All messages"
+tap OK                          # "All messages" row -> in-house confirm
 sleep 1
 require_marker 'DELETE_ALL_MESSAGES_CONFIRM'
 if [[ "$expected_hidden" -gt 0 ]]; then
@@ -310,7 +311,8 @@ fi
 # --- N. No leaves everything untouched --------------------------------------
 open_delete_messages
 adb logcat -c || true
-tap OK                          # "All messages"
+tap OK                          # open the Delete messages submenu
+tap OK                          # "All messages" row -> in-house confirm
 sleep 1
 require_marker 'DELETE_ALL_MESSAGES_CONFIRM'
 shot delmsg-confirm-no
