@@ -73,11 +73,11 @@ capture_evidence() {
   adb shell rm -f /sdcard/c2-movecopy.png 2>/dev/null || true
 }
 # provider_dump: TSV of name<TAB>number_count per raw contact, one per line.
-provider_dump() {
+provider_dump() { # provider_dump <raw-out-file>: raw adb output kept for diagnosis
   # No --where: adb shell mashes arguments on spaces. Filter in python.
   adb shell content query --uri content://com.android.contacts/data \
     --projection raw_contact_id:mimetype:data1 2>&1 \
-    | tr -d '\r' | python3 -c '
+    | tr -d '\r' | tee "$1" | python3 -c '
 import sys, collections
 names = {}
 nums = collections.defaultdict(set)
@@ -121,7 +121,7 @@ finish() {
     local reseeded=0 name ncount
     while IFS=$'\t' read -r name ncount; do
       [[ -n "$name" ]] || continue
-      if ! provider_dump | grep -qF "$name	"; then
+      if ! provider_dump "$out/.pd-trap-raw.txt" | grep -qF "$name	"; then
         local rid
         rid="$(adb shell content insert --uri content://com.android.contacts/raw_contacts \
           --bind starred:i:0 2>&1 | tr -d '\r' | grep -oE 'raw_contact_id=[0-9]+|/[0-9]+$' | grep -oE '[0-9]+' | head -1 || true)"
@@ -242,8 +242,13 @@ if [[ -s "$backup" ]] && grep -q '<map>' "$backup"; then
   restore_needed=1
   echo "BACKUP existing c2_state.xml captured for restore" >> "$result"
 fi
-provider_dump > "$baseline_tsv"
+provider_dump "$out/pd-baseline-raw.txt" > "$baseline_tsv"
 baseline_total="$(grep -c . < "$baseline_tsv" || true)"
+baseline_raw="$(raw_count)"
+if [[ "$baseline_total" == "0" && "$baseline_raw" != "0" ]]; then
+  echo 'DIAG provider_dump returned no rows while raw_contacts is non-empty; raw query output follows' | tee -a "$result"
+  sed 's/^/  RAW: /' "$out/pd-baseline-raw.txt" >> "$result"
+fi
 baseline_multi="$(awk -F '\t' '$2 > 1' "$baseline_tsv" | grep -c . || true)"
 baseline_singles=$((baseline_total - baseline_multi))
 echo "provider baseline: $baseline_total contacts ($baseline_multi multi-number)" >> "$result"
@@ -251,10 +256,19 @@ echo "provider baseline: $baseline_total contacts ($baseline_multi multi-number)
 seed_contact "$mov_one" "$num_one" >/dev/null
 seed_contact "$mov_two" "$num_two" >/dev/null
 seed_contact "$mov_multi" "$num_multi_a" "$num_multi_b" >/dev/null
-provider_dump > "$out/move-copy-post-seed-dump.tsv"
+provider_dump "$out/pd-post-seed-raw.txt" > "$out/move-copy-post-seed-dump.tsv"
 echo '--- provider dump after seeding (name<TAB>number_count) ---' >> "$result"
 sed 's/^/  /' "$out/move-copy-post-seed-dump.tsv" >> "$result"
 post_total="$(grep -c . < "$out/move-copy-post-seed-dump.tsv" || true)"
+post_raw="$(raw_count)"
+if [[ "$post_raw" != "$((baseline_raw + 3))" ]]; then
+  echo "UNVERIFIED raw_contacts holds $post_raw rows after seeding, expected $((baseline_raw + 3))" | tee -a "$result"
+  exit 1
+fi
+if [[ "$post_total" == "0" && "$post_raw" != "0" ]]; then
+  echo 'DIAG provider_dump returned no rows while raw_contacts is non-empty; raw query output follows' | tee -a "$result"
+  sed 's/^/  RAW: /' "$out/pd-post-seed-raw.txt" >> "$result"
+fi
 multi_total="$(awk -F '\t' '$2 > 1' "$out/move-copy-post-seed-dump.tsv" | grep -c . || true)"
 singles=$((post_total - multi_total))
 echo "Seeded 2 singles + 1 multi-number; post-seed provider: $post_total contacts, eligible for SIM: $singles, multi: $multi_total" >> "$result"
