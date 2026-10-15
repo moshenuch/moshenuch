@@ -325,10 +325,10 @@ adb shell am force-stop "$package" || true
 printf '%s\n' \
   '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
   '<map>' \
-  "<string name=\"sim_contacts_v1\">[{&quot;name&quot;:&quot;$mov_one&quot;,&quot;number&quot;:&quot;+44 7900 05011&quot;}]</string>" \
+  "<string name=\"sim_contacts_v1\">[{&quot;name&quot;:&quot;$mov_one&quot;,&quot;number&quot;:&quot;+44 7900 005011&quot;}]</string>" \
   '</map>' | adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'"
 fixture_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
-if ! grep -qF 'sim_contacts_v1' <<< "$fixture_check" || ! grep -qF '+44 7900 05011' <<< "$fixture_check"; then
+if ! grep -qF 'sim_contacts_v1' <<< "$fixture_check" || ! grep -qF '+44 7900 005011' <<< "$fixture_check"; then
   echo 'UNVERIFIED duplicate-fixture prefs write did not land' | tee -a "$result"
   echo "$fixture_check" | sed 's/^/  /' >> "$result"
   exit 1
