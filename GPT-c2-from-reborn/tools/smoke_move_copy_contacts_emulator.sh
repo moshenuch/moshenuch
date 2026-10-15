@@ -11,10 +11,19 @@
 #  E.  Empty SIM memory: From SIM to phone is refused with "Selected memory
 #     empty" (exact HTML wording).
 #  M1. Move phone->SIM: single-number contacts move; a multi-number contact
-#     is SKIPPED (not stripped) and stays untouched in the provider.
+#     and a contact carrying extra data (email row) are SKIPPED (not
+#     stripped) and stay untouched in the provider, email row included
+#     (audit #16).
+#  C-extra. Copy phone->SIM copies the extra-data contact as name+number
+#     only; the provider original keeps its email row (audit #16).
 #  M2. Move SIM->phone: provider and SIM list swap back.
 #  C.  Copy phone->SIM: provider unchanged; multi-number skipped again.
 #  N.  No on the confirm changes nothing (provider + SIM list).
+#  W.  Two identical contacts inside the source batch refuse the whole Move
+#     (duplicate_source; audit #16).
+#  R.  Rollback-failure injection: WRITE_CONTACTS revoked mid-rollback makes
+#     the reverse deletes fail; the app must log rolled_back=0 with
+#     undone < done and show the undo-incomplete notice (audit #16).
 # Baseline contacts are snapshotted up front and re-seeded by the trap if an
 # interrupted run strands them, so the probe can never eat real contacts.
 # Verification reads the Contacts provider directly, the app prefs via
@@ -32,10 +41,13 @@ restore_needed=0
 mov_one="AAAC2MoveOne"
 mov_two="AAAC2MoveTwo"
 mov_multi="AAAC2MoveMulti"
+mov_extra="AAAC2MoveExtra"
 num_one="07900005011"
 num_two="07900005012"
 num_multi_a="07900005013"
 num_multi_b="07900005014"
+num_extra="07900005015"
+email_extra="mov.extra@c2probe.example"
 
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -1 | tr -d '\r')"
 if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -78,11 +90,14 @@ provider_dump() { # provider_dump <raw-out-file>: raw adb output kept for diagno
   adb shell content query --uri content://com.android.contacts/data \
     --projection raw_contact_id:mimetype:data1 2>&1 \
     | tr -d '\r' | tee "$1" | python3 -c '
-import sys, collections
+import sys, collections, re
 names = {}
 nums = collections.defaultdict(set)
 for line in sys.stdin:
-    parts = dict(p.split("=", 1) for p in line.strip().split(", ") if "=" in p)
+    # adb prefixes every row with "Row: N "; without stripping, the first
+    # key parses as "Row: N raw_contact_id" and every row is dropped.
+    line = re.sub(r"^Row:\s*\d+\s+", "", line.strip())
+    parts = dict(p.split("=", 1) for p in line.split(", ") if "=" in p)
     rid = parts.get("raw_contact_id")
     mt = parts.get("mimetype", "")
     d1 = parts.get("data1", "")
@@ -142,9 +157,9 @@ finish() {
   # exactly what was seeded (emulator is fresh per CI run).
   local rows row_count
   rows="$(adb shell content query --uri content://com.android.contacts/data \
-    --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E "data1=($mov_one|$mov_two|$mov_multi)" || true)"
+    --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E "data1=($mov_one|$mov_two|$mov_multi|$mov_extra)" || true)"
   row_count="$(grep -c . <<< "$rows" || true)"
-  if [[ "$row_count" == "3" ]]; then
+  if [[ "$row_count" == "4" ]]; then
     local line rid
     while IFS= read -r line; do
       rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
@@ -154,7 +169,7 @@ finish() {
     done <<< "$rows"
     echo "PASS seeded Move/Copy contacts removed from provider" | tee -a "$result"
   elif [[ "$row_count" != "0" ]]; then
-    echo "WARN seeded-name provider rows: $row_count (expected 0 or 3); left for the discarded emulator" | tee -a "$result"
+    echo "WARN seeded-name provider rows: $row_count (expected 0 or 4); left for the discarded emulator" | tee -a "$result"
   fi
 }
 trap finish EXIT
@@ -201,8 +216,8 @@ sim_count() { # entries in the in-app SIM list, from the prefs file
   line="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -o '<string name="sim_contacts_v1">[^<]*' || true)"
   if [[ -z "$line" ]]; then echo 0; else { grep -o '&quot;name&quot;' <<< "$line" || true; } | wc -l | tr -d ' '; fi
 }
-seed_contact() { # seed_contact <name> <number> [number2]; prints the new raw id
-  local name="$1" number="$2" number2="${3:-}" before after new_id
+seed_contact() { # seed_contact <name> <number> [number2] [email]; prints the new raw id
+  local name="$1" number="$2" number2="${3:-}" email="${4:-}" before after new_id
   before="$(raw_ids)"
   adb shell content insert --uri content://com.android.contacts/raw_contacts \
     --bind starred:i:0 >/dev/null 2>&1 || true
@@ -225,6 +240,12 @@ seed_contact() { # seed_contact <name> <number> [number2]; prints the new raw id
       --bind raw_contact_id:i:"$new_id" \
       --bind mimetype:s:vnd.android.cursor.item/phone_v2 \
       --bind data1:s:"$number2" --bind data2:i:1 >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$email" ]]; then
+    adb shell content insert --uri content://com.android.contacts/data \
+      --bind raw_contact_id:i:"$new_id" \
+      --bind mimetype:s:vnd.android.cursor.item/email_v2 \
+      --bind data1:s:"$email" --bind data2:i:1 >/dev/null 2>&1 || true
   fi
   echo "$new_id"
 }
@@ -256,13 +277,14 @@ echo "provider baseline: $baseline_total contacts ($baseline_multi multi-number)
 seed_contact "$mov_one" "$num_one" >/dev/null
 seed_contact "$mov_two" "$num_two" >/dev/null
 seed_contact "$mov_multi" "$num_multi_a" "$num_multi_b" >/dev/null
+seed_contact "$mov_extra" "$num_extra" "" "$email_extra" >/dev/null
 provider_dump "$out/pd-post-seed-raw.txt" > "$out/move-copy-post-seed-dump.tsv"
 echo '--- provider dump after seeding (name<TAB>number_count) ---' >> "$result"
 sed 's/^/  /' "$out/move-copy-post-seed-dump.tsv" >> "$result"
 post_total="$(grep -c . < "$out/move-copy-post-seed-dump.tsv" || true)"
 post_raw="$(raw_count)"
-if [[ "$post_raw" != "$((baseline_raw + 3))" ]]; then
-  echo "UNVERIFIED raw_contacts holds $post_raw rows after seeding, expected $((baseline_raw + 3))" | tee -a "$result"
+if [[ "$post_raw" != "$((baseline_raw + 4))" ]]; then
+  echo "UNVERIFIED raw_contacts holds $post_raw rows after seeding, expected $((baseline_raw + 4))" | tee -a "$result"
   exit 1
 fi
 if [[ "$post_total" == "0" && "$post_raw" != "0" ]]; then
@@ -271,9 +293,17 @@ if [[ "$post_total" == "0" && "$post_raw" != "0" ]]; then
 fi
 multi_total="$(awk -F '\t' '$2 > 1' "$out/move-copy-post-seed-dump.tsv" | grep -c . || true)"
 singles=$((post_total - multi_total))
-echo "Seeded 2 singles + 1 multi-number; post-seed provider: $post_total contacts, eligible for SIM: $singles, multi: $multi_total" >> "$result"
+# Move excludes contacts with data beyond name+one number; the probe seeds
+# exactly one (mov_extra, carries an email row). Copy still takes it.
+move_eligible=$((singles - 1))
+echo "Seeded 2 plain singles + 1 extra-data single + 1 multi-number; post-seed provider: $post_total contacts, move-eligible: $move_eligible, copy-eligible: $singles, multi: $multi_total" >> "$result"
 if ! grep -qF "$mov_multi	2" "$out/move-copy-post-seed-dump.tsv"; then
   echo "UNVERIFIED multi-number seed $mov_multi does not show exactly 2 numbers" | tee -a "$result"
+  exit 1
+fi
+if ! adb shell content query --uri content://com.android.contacts/data \
+     --projection data1 2>&1 | tr -d '\r' | grep -qF "data1=$email_extra"; then
+  echo "UNVERIFIED extra-data seed $mov_extra is missing its email row ($email_extra)" | tee -a "$result"
   exit 1
 fi
 
@@ -309,12 +339,12 @@ tap OK                          # Move contacts submenu
 adb logcat -c || true
 tap OK                          # From phone to SIM
 sleep 1
-require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$singles"
+require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
 shot movecopy-dup-confirm
 tap LSK                         # Yes
 sleep 2
 require_marker 'MOVE_CONTACTS_REFUSED reason=duplicate dir=phone2sim'
-if [[ "$(raw_count)" != "$((baseline_total + 3))" || "$(sim_count)" != "1" ]]; then
+if [[ "$(raw_count)" != "$((baseline_total + 4))" || "$(sim_count)" != "1" ]]; then
   echo "FAIL duplicate refusal changed state (provider $(raw_count), SIM $(sim_count))" | tee -a "$result"
   exit 1
 fi
@@ -337,7 +367,7 @@ tap OK                          # Move contacts submenu
 adb logcat -c || true
 tap OK                          # From phone to SIM
 sleep 1
-require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$singles"
+require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
 shot movecopy-rollback-confirm
 two_id="$(adb shell content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 --where "data1='$mov_two'" 2>&1 | tr -d '\r' | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
 if [[ ! "$two_id" =~ ^[0-9]+$ ]]; then
@@ -347,20 +377,16 @@ fi
 adb shell content delete --uri content://com.android.contacts/raw_contacts   --where "_id=$two_id" >/dev/null 2>&1 || true
 tap LSK                         # Yes: mov_one moves, mov_two fails -> rollback
 sleep 2
-require_marker 'MOVE_CONTACTS dir=phone2sim'
-if ! marker_seen 'failed=1' || ! marker_seen "skipped=$multi_total" || ! marker_seen 'rolled_back=1'; then
-  echo 'FAIL rollback marker missing failed=1/skipped/rolled_back=1' | tee -a "$result"
-  adb logcat -d -s C2Contacts:I 2>/dev/null | tee -a "$result" > /dev/null || true
-  exit 1
-fi
+require_marker "MOVE_CONTACTS dir=phone2sim done=1 failed=1 skipped=$((multi_total + 1)) skipped_multi=$multi_total skipped_data=1 rolled_back=1 undone=1"
+echo 'PASS rollback marker honest: rolled_back=1 with undone==done' | tee -a "$result"
 f_provider="$(raw_count)"
 f_sim="$(sim_count)"
 if [[ "$f_sim" != "0" ]]; then
   echo "FAIL rollback left $f_sim entries in the SIM list" | tee -a "$result"
   exit 1
 fi
-if [[ "$f_provider" != "$((baseline_total + 2))" ]]; then
-  echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 2)) (baseline + mov_one re-added + multi)" | tee -a "$result"
+if [[ "$f_provider" != "$((baseline_total + 3))" ]]; then
+  echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 3)) (baseline + mov_one re-added + multi + extra-data)" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data --projection data1 --where "data1='$mov_one'" 2>&1 | tr -d '\r' | grep -qF "data1=$mov_one"; then
@@ -392,14 +418,14 @@ shot movecopy-move-submenu
 adb logcat -c || true
 tap OK                          # From phone to SIM
 sleep 1
-require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$singles"
+require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
 shot movecopy-move-confirm
 tap LSK                         # Yes
 sleep 2
-require_marker "MOVE_CONTACTS dir=phone2sim done=$singles failed=0 skipped=$multi_total"
+require_marker "MOVE_CONTACTS dir=phone2sim done=$move_eligible failed=0 skipped=$((multi_total + 1)) skipped_multi=$multi_total skipped_data=1"
 after_move="$(raw_count)"
-if [[ "$after_move" != "$multi_total" ]]; then
-  echo "FAIL Move left $after_move raw contacts, expected only the $multi_total multi-number" | tee -a "$result"
+if [[ "$after_move" != "$((multi_total + 1))" ]]; then
+  echo "FAIL Move left $after_move raw contacts, expected the $multi_total multi-number + the extra-data contact" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
@@ -408,12 +434,23 @@ if ! adb shell content query --uri content://com.android.contacts/data \
   echo "FAIL multi-number contact $mov_multi is gone after Move" | tee -a "$result"
   exit 1
 fi
-sim_after_move="$(sim_count)"
-if [[ "$sim_after_move" != "$singles" ]]; then
-  echo "FAIL in-app SIM list holds $sim_after_move entries, expected $singles" | tee -a "$result"
+if ! adb shell content query --uri content://com.android.contacts/data \
+     --projection data1 --where "data1='$email_extra'" 2>&1 \
+     | tr -d '\r' | grep -qF "data1=$email_extra"; then
+  echo "FAIL extra-data contact $mov_extra lost its email row after Move" | tee -a "$result"
   exit 1
 fi
-echo "PASS Move phone->SIM moved $singles singles; multi-number contact untouched in provider" | tee -a "$result"
+echo 'PASS extra-data contact kept its email row after Move' | tee -a "$result"
+sim_after_move="$(sim_count)"
+if [[ "$sim_after_move" != "$move_eligible" ]]; then
+  echo "FAIL in-app SIM list holds $sim_after_move entries, expected $move_eligible" | tee -a "$result"
+  exit 1
+fi
+if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_extra"; then
+  echo "FAIL extra-data contact $mov_extra landed in the SIM list on Move" | tee -a "$result"
+  exit 1
+fi
+echo "PASS Move phone->SIM moved $move_eligible singles; multi-number and extra-data contacts untouched in provider" | tee -a "$result"
 expect_foreground
 shot movecopy-after-move
 
@@ -425,13 +462,13 @@ tap DOWN                        # From SIM to phone
 adb logcat -c || true
 tap OK
 sleep 1
-require_marker "MOVE_CONTACTS_CONFIRM dir=sim2phone count=$singles"
+require_marker "MOVE_CONTACTS_CONFIRM dir=sim2phone count=$move_eligible"
 tap LSK                         # Yes
 sleep 2
-require_marker "MOVE_CONTACTS dir=sim2phone done=$singles failed=0 skipped=0"
+require_marker "MOVE_CONTACTS dir=sim2phone done=$move_eligible failed=0 skipped=0 skipped_multi=0 skipped_data=0"
 after_back="$(raw_count)"
-if [[ "$after_back" != "$((baseline_total + 3))" ]]; then
-  echo "FAIL Move SIM->phone left provider at $after_back, expected $((baseline_total + 3))" | tee -a "$result"
+if [[ "$after_back" != "$((baseline_total + 4))" ]]; then
+  echo "FAIL Move SIM->phone left provider at $after_back, expected $((baseline_total + 4))" | tee -a "$result"
   exit 1
 fi
 sim_after_back="$(sim_count)"
@@ -454,10 +491,10 @@ require_marker "COPY_CONTACTS_CONFIRM dir=phone2sim count=$singles"
 shot movecopy-copy-confirm
 tap LSK                         # Yes
 sleep 2
-require_marker "COPY_CONTACTS dir=phone2sim done=$singles failed=0 skipped=$multi_total"
+require_marker "COPY_CONTACTS dir=phone2sim done=$singles failed=0 skipped=$multi_total skipped_multi=$multi_total skipped_data=0"
 after_copy="$(raw_count)"
-if [[ "$after_copy" != "$((baseline_total + 3))" ]]; then
-  echo "FAIL Copy changed provider count to $after_copy, expected $((baseline_total + 3))" | tee -a "$result"
+if [[ "$after_copy" != "$((baseline_total + 4))" ]]; then
+  echo "FAIL Copy changed provider count to $after_copy, expected $((baseline_total + 4))" | tee -a "$result"
   exit 1
 fi
 sim_after_copy="$(sim_count)"
@@ -465,7 +502,18 @@ if [[ "$sim_after_copy" != "$singles" ]]; then
   echo "FAIL in-app SIM list holds $sim_after_copy entries after copy, expected $singles" | tee -a "$result"
   exit 1
 fi
-echo "PASS Copy phone->SIM copied $singles singles; multi-number contact untouched" | tee -a "$result"
+if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_extra"; then
+  echo "FAIL extra-data contact $mov_extra missing from the SIM list after Copy" | tee -a "$result"
+  exit 1
+fi
+if ! adb shell content query --uri content://com.android.contacts/data \
+     --projection data1 --where "data1='$email_extra'" 2>&1 \
+     | tr -d '\r' | grep -qF "data1=$email_extra"; then
+  echo "FAIL Copy disturbed the extra-data contact original (email row gone)" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS extra-data contact copied to SIM as name+number only' | tee -a "$result"
+echo "PASS Copy phone->SIM copied $singles singles incl. extra-data contact; multi-number skipped" | tee -a "$result"
 expect_foreground
 shot movecopy-after-copy
 
@@ -486,7 +534,7 @@ if marker_seen 'COPY_CONTACTS dir='; then
 fi
 after_no="$(raw_count)"
 sim_after_no="$(sim_count)"
-if [[ "$after_no" != "$((baseline_total + 3))" || "$sim_after_no" != "$singles" ]]; then
+if [[ "$after_no" != "$((baseline_total + 4))" || "$sim_after_no" != "$singles" ]]; then
   echo "FAIL No changed state (provider $after_no, SIM $sim_after_no)" | tee -a "$result"
   exit 1
 fi
@@ -495,9 +543,131 @@ expect_foreground
 echo 'PASS C2 remains foreground after Move/Copy flows' | tee -a "$result"
 shot movecopy-after-no
 
+# --- W. Duplicates within the source batch refuse the Move -------------------
+seed_contact "AAAC2MoveDup" "07900006020" >/dev/null
+seed_contact "AAAC2MoveDup" "07900006020" >/dev/null
+sim_before_w="$(sim_count)"
+open_contacts_menu
+tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
+tap OK                          # Move contacts submenu
+adb logcat -c || true
+tap OK                          # From phone to SIM
+sleep 1
+require_marker 'MOVE_CONTACTS_CONFIRM dir=phone2sim'
+tap LSK                         # Yes
+sleep 2
+require_marker 'MOVE_CONTACTS_REFUSED reason=duplicate_source dir=phone2sim'
+if [[ "$(raw_count)" != "$((baseline_total + 6))" || "$(sim_count)" != "$sim_before_w" ]]; then
+  echo "FAIL within-source duplicate refusal changed state (provider $(raw_count), SIM $(sim_count) was $sim_before_w)" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS within-source duplicate batch refused (duplicate_source)' | tee -a "$result"
+shot movecopy-dup-source-refused
+# Remove the duplicate fixtures so the trap count guard sees its 4 rows.
+dup_rows="$(adb shell content query --uri content://com.android.contacts/data \
+  --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E 'data1=AAAC2MoveDup' || true)"
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
+  [[ "$rid" =~ ^[0-9]+$ ]] || continue
+  adb shell content delete --uri content://com.android.contacts/raw_contacts \
+    --where "_id=$rid" >/dev/null 2>&1 || true
+done <<< "$dup_rows"
+
+# --- R. Rollback failure is reported honestly ---------------------------------
+# SIM list: 20 valid entries then one with a blank number. Move SIM->phone
+# inserts the valid ones, then fails; the rollback must delete the inserted
+# rows. WRITE_CONTACTS is revoked the moment Yes is tapped so the reverse
+# deletes fail too: the app must log rolled_back=0 with undone < done and
+# show the undo-incomplete notice. The revoke can race past the handler
+# (vacuous or complete rollback), so the attempt retries.
+rb_pass=0
+rb_done=0
+rb_undone=0
+for attempt in 1 2 3; do
+  echo "rollback-injection attempt $attempt" >> "$result"
+  # Drop stranded inserts from a previous attempt.
+  rb_rows="$(adb shell content query --uri content://com.android.contacts/data \
+    --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E 'data1=AAAC2Rb' || true)"
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
+    [[ "$rid" =~ ^[0-9]+$ ]] || continue
+    adb shell content delete --uri content://com.android.contacts/raw_contacts \
+      --where "_id=$rid" >/dev/null 2>&1 || true
+  done <<< "$rb_rows"
+  adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+  sim_json="$(python3 -c '
+import json
+entries = [{"name": f"AAAC2Rb{i:02d}", "number": f"079000060{i:02d}"} for i in range(1, 21)]
+entries.append({"name": "AAAC2RbBad", "number": ""})
+print(json.dumps(entries))
+')"
+  sim_escaped="$(python3 -c 'import sys, html; print(html.escape(sys.stdin.read().strip(), quote=True))' <<< "$sim_json")"
+  adb shell am force-stop "$package" || true
+  printf '%s\n' \
+    '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
+    '<map>' \
+    "<string name=\"sim_contacts_v1\">$sim_escaped</string>" \
+    '</map>' | adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'"
+  fixture_check="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
+  if ! grep -qF 'AAAC2RbBad' <<< "$fixture_check"; then
+    echo 'UNVERIFIED rollback-fixture prefs write did not land' | tee -a "$result"
+    exit 1
+  fi
+  open_contacts_menu
+  tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
+  tap OK                          # Move contacts submenu
+  adb logcat -c || true
+  tap DOWN                        # From SIM to phone
+  tap OK
+  sleep 1
+  require_marker 'MOVE_CONTACTS_CONFIRM dir=sim2phone count=21'
+  ( for i in $(seq 1 10); do
+      adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+    done ) &
+  rb_revoke_pid=$!
+  tap LSK                         # Yes
+  wait "$rb_revoke_pid" || true
+  sleep 3
+  require_marker 'MOVE_CONTACTS dir=sim2phone'
+  marker_line="$(adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F 'MOVE_CONTACTS dir=sim2phone' | tail -1)"
+  echo "  attempt $attempt marker: $marker_line" >> "$result"
+  rb_done="$(sed -n 's/.* done=\([0-9][0-9]*\).*/\1/p' <<< "$marker_line")"
+  rb_undone="$(sed -n 's/.* undone=\([0-9][0-9]*\).*/\1/p' <<< "$marker_line")"
+  if grep -qF 'rolled_back=0' <<< "$marker_line" \
+     && [[ "$rb_done" =~ ^[0-9]+$ && "$rb_undone" =~ ^[0-9]+$ && "$rb_undone" -lt "$rb_done" ]]; then
+    rb_pass=1
+    break
+  fi
+done
+adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+if [[ "$rb_pass" != "1" ]]; then
+  echo 'UNVERIFIED rollback-failure injection never landed (revoke raced past the handler 3 times)' | tee -a "$result"
+  exit 1
+fi
+echo "PASS rollback failure reported honestly: rolled_back=0, undone=$rb_undone < done=$rb_done" | tee -a "$result"
+shot movecopy-rollback-incomplete
+# Clean up the stranded inserts and the SIM fixture; restore pre-probe prefs.
+rb_rows="$(adb shell content query --uri content://com.android.contacts/data \
+  --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E 'data1=AAAC2Rb' || true)"
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
+  [[ "$rid" =~ ^[0-9]+$ ]] || continue
+  adb shell content delete --uri content://com.android.contacts/raw_contacts \
+    --where "_id=$rid" >/dev/null 2>&1 || true
+done <<< "$rb_rows"
+adb shell am force-stop "$package" || true
+if [[ "$restore_needed" == "1" ]]; then
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$backup"
+else
+  adb shell run-as "$package" rm -f "$prefs_dir/c2_state.xml" || true
+fi
+
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in movecopy-move-submenu movecopy-move-confirm movecopy-dup-refused movecopy-empty-refused movecopy-copy-confirm movecopy-confirm-no; do
+for f in movecopy-move-submenu movecopy-move-confirm movecopy-dup-refused movecopy-empty-refused movecopy-copy-confirm movecopy-confirm-no movecopy-dup-source-refused movecopy-rollback-incomplete; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
