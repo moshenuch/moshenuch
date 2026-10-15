@@ -11,8 +11,8 @@ android {
         minSdk 23
         targetSdk 34
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        versionCode 20311
-        versionName "2.03.11"
+        versionCode 20312
+        versionName "2.03.12"
     }
 
     buildTypes {
