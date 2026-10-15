@@ -1280,7 +1280,7 @@ public class C2PhoneView extends View {
                     p.setTextSize(16);
                     p.setTypeface(fontBold);
                     p.setTextAlign(Paint.Align.LEFT);
-                    c.drawText("â", 211, y + 25, p);
+                    c.drawText("✓", 211, y + 25, p);
                     p.setTypeface(fontRegular);
                 }
             }
@@ -1555,9 +1555,9 @@ public class C2PhoneView extends View {
         if (lines.size() > limit) {
             while (lines.size() > limit) lines.remove(lines.size() - 1);
             String last = lines.get(limit - 1);
-            while (last.length() > 0 && p.measureText(last + "â¦") > 190)
+            while (last.length() > 0 && p.measureText(last + "…") > 190)
                 last = last.substring(0, last.length() - 1);
-            lines.set(limit - 1, last + "â¦");
+            lines.set(limit - 1, last + "…");
         }
         if (lines.isEmpty()) lines.add("");
         return lines;
@@ -1677,7 +1677,7 @@ public class C2PhoneView extends View {
         if ("conversations".equals(pg) && deviceSmsActive && idx < smsThreads.size()) {
             SmsThread t = smsThreads.get(idx);
             String text = t.body == null ? "" : t.body.replace("\n", " ");
-            if (text.length() > 25) text = text.substring(0, 25) + "â¦";
+            if (text.length() > 25) text = text.substring(0, 25) + "…";
             return text;
         }
         if ("messaging".equals(pg)) {
@@ -1800,7 +1800,7 @@ public class C2PhoneView extends View {
             }
         }
         p.setTextSize(19);
-        if (displayName.length() > 21) displayName = displayName.substring(0, 20) + "â¦";
+        if (displayName.length() > 21) displayName = displayName.substring(0, 20) + "…";
         c.drawText(displayName, 120, 116, p);
         p.setTypeface(fontRegular);
         p.setTextSize(13);
@@ -1969,7 +1969,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(10);
         c.drawText("Number " + (selected + 1) + " of " + numbers.size()
-                + "  â¢  Up/Down", 120, 283, p);
+                + "  •  Up/Down", 120, 283, p);
         p.setTextAlign(Paint.Align.LEFT);
     }
 
@@ -2052,7 +2052,7 @@ public class C2PhoneView extends View {
         p.setTextSize(28);
         c.drawText(calc, 223, NativeOverlayLayout.CALC_VALUE_BASELINE, p);
 
-        String[] ops = {"â² Ã","â â","OK =","â¶ +","â¼ Ã·","* .   # Â±"};
+        String[] ops = {"▲ ×","◀ −","OK =","▶ +","▼ ÷","* .   # ±"};
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(13);
         for (int i = 0; i < ops.length; i++)
@@ -2080,7 +2080,7 @@ public class C2PhoneView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(11);
         c.drawText("OK = calculate monthly payment", 120, 244, p);
-        c.drawText("Use â²/â¼ to change field", 120, 263, p);
+        c.drawText("Use ▲/▼ to change field", 120, 263, p);
     }
 
     private void drawStopwatch(Canvas c) {
@@ -2126,11 +2126,11 @@ public class C2PhoneView extends View {
         p.setColor(themeText());
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(42);
-        c.drawText("âª", 120, 90, p);
+        c.drawText("♪", 120, 90, p);
         p.setTypeface(fontBold);
         p.setTextSize(15);
         String name = musicEngine.title();
-        if (name.length() > 25) name = name.substring(0, 24) + "â¦";
+        if (name.length() > 25) name = name.substring(0, 24) + "…";
         c.drawText(name, 120, 128, p);
         p.setTypeface(fontRegular);
         p.setTextSize(11);
@@ -2147,7 +2147,7 @@ public class C2PhoneView extends View {
                 (float) elapsed / duration)), 205, p);
         p.setColor(themeText());
         p.setTextSize(12);
-        c.drawText("â    " + (musicEngine.isPlaying() ? "Pause" : "Play") + "    â¶", 120, 240, p);
+        c.drawText("◀    " + (musicEngine.isPlaying() ? "Pause" : "Play") + "    ▶", 120, 240, p);
         p.setTextSize(10);
         c.drawText("Shuffle " + (musicEngine.shuffleEnabled() ? "On" : "Off")
                 + "   Repeat " + musicEngine.repeatLabel(), 120, 261, p);
@@ -2168,7 +2168,7 @@ public class C2PhoneView extends View {
         c.drawText(browserUrl, 8, 43, p);
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(33);
-        c.drawText("â", 120, 123, p);
+        c.drawText("◎", 120, 123, p);
         p.setTextSize(14);
         c.drawText("Nokia Web", 120, 151, p);
         p.setTextSize(11);
@@ -2460,10 +2460,10 @@ public class C2PhoneView extends View {
         p.setColor(Color.rgb(230,230,230));
         p.setTextAlign(Paint.Align.CENTER);
         p.setTextSize(8);
-        c.drawText("â²", 180, 451, p);
-        c.drawText("â¼", 180, 499, p);
-        c.drawText("â", 155, 476, p);
-        c.drawText("â¶", 205, 476, p);
+        c.drawText("▲", 180, 451, p);
+        c.drawText("▼", 180, 499, p);
+        c.drawText("◀", 155, 476, p);
+        c.drawText("▶", 205, 476, p);
         p.setTextSize(10);
         p.setTypeface(fontBold);
         c.drawText("OK", 180, 477, p);
@@ -2476,15 +2476,15 @@ public class C2PhoneView extends View {
         p.setShader(null);
         p.setTextSize(20);
         p.setColor(Color.rgb(45,190,95));
-        c.drawText("â", 96, 479, p);
+        c.drawText("☎", 96, 479, p);
         p.setColor(Color.rgb(225,65,75));
-        c.drawText("â", 264, 479, p);
+        c.drawText("☎", 264, 479, p);
 
         String[][] labels = {
-                {"1","ââ"},{"2","abc"},{"3","def"},
+                {"1","●●"},{"2","abc"},{"3","def"},
                 {"4","ghi"},{"5","jkl"},{"6","mno"},
                 {"7","pqrs"},{"8","tuv"},{"9","wxyz"},
-                {"*","+"},{"0","â»"},{"#","â *"}
+                {"*","+"},{"0","↻"},{"#","⌂ *"}
         };
         float[] xs = {48, 138, 228};
         float[] ys = {535, 588, 641, 694};
@@ -2523,7 +2523,7 @@ public class C2PhoneView extends View {
         p.setColor(Color.rgb(210,210,213));
         p.setTextSize(8);
         p.setTextAlign(Paint.Align.CENTER);
-        c.drawText(left ? "â" : "â", r.centerX(), r.centerY() + 3, p);
+        c.drawText(left ? "—" : "—", r.centerX(), r.centerY() + 3, p);
     }
 
     private void drawWrappedText(Canvas c, String text, float x, float y, float maxWidth, float lineHeight, int maxLines) {
@@ -2675,7 +2675,7 @@ public class C2PhoneView extends View {
                 String[] a = new String[msgs.size()];
                 for (int i = 0; i < msgs.size(); i++) {
                     String body = msgs.get(i).body == null ? "" : msgs.get(i).body.replace("\n", " ");
-                    a[i] = body.length() > 28 ? body.substring(0, 28) + "â¦" : body;
+                    a[i] = body.length() > 28 ? body.substring(0, 28) + "…" : body;
                 }
                 return a;
             }
@@ -2687,7 +2687,7 @@ public class C2PhoneView extends View {
                 for (int i = 0; i < labels.length; i++) {
                     String body = drafts.get(i).body.replace("\n", " ").trim();
                     if (body.isEmpty()) body = "(recipient only)";
-                    labels[i] = body.length() > 28 ? body.substring(0, 28) + "â¦" : body;
+                    labels[i] = body.length() > 28 ? body.substring(0, 28) + "…" : body;
                 }
                 return labels;
             }
@@ -2703,7 +2703,7 @@ public class C2PhoneView extends View {
                 String[] labels = new String[savedSmsTemplates.size()];
                 for (int i = 0; i < labels.length; i++) {
                     String raw = savedSmsTemplates.get(i).replace('\n', ' ').trim();
-                    labels[i] = raw.length() > 34 ? raw.substring(0, 34) + "â¦" : raw;
+                    labels[i] = raw.length() > 34 ? raw.substring(0, 34) + "…" : raw;
                 }
                 return labels;
             }
@@ -2733,7 +2733,7 @@ public class C2PhoneView extends View {
             case "symbolPicker":
                 return new String[]{".",",","?","!","@","#","%","&","(",")","-","+","/",";",":","'"};
             case "emojiPicker":
-                return new String[]{"âº","â¹","â¥","â","âª","â","â","â"};
+                return new String[]{"☺","☹","♥","★","♪","✓","☀","☕"};
             case "menuViewPicker":
                 return NativeMenuLayout.MODES;
             case "contacts":
@@ -2756,7 +2756,7 @@ public class C2PhoneView extends View {
             case "groupMembers": {
                 NativeContactGroups.Group group = contactGroups.byId(activeContactGroupId);
                 if (group == null || group.numbers.isEmpty())
-                    return new String[]{"(No members â Add member)"};
+                    return new String[]{"(No members — Add member)"};
                 String[] labels = new String[group.numbers.size()];
                 for (int i = 0; i < labels.length; i++)
                     labels[i] = contactNameFor(group.numbers.get(i));
@@ -2872,7 +2872,7 @@ public class C2PhoneView extends View {
                 for (int i = 0; i < titles.length; i++) titles[i] = NativeVoiceRecorder.title(files.get(i));
                 return titles;
             }
-            case "gallerySort": return new String[]{"Name AâZ","Name ZâA","Newest added"};
+            case "gallerySort": return new String[]{"Name A–Z","Name Z–A","Newest added"};
             case "galleryImageBrowser":
                 return deviceImageNames.isEmpty() ? new String[]{"(No phone images)"} :
                         deviceImageNames.toArray(new String[0]);
@@ -2883,7 +2883,7 @@ public class C2PhoneView extends View {
             case "galleryVideos": {
                 java.util.List<NativeGalleryStore.Entry> media =
                         galleryStore.entries("galleryVideos".equals(pg));
-                if (media.isEmpty()) return new String[]{"(No selected files) â Add from phone"};
+                if (media.isEmpty()) return new String[]{"(No selected files) — Add from phone"};
                 String[] names = new String[media.size()];
                 for (int i = 0; i < names.length; i++) names[i] = media.get(i).title;
                 return names;
@@ -2903,7 +2903,7 @@ public class C2PhoneView extends View {
             case "maps":
                 return new String[]{"Current position","Find address","Favourites","Route planner"};
             case "scientific":
-                return new String[]{"sin","cos","tan","â","xÂ²","log10","1/x","Ï"};
+                return new String[]{"sin","cos","tan","√","x²","log10","1/x","π"};
             case "alarm":
                 return new String[]{"Alarm","Alarm time","Repeat","Alarm tone","Snooze time-out"};
             case "calendar":
@@ -4850,8 +4850,8 @@ public class C2PhoneView extends View {
         } else if ("#".equals(key)) {
             if (calc.startsWith("-")) calc = calc.substring(1);
             else if (!"0".equals(calc)) calc = "-" + calc;
-        } else if ("UP".equals(key)) setCalcOp('Ã');
-        else if ("DOWN".equals(key)) setCalcOp('Ã·');
+        } else if ("UP".equals(key)) setCalcOp('×');
+        else if ("DOWN".equals(key)) setCalcOp('÷');
         else if ("LEFT".equals(key)) setCalcOp('-');
         else if ("RIGHT".equals(key)) setCalcOp('+');
         else if ("OK".equals(key)) calculate();
@@ -4876,7 +4876,7 @@ public class C2PhoneView extends View {
         double r;
         if (calcOp == '+') r = calcStored + b;
         else if (calcOp == '-') r = calcStored - b;
-        else if (calcOp == 'Ã') r = calcStored * b;
+        else if (calcOp == '×') r = calcStored * b;
         else r = b == 0 ? Double.NaN : calcStored / b;
         if (Double.isNaN(r) || Double.isInfinite(r)) calc = "Error";
         else if (Math.abs(r - Math.rint(r)) < 0.0000001) calc = String.valueOf((long)Math.rint(r));
