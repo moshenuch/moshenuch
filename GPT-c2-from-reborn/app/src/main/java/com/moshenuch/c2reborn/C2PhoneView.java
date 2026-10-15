@@ -847,6 +847,12 @@ public class C2PhoneView extends View {
         return deviceContactsActive && contactsWithExtraData.contains(c.contactId);
     }
 
+    private String simSkipReason(int skippedMulti, int skippedData) {
+        return skippedMulti > 0 && skippedData > 0
+                ? "multiple numbers or extra data"
+                : skippedData > 0 ? "extra data" : "multiple numbers";
+    }
+
     private int countSimEligible(ArrayList<Contact> source, boolean toSim, boolean move) {
         if (!toSim) return source.size();
         int n = 0;
@@ -856,19 +862,6 @@ public class C2PhoneView extends View {
             n++;
         }
         return n;
-    }
-
-    // Rollback helper: delete the newest provider aggregate carrying this
-    // name+number (the row a failed batch just added).
-    private boolean deleteContactByNameNumber(String name, String number) {
-        refreshContactsFromPhone();
-        for (int i = contacts.size() - 1; i >= 0; i--) {
-            Contact c = contacts.get(i);
-            if (c.name.equals(name) && c.number.equals(number)) {
-                return backend.deleteContact(c.contactId);
-            }
-        }
-        return false;
     }
 
     // UK national vs +44 forms of the same number must compare equal when
@@ -3271,14 +3264,29 @@ public class C2PhoneView extends View {
                                 + " dir=" + sel);
                 return;
             }
+            int skipMulti = 0;
+            int skipData = 0;
+            if (sel == 0) {
+                for (Contact c : source) {
+                    if (isMultiNumberContact(c)) skipMulti++;
+                    else if (move && contactHasExtraData(c)) skipData++;
+                }
+            }
+            int skipTotal = skipMulti + skipData;
             requestConfirm((move ? "moveContacts" : "copyContacts") + sel,
                     (move ? "Move contacts?" : "Copy contacts?")
                             + "\n\n" + count
-                            + (count == 1 ? " contact selected" : " contacts selected"));
+                            + (count == 1 ? " contact selected" : " contacts selected")
+                            // Skip disclosure added for audit #16 (no HTML
+                            // source; plain factual wording, disclosed).
+                            + (skipTotal > 0
+                                    ? "\n" + skipTotal + " skipped (" + simSkipReason(skipMulti, skipData) + ")"
+                                    : ""));
             android.util.Log.i("C2Contacts",
                     (move ? "MOVE_CONTACTS_CONFIRM" : "COPY_CONTACTS_CONFIRM")
                             + " dir=" + (sel == 0 ? "phone2sim" : "sim2phone")
-                            + " count=" + count);
+                            + " count=" + count
+                            + " skipped=" + skipTotal);
             return;
         }
 
@@ -7372,18 +7380,40 @@ public class C2PhoneView extends View {
             } else {
                 ArrayList<Contact> source = dir == 0 ? contacts : simContacts;
                 ArrayList<Contact> destination = dir == 0 ? simContacts : contacts;
-                boolean duplicate = false;
-                for (Contact c : source) {
-                    for (Contact d : destination) {
-                        if (c.name.equals(d.name)
-                                && normalizeSimNumber(c.number).equals(normalizeSimNumber(d.number))) {
-                            duplicate = true;
+                // Within-source duplicates first (audit #16): two identical
+                // source entries would both transfer into duplicates the
+                // prototype cannot represent. Wording drops "destination"
+                // from the HTML string; no HTML source, disclosed.
+                boolean sourceDuplicate = false;
+                for (int i = 0; i < source.size() && !sourceDuplicate; i++) {
+                    for (int j = i + 1; j < source.size(); j++) {
+                        Contact a = source.get(i);
+                        Contact b = source.get(j);
+                        if (a.name.equals(b.name)
+                                && normalizeSimNumber(a.number).equals(normalizeSimNumber(b.number))) {
+                            sourceDuplicate = true;
                             break;
                         }
                     }
-                    if (duplicate) break;
                 }
-                if (duplicate) {
+                boolean duplicate = false;
+                if (!sourceDuplicate) {
+                    for (Contact c : source) {
+                        for (Contact d : destination) {
+                            if (c.name.equals(d.name)
+                                    && normalizeSimNumber(c.number).equals(normalizeSimNumber(d.number))) {
+                                duplicate = true;
+                                break;
+                            }
+                        }
+                        if (duplicate) break;
+                    }
+                }
+                if (sourceDuplicate) {
+                    showNotice("Duplicate contacts not supported in this prototype");
+                    android.util.Log.i("C2Contacts",
+                            (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=duplicate_source dir=" + dirName);
+                } else if (duplicate) {
                     // Exact HTML v6.343 error wording.
                     showNotice("Duplicate destination contacts not supported in this prototype");
                     android.util.Log.i("C2Contacts",
@@ -7394,6 +7424,9 @@ public class C2PhoneView extends View {
                     int skippedMulti = 0;
                     int skippedData = 0;
                     ArrayList<Contact> completed = new ArrayList<>();
+                    // Raw ids this batch inserted (SIM->phone), aligned with
+                    // completed; rollback deletes exactly these (audit #16).
+                    ArrayList<Long> completedRawIds = new ArrayList<>();
                     for (Contact c : new ArrayList<>(source)) {
                         if (dir == 0 && isMultiNumberContact(c)) {
                             skippedMulti++;
@@ -7420,10 +7453,16 @@ public class C2PhoneView extends View {
                                 ok = true;
                             }
                         } else {
-                            boolean added = deviceContactsActive
-                                    ? backend.addContact(c.name, c.number)
-                                    : contacts.add(new Contact(c.name, c.number));
+                            long addedRawId = -1;
+                            boolean added;
+                            if (deviceContactsActive) {
+                                addedRawId = backend.addContactReturningRawId(c.name, c.number);
+                                added = addedRawId > 0;
+                            } else {
+                                added = contacts.add(new Contact(c.name, c.number));
+                            }
                             if (added && move) simContacts.remove(c);
+                            if (added) completedRawIds.add(addedRawId);
                             ok = added;
                         }
                         if (!ok) {
@@ -7439,7 +7478,8 @@ public class C2PhoneView extends View {
                         // path; the wording is the HTML's own changed-list
                         // error).
                         int undone = 0;
-                        for (Contact c : completed) {
+                        for (int idx = 0; idx < completed.size(); idx++) {
+                            Contact c = completed.get(idx);
                             boolean back;
                             if (dir == 0) {
                                 for (int i = simContacts.size() - 1; i >= 0; i--) {
@@ -7454,17 +7494,15 @@ public class C2PhoneView extends View {
                                         : contacts.add(c));
                             } else {
                                 if (move) simContacts.add(c);
-                                back = true;
                                 if (deviceContactsActive) {
-                                    // Remove the provider row added for c: it
-                                    // is the newest aggregate with this
-                                    // name+number; delete by re-querying.
-                                    back = deleteContactByNameNumber(c.name, c.number);
+                                    back = backend.deleteRawContact(completedRawIds.get(idx));
                                 } else {
+                                    back = false;
                                     for (int i = contacts.size() - 1; i >= 0; i--) {
                                         Contact d = contacts.get(i);
                                         if (d.name.equals(c.name) && d.number.equals(c.number)) {
                                             contacts.remove(i);
+                                            back = true;
                                             break;
                                         }
                                     }
@@ -7505,11 +7543,10 @@ public class C2PhoneView extends View {
                                         + " skipped_multi=" + skippedMulti
                                         + " skipped_data=" + skippedData);
                         int skipped = skippedMulti + skippedData;
-                        String skipReason = skippedMulti > 0 && skippedData > 0
-                                ? "multiple numbers or extra data"
-                                : skippedData > 0 ? "extra data" : "multiple numbers";
                         showNotice(done + (move ? " contacts moved" : " contacts copied")
-                                + (skipped > 0 ? "; " + skipped + " skipped (" + skipReason + ")" : ""));
+                                + (skipped > 0
+                                        ? "; " + skipped + " skipped (" + simSkipReason(skippedMulti, skippedData) + ")"
+                                        : ""));
                     }
                 }
             }
