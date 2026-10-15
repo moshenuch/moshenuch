@@ -823,6 +823,46 @@ public class C2PhoneView extends View {
         prefs.edit().putString("sim_contacts_v1", a.toString()).apply();
     }
 
+    // SIM entries are one name + one number (HTML v6.343 store model), so a
+    // phone contact holding several numbers cannot transfer without dropping
+    // the extras; Move/Copy skips those contacts instead of losing data.
+    private boolean isMultiNumberContact(Contact c) {
+        if (!deviceContactsActive) return false;
+        ArrayList<String> nums = contactNumbersById.get(c.contactId);
+        return nums != null && nums.size() > 1;
+    }
+
+    private int countSimEligible(ArrayList<Contact> source, boolean toSim) {
+        if (!toSim) return source.size();
+        int n = 0;
+        for (Contact c : source) {
+            if (!isMultiNumberContact(c)) n++;
+        }
+        return n;
+    }
+
+    // Rollback helper: delete the newest provider aggregate carrying this
+    // name+number (the row a failed batch just added).
+    private boolean deleteContactByNameNumber(String name, String number) {
+        refreshContactsFromPhone();
+        for (int i = contacts.size() - 1; i >= 0; i--) {
+            Contact c = contacts.get(i);
+            if (c.name.equals(name) && c.number.equals(number)) {
+                return backend.deleteContact(c.contactId);
+            }
+        }
+        return false;
+    }
+
+    // UK national vs +44 forms of the same number must compare equal when
+    // checking destination duplicates (audit #15).
+    private String normalizeSimNumber(String number) {
+        String n = number == null ? "" : number.replaceAll("[^0-9+]", "");
+        if (n.startsWith("+44")) n = "0" + n.substring(3);
+        else if (n.startsWith("0044")) n = "0" + n.substring(4);
+        return n;
+    }
+
     private void saveSpeedDialSettings() {
         JSONObject values = new JSONObject();
         try {
@@ -3191,7 +3231,13 @@ public class C2PhoneView extends View {
                         (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=empty dir=" + sel);
                 return;
             }
-            int count = source.size();
+            int count = countSimEligible(source, sel == 0);
+            if (count == 0) {
+                showNotice("Contacts with multiple numbers are not supported by the SIM memory");
+                android.util.Log.i("C2Contacts",
+                        (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=multinumber dir=" + sel);
+                return;
+            }
             requestConfirm((move ? "moveContacts" : "copyContacts") + sel,
                     (move ? "Move contacts?" : "Copy contacts?")
                             + "\n\n" + count
@@ -7296,7 +7342,8 @@ public class C2PhoneView extends View {
                 boolean duplicate = false;
                 for (Contact c : source) {
                     for (Contact d : destination) {
-                        if (c.name.equals(d.name) && c.number.equals(d.number)) {
+                        if (c.name.equals(d.name)
+                                && normalizeSimNumber(c.number).equals(normalizeSimNumber(d.number))) {
                             duplicate = true;
                             break;
                         }
@@ -7306,10 +7353,20 @@ public class C2PhoneView extends View {
                 if (duplicate) {
                     // Exact HTML v6.343 error wording.
                     showNotice("Duplicate destination contacts not supported in this prototype");
+                    android.util.Log.i("C2Contacts",
+                            (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=duplicate dir=" + dirName);
                 } else {
                     int done = 0;
                     int failed = 0;
+                    int skipped = 0;
+                    boolean rolledBack = false;
+                    ArrayList<Contact> completed = new ArrayList<>();
                     for (Contact c : new ArrayList<>(source)) {
+                        if (dir == 0 && isMultiNumberContact(c)) {
+                            skipped++;
+                            continue;
+                        }
+                        boolean ok;
                         if (dir == 0) {
                             simContacts.add(new Contact(c.name, c.number));
                             if (move) {
@@ -7318,31 +7375,89 @@ public class C2PhoneView extends View {
                                         : contacts.remove(c);
                                 if (!removed) {
                                     simContacts.remove(simContacts.size() - 1);
-                                    failed++;
-                                    continue;
+                                    ok = false;
+                                } else {
+                                    ok = true;
                                 }
+                            } else {
+                                ok = true;
                             }
                         } else {
                             boolean added = deviceContactsActive
                                     ? backend.addContact(c.name, c.number)
                                     : contacts.add(new Contact(c.name, c.number));
-                            if (!added) {
-                                failed++;
-                                continue;
-                            }
-                            if (move) simContacts.remove(c);
+                            if (added && move) simContacts.remove(c);
+                            ok = added;
                         }
+                        if (!ok) {
+                            failed++;
+                            break;
+                        }
+                        completed.add(c);
                         done++;
                     }
-                    saveSimContacts();
-                    if (deviceContactsActive) refreshContactsFromPhone();
-                    else saveContacts();
-                    android.util.Log.i("C2Contacts",
-                            (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
-                                    + " dir=" + dirName
-                                    + " done=" + done + " failed=" + failed);
-                    showNotice(done + (move ? " contacts moved" : " contacts copied")
-                            + (failed > 0 ? "; " + failed + " failed" : ""));
+                    if (failed > 0) {
+                        // Batch rollback: no partial transfer survives a
+                        // failure (stricter than HTML, which has no failure
+                        // path; the wording is the HTML's own changed-list
+                        // error).
+                        int undone = 0;
+                        for (Contact c : completed) {
+                            boolean back;
+                            if (dir == 0) {
+                                for (int i = simContacts.size() - 1; i >= 0; i--) {
+                                    Contact s = simContacts.get(i);
+                                    if (s.name.equals(c.name) && s.number.equals(c.number)) {
+                                        simContacts.remove(i);
+                                        break;
+                                    }
+                                }
+                                back = !move || (deviceContactsActive
+                                        ? backend.addContact(c.name, c.number)
+                                        : contacts.add(c));
+                            } else {
+                                if (move) simContacts.add(c);
+                                back = true;
+                                if (deviceContactsActive) {
+                                    // Remove the provider row added for c: it
+                                    // is the newest aggregate with this
+                                    // name+number; delete by re-querying.
+                                    back = deleteContactByNameNumber(c.name, c.number);
+                                } else {
+                                    for (int i = contacts.size() - 1; i >= 0; i--) {
+                                        Contact d = contacts.get(i);
+                                        if (d.name.equals(c.name) && d.number.equals(c.number)) {
+                                            contacts.remove(i);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (back) undone++;
+                        }
+                        rolledBack = true;
+                        saveSimContacts();
+                        if (deviceContactsActive) refreshContactsFromPhone();
+                        else saveContacts();
+                        android.util.Log.i("C2Contacts",
+                                (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
+                                        + " dir=" + dirName
+                                        + " done=" + done + " failed=" + failed
+                                        + " skipped=" + skipped
+                                        + " rolled_back=1 undone=" + undone);
+                        showNotice("Contacts changed; try again");
+                    } else {
+                        saveSimContacts();
+                        if (deviceContactsActive) refreshContactsFromPhone();
+                        else saveContacts();
+                        android.util.Log.i("C2Contacts",
+                                (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
+                                        + " dir=" + dirName
+                                        + " done=" + done + " failed=" + failed
+                                        + " skipped=" + skipped);
+                        showNotice(done + (move ? " contacts moved" : " contacts copied")
+                                + (skipped > 0 ? "; " + skipped + " skipped (multiple numbers)" : ""));
+                    }
                 }
             }
             page = move ? "movecontacts" : "copycontacts";
