@@ -136,8 +136,10 @@ public final class AndroidBackend {
 
     /** Aggregate contact ids carrying data a SIM name+number entry cannot
      *  hold: other MIME rows (email, address, note, photo, groups, ...),
-     *  more than one raw contact, or a phone row with a custom type/label
-     *  (the label text and is_primary would be lost). Move skips these;
+     *  more than one raw contact, or a phone row that is not plain MOBILE:
+     *  a custom type/label, another kind (HOME, WORK, ...) or is_primary
+     *  (restore writes plain TYPE_MOBILE, so the kind and primary flag
+     *  would be lost). Move skips these;
      *  Copy only duplicates name + one number and leaves the original, so
      *  it stays allowed (audit #16/#17).
      *  Returns null when the scan cannot complete (permission gone or a
@@ -156,7 +158,8 @@ public final class AndroidBackend {
                             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
                             ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE},
                     null);
-            while (c != null && c.moveToNext()) out.add(c.getLong(0));
+            if (c == null) return null;
+            while (c.moveToNext()) out.add(c.getLong(0));
         } catch (Exception ignored) {
             return null;
         } finally {
@@ -171,7 +174,8 @@ public final class AndroidBackend {
                             ContactsContract.RawContacts.CONTACT_ID,
                             ContactsContract.RawContacts.ACCOUNT_TYPE},
                     ContactsContract.RawContacts.DELETED + "=0", null, null);
-            while (c != null && c.moveToNext()) {
+            if (c == null) return null;
+            while (c.moveToNext()) {
                 long id = c.getLong(0);
                 Integer n = rawCounts.get(id);
                 rawCounts.put(id, n == null ? 1 : n + 1);
@@ -194,13 +198,53 @@ public final class AndroidBackend {
                     new String[]{
                             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                             ContactsContract.CommonDataKinds.Phone.TYPE,
-                            ContactsContract.CommonDataKinds.Phone.LABEL},
+                            ContactsContract.CommonDataKinds.Phone.LABEL,
+                            ContactsContract.CommonDataKinds.Phone.IS_PRIMARY},
                     null, null, null);
-            while (c != null && c.moveToNext()) {
+            if (c == null) return null;
+            while (c.moveToNext()) {
                 String label = c.getString(2);
-                if (c.getInt(1) == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM
-                        || (label != null && !label.trim().isEmpty()))
+                // A getInt on a null column reads 0 == TYPE_CUSTOM, which is
+                // also not TYPE_MOBILE, so null types fail closed too.
+                if (c.getInt(1) != ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                        || (label != null && !label.trim().isEmpty())
+                        || c.getInt(3) != 0)
                     out.add(c.getLong(0));
+            }
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
+        return out;
+    }
+
+    /** Fresh contact-id -> numbers map for the Yes-time revalidation
+     *  (audit #18): the Move commit path re-derives multi-number status
+     *  from current provider data instead of the page-load cache, so a
+     *  contact that gained a number after the confirm cannot be moved with
+     *  silent number loss. Returns null when the scan cannot complete so
+     *  the caller fails CLOSED, same as loadContactsWithExtraData. */
+    public java.util.HashMap<Long, ArrayList<String>> loadContactNumbersById() {
+        if (!has(Manifest.permission.READ_CONTACTS)) return null;
+        java.util.HashMap<Long, ArrayList<String>> out = new java.util.HashMap<>();
+        Cursor c = null;
+        try {
+            c = resolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[]{
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                            ContactsContract.CommonDataKinds.Phone.NUMBER},
+                    null, null, null);
+            if (c == null) return null;
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                ArrayList<String> nums = out.get(id);
+                if (nums == null) {
+                    nums = new ArrayList<>();
+                    out.put(id, nums);
+                }
+                nums.add(c.getString(1));
             }
         } catch (Exception ignored) {
             return null;
