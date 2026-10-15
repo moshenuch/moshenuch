@@ -84,6 +84,9 @@ public class C2PhoneView extends View {
     private final ArrayList<String> whitelistNumbers = new ArrayList<>();
 
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    // In-app SIM memory (HTML v6.343 phone/SIM model): one name+number row per
+    // SIM entry, persisted locally; the real SIM card is never touched.
+    private final ArrayList<Contact> simContacts = new ArrayList<>();
     // Functional Nokia multi-tap search, with an optional numeric mode.
     private String contactSearchQuery = "";
     private boolean contactSearchNumeric = false;
@@ -606,6 +609,7 @@ public class C2PhoneView extends View {
         loadStringList("calendar", calendar);
         loadStringList("sms_templates_v1", savedSmsTemplates);
         loadDrafts();
+        loadSimContacts();
         loadMsgRecipients();
         loadLongSet("sms_local_read", localReadSmsIds);
         loadLongSet("sms_local_unread", localUnreadSmsIds);
@@ -789,6 +793,34 @@ public class C2PhoneView extends View {
             }
         } catch (Exception ignored) {}
         prefs.edit().putString("contacts", a.toString()).apply();
+    }
+
+    private void loadSimContacts() {
+        simContacts.clear();
+        try {
+            JSONArray a = new JSONArray(prefs.getString("sim_contacts_v1", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.optJSONObject(i);
+                if (o == null) continue;
+                String name = o.optString("name", "");
+                String number = o.optString("number", "");
+                if (name.isEmpty() && number.isEmpty()) continue;
+                simContacts.add(new Contact(name, number));
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void saveSimContacts() {
+        JSONArray a = new JSONArray();
+        try {
+            for (Contact c : simContacts) {
+                JSONObject o = new JSONObject();
+                o.put("name", c.name);
+                o.put("number", c.number);
+                a.put(o);
+            }
+        } catch (Exception ignored) {}
+        prefs.edit().putString("sim_contacts_v1", a.toString()).apply();
     }
 
     private void saveSpeedDialSettings() {
@@ -2569,6 +2601,8 @@ public class C2PhoneView extends View {
             case "infomessages": return "Info messages";
             case "servicecommands": return "Serv. commands";
             case "deletemessages": return "Delete messages";
+            case "movecontacts": return "Move";
+            case "copycontacts": return "Copy";
             case "messagesettings": return "Message settings";
             case "recipientPicker": return "Select contact";
             case "symbolPicker": return "Symbols";
@@ -2721,6 +2755,9 @@ public class C2PhoneView extends View {
                 return new String[]{"Service command editor"};
             case "deletemessages":
                 return new String[]{"All messages","By folder","Inbox","Sent items","Drafts"};
+            case "movecontacts":
+            case "copycontacts":
+                return new String[]{"From phone to SIM","From SIM to phone"};
             case "messagesettings":
                 return new String[]{"General settings","Text messages","Multimedia messages","E-mail messages","Service messages"};
             case "recipientPicker": {
@@ -3115,6 +3152,10 @@ public class C2PhoneView extends View {
                 go("speedDials");
             } else if (sel == 4) {
                 go("contactGroups");
+            } else if (sel == 8) {
+                go("movecontacts");
+            } else if (sel == 9) {
+                go("copycontacts");
             } else if (sel == 7) {
                 // HTML v6.343 ships no delete-all confirm of its own; wording
                 // follows its bulk template ("Move contacts?" / "Copy
@@ -3136,6 +3177,29 @@ public class C2PhoneView extends View {
                 else detailText = "This contact option is not yet implemented.\nNo data changed.";
                 go("itemDetail");
             }
+            return;
+        }
+
+        if ("movecontacts".equals(page) || "copycontacts".equals(page)) {
+            // HTML v6.343 bulkContactPending flow: row 0 = From phone to SIM,
+            // row 1 = From SIM to phone; empty source = "Selected memory empty".
+            boolean move = "movecontacts".equals(page);
+            ArrayList<Contact> source = sel == 0 ? contacts : simContacts;
+            if (source.isEmpty()) {
+                showNotice("Selected memory empty");
+                android.util.Log.i("C2Contacts",
+                        (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=empty dir=" + sel);
+                return;
+            }
+            int count = source.size();
+            requestConfirm((move ? "moveContacts" : "copyContacts") + sel,
+                    (move ? "Move contacts?" : "Copy contacts?")
+                            + "\n\n" + count
+                            + (count == 1 ? " contact selected" : " contacts selected"));
+            android.util.Log.i("C2Contacts",
+                    (move ? "MOVE_CONTACTS_CONFIRM" : "COPY_CONTACTS_CONFIRM")
+                            + " dir=" + (sel == 0 ? "phone2sim" : "sim2phone")
+                            + " count=" + count);
             return;
         }
 
@@ -7216,6 +7280,73 @@ public class C2PhoneView extends View {
             page = "messaging";
             sel = 12;
             showNotice("Messages deleted");
+        } else if (action.startsWith("moveContacts") || action.startsWith("copyContacts")) {
+            // HTML v6.343 bulk transfer: Move changes the record's memory,
+            // Copy appends a duplicate in the destination memory. "Phone" is
+            // the device provider (or the internal list without permission);
+            // "SIM" is the in-app SIM list - no real SIM card is involved.
+            boolean move = action.startsWith("moveContacts");
+            int dir = Integer.parseInt(action.substring(action.length() - 1));
+            String dirName = dir == 0 ? "phone2sim" : "sim2phone";
+            if (demoMode) {
+                showNotice("DEMO: Contacts are read-only");
+            } else {
+                ArrayList<Contact> source = dir == 0 ? contacts : simContacts;
+                ArrayList<Contact> destination = dir == 0 ? simContacts : contacts;
+                boolean duplicate = false;
+                for (Contact c : source) {
+                    for (Contact d : destination) {
+                        if (c.name.equals(d.name) && c.number.equals(d.number)) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (duplicate) break;
+                }
+                if (duplicate) {
+                    // Exact HTML v6.343 error wording.
+                    showNotice("Duplicate destination contacts not supported in this prototype");
+                } else {
+                    int done = 0;
+                    int failed = 0;
+                    for (Contact c : new ArrayList<>(source)) {
+                        if (dir == 0) {
+                            simContacts.add(new Contact(c.name, c.number));
+                            if (move) {
+                                boolean removed = deviceContactsActive
+                                        ? backend.deleteContact(c.contactId)
+                                        : contacts.remove(c);
+                                if (!removed) {
+                                    simContacts.remove(simContacts.size() - 1);
+                                    failed++;
+                                    continue;
+                                }
+                            }
+                        } else {
+                            boolean added = deviceContactsActive
+                                    ? backend.addContact(c.name, c.number)
+                                    : contacts.add(new Contact(c.name, c.number));
+                            if (!added) {
+                                failed++;
+                                continue;
+                            }
+                            if (move) simContacts.remove(c);
+                        }
+                        done++;
+                    }
+                    saveSimContacts();
+                    if (deviceContactsActive) refreshContactsFromPhone();
+                    else saveContacts();
+                    android.util.Log.i("C2Contacts",
+                            (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
+                                    + " dir=" + dirName
+                                    + " done=" + done + " failed=" + failed);
+                    showNotice(done + (move ? " contacts moved" : " contacts copied")
+                            + (failed > 0 ? "; " + failed + " failed" : ""));
+                }
+            }
+            page = move ? "movecontacts" : "copycontacts";
+            sel = dir;
         } else if ("deleteMarkedContacts".equals(action)) {
             if (demoMode) {
                 markedContactIndices.clear();
