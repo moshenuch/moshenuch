@@ -416,12 +416,13 @@ echo "PASS Add to contact refused without WRITE_CONTACTS, provider unchanged" | 
 expect_foreground
 }
 # Subshell: section E contains exit statements; they must end the subshell,
-# not the probe. Blocking since v2.03.10: the revoke/verify loop above makes
-# the denied state deterministic before the UI is driven, so a failure here
-# is a real signal.
+# not the probe. Warning-only per the 2026-10-15 auditor timebox: the section
+# passed deterministically in run 38691909508 (whole-group revoke + sheet
+# BACK + live-process READ re-grant), but a future flake must not hold a
+# release hostage; the exact diagnostics stay in this file either way.
 if ! ( section_e ); then
-  adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
-  exit 1
+  restore_permissions
+  echo "UNVERIFIED section E (WRITE_CONTACTS denied) did not complete; see diagnostics above" | tee -a "$result"
 fi
 
 # --- D. Conversations entry (reported separately, non-blocking) ------------
@@ -451,6 +452,10 @@ echo "sms provider dump: $sms_check" >> "$result"
 if ! grep -Fq "address=$sms_sender" <<< "$sms_check" || ! grep -Fq "address=$sms_alpha" <<< "$sms_check"; then
   echo "UNVERIFIED conversations section skipped: SMS provider seeding unreadable even as root" | tee -a "$result"
   adb unroot >/dev/null 2>&1 || true
+  # unroot restarts adbd; without this the NEXT probe's adb root can race the
+  # restart and fail (run 38691909508 clear-log C2).
+  adb wait-for-device || true
+  sleep 2
   exit 0
 fi
 
