@@ -68,18 +68,49 @@ capture_evidence() {
   adb pull /sdcard/c2-add-to-contact.png "$out/add-to-contact-screen.png" >/dev/null 2>&1 || true
   adb shell rm -f /sdcard/c2-add-to-contact.png 2>/dev/null || true
 }
-# audit-#11 item 3: unroot/wait lives in the EXIT trap so EVERY exit path
-# after adb root (FAIL, UNVERIFIED, or fall-through) releases root; inline
-# unroot calls were easy to miss on early exits.
+# audit-#11 item 3 + audit-#12 items 2+4: tracked SMS cleanup, unroot/wait
+# and the post-unroot uid check all live in the EXIT trap so EVERY exit path
+# after adb root (FAIL, UNVERIFIED, or fall-through) cleans up and releases
+# root. Every fallible command is guarded: set -euo pipefail must not abort
+# the trap before unroot.
 rooted=0
+seeded_sms_ids=""
 finish() {
   capture_evidence
   if [[ "$rooted" == "1" ]]; then
+    # audit-#12 item 2: delete only the tracked rows this probe inserted,
+    # each verified gone by exact id; failures are recorded, not hidden.
+    if [[ -n "$seeded_sms_ids" ]]; then
+      while IFS= read -r sms_id; do
+        [[ "$sms_id" =~ ^[0-9]+$ ]] || continue
+        del_out="$(adb shell content delete --uri content://sms --where "_id=$sms_id" 2>&1 | tr -d '\r' || true)"
+        if grep -qiE 'exception|denied|error' <<< "$del_out"; then
+          echo "FAIL cleanup: SMS provider delete of _id=$sms_id errored: $del_out" | tee -a "$result"
+          continue
+        fi
+        q_out="$(adb shell content query --uri content://sms --projection _id 2>&1 | tr -d '\r' || true)"
+        if grep -qiE 'exception|denied|error' <<< "$q_out"; then
+          echo "FAIL cleanup: SMS provider query after delete errored: $q_out" | tee -a "$result"
+          continue
+        fi
+        left="$(printf '%s\n' "$q_out" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -cx "$sms_id" || true)"
+        if [[ "$left" != "0" ]]; then
+          echo "FAIL cleanup: seeded SMS row _id=$sms_id still present after delete" | tee -a "$result"
+        fi
+      done <<< "$seeded_sms_ids"
+    fi
     adb unroot >/dev/null 2>&1 || true
     # unroot restarts adbd; without this the NEXT probe's adb root can race the
     # restart and fail (run 38691909508 clear-log C2).
     adb wait-for-device || true
     sleep 2
+    # audit-#12 item 4: prove root was actually dropped; record when it was not.
+    uid="$(adb shell id -u 2>/dev/null | tr -d '\r' || true)"
+    if [[ "$uid" == "0" ]]; then
+      echo "FAIL unroot did not drop root: id -u still 0" | tee -a "$result"
+    elif [[ -z "$uid" ]]; then
+      echo "WARN could not verify effective uid after unroot" | tee -a "$result"
+    fi
   fi
 }
 trap finish EXIT
@@ -453,6 +484,10 @@ rooted=1
 sleep 3
 adb wait-for-device
 now_ms="$(date +%s)000"
+# audit-#12 item 1: snapshot provider ids for the probe's addresses BEFORE
+# seeding; cleanup will delete only ids that appear after this baseline, so
+# pre-existing rows from those addresses are never touched.
+pre_sms_ids="$(adb shell content query --uri content://sms --projection _id:address 2>&1 | tr -d '\r' | grep -E "address=($sms_sender|$sms_alpha)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
 sms_out="$(adb shell content insert --uri content://sms \
   --bind address:s:"$sms_alpha" --bind body:s:Alert \
   --bind type:i:1 --bind date:l:"$now_ms" 2>&1 | tr -d '\r')"
@@ -469,11 +504,21 @@ if ! grep -Fq "address=$sms_sender" <<< "$sms_check" || ! grep -Fq "address=$sms
   exit 0   # EXIT trap unroots and waits (audit-#11 item 3)
 fi
 
-# audit-#11 item 2: remember exactly which rows this probe seeded so cleanup
-# deletes by tracked _id only - never by a fixed address, which could match a
-# real message.
-sms_ids_out="$(adb shell content query --uri content://sms --projection _id:address 2>&1 | tr -d '\r' || true)"
-seeded_sms_ids="$(printf '%s\n' "$sms_ids_out" | grep -E "address=($sms_sender|$sms_alpha)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
+# audit-#12 item 1: attribute rows to this probe by diffing against the
+# pre-seed baseline - an address match alone would also catch pre-existing
+# rows, which cleanup must never delete.
+post_sms_ids="$(adb shell content query --uri content://sms --projection _id:address 2>&1 | tr -d '\r' | grep -E "address=($sms_sender|$sms_alpha)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
+seeded_sms_ids=""
+while IFS= read -r cand; do
+  [[ "$cand" =~ ^[0-9]+$ ]] || continue
+  if ! grep -qx "$cand" <<< "$pre_sms_ids"; then
+    seeded_sms_ids+="$cand"$'\n'
+  fi
+done <<< "$post_sms_ids"
+seeded_sms_ids="${seeded_sms_ids%$'\n'}"
+if [[ -z "$seeded_sms_ids" ]]; then
+  echo "NOTE no NEW sms rows attributed to this probe (matching rows all pre-existed); cleanup will not touch them" >> "$result"
+fi
 
 adb shell pm grant "$package" android.permission.READ_SMS 2>/dev/null || true
 adb shell am force-stop "$package"
@@ -532,18 +577,5 @@ if marker_seen 'ADD_TO_CONTACT_PICKER_OPEN'; then
 fi
 echo "PASS alphanumeric SMS sender refused before picker, provider unchanged" | tee -a "$result"
 expect_foreground
-# Remove only the tracked seeded rows (still root) so later runs start
-# clean; with nothing seeded there is nothing to delete. A leftover is
-# reported, not failed on.
-if [[ -z "$seeded_sms_ids" ]]; then
-  echo "cleanup: no tracked seeded SMS rows; nothing to delete" >> "$result"
-else
-  while IFS= read -r sms_id; do
-    adb shell content delete --uri content://sms --where "_id=$sms_id" >/dev/null 2>&1 || true
-  done <<< "$seeded_sms_ids"
-fi
-sms_left="$(adb shell content query --uri content://sms --projection address 2>&1 | tr -d '\r' || true)"
-if grep -qE "address=($sms_sender|$sms_alpha)" <<< "$sms_left"; then
-  echo "WARN seeded SMS rows still present after cleanup" | tee -a "$result"
-fi
-# EXIT trap unroots and waits (audit-#11 item 3).
+# Tracked SMS cleanup, unroot/wait and the uid check run in the EXIT trap
+# (audit-#11 item 3; audit-#12 items 1, 2, 4).
