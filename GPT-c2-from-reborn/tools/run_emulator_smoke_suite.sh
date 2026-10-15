@@ -41,10 +41,11 @@ if bash GPT-c2-from-reborn/tools/smoke_add_to_contact_emulator.sh "$results"; th
     echo "::error::Add to contact core acceptance incomplete; see add-to-contact-results.txt"
     add_to_contact_core_failed=1
   fi
-  # Section E (WRITE_CONTACTS denied) is warning-only per the v2.03.x
-  # timebox: the startup permission sheet timing made it flaky twice.
+  # Section E (WRITE_CONTACTS denied) is blocking since v2.03.10: the probe
+  # verifies the denied state before driving the UI, so a failure is real.
   if ! grep -Fq 'PASS Add to contact refused without WRITE_CONTACTS' "$results/add-to-contact-results.txt"; then
-    echo "::warning::Section E (WRITE_CONTACTS denied) coverage incomplete; warning-only per timebox"
+    echo "::error::Section E (WRITE_CONTACTS denied) acceptance incomplete; see add-to-contact-results.txt"
+    add_to_contact_core_failed=1
   fi
   if ! grep -Fq 'PASS Conversations Add to contact appended sender number' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS alphanumeric SMS sender refused before picker' "$results/add-to-contact-results.txt"; then
@@ -57,7 +58,10 @@ fi
 clear_log_lists_failed=0
 if bash GPT-c2-from-reborn/tools/smoke_clear_log_lists_emulator.sh "$results"; then
   if ! grep -Fq 'PASS Message recipients list cleared via Clear log lists' "$results/clear-log-lists-results.txt" ||
-     ! grep -Fq 'PASS Missed calls list cleared via Clear log lists, provider unchanged' "$results/clear-log-lists-results.txt"; then
+     ! grep -Fq 'PASS Missed calls list cleared via Clear log lists, provider unchanged' "$results/clear-log-lists-results.txt" ||
+     ! grep -Fq 'PASS No/cancel on Clear log lists preserves recipients and missed call' "$results/clear-log-lists-results.txt" ||
+     ! grep -Fq 'PASS cleared state persists across force-stop and restart' "$results/clear-log-lists-results.txt" ||
+     ! grep -Fq 'PASS empty call lists show Back-only and labels return with records' "$results/clear-log-lists-results.txt"; then
     echo "::error::Clear log lists acceptance incomplete; see clear-log-lists-results.txt"
     clear_log_lists_failed=1
   fi
