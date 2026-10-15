@@ -3043,6 +3043,15 @@ public class C2PhoneView extends View {
             useSelectedSmsTemplate();
             return;
         }
+        if ("deletemessages".equals(page) && sel == 0) {
+            // HTML v6.343 confirmdelete flow: in-house "Delete all messages?"
+            // question box, Yes/No softkeys. Other rows keep their detail page.
+            refreshSmsFromPhone();
+            requestConfirm("deleteAllMessages", "Delete all messages?");
+            android.util.Log.i("C2Messages",
+                    "DELETE_ALL_MESSAGES_CONFIRM visible=" + deviceSms.size());
+            return;
+        }
         if (Arrays.asList("outbox","reports","email","ims","voicemessages","infomessages","servicecommands","deletemessages","messagesettings").contains(page)) {
             detailTitle = itemsFor(page)[sel];
             if ("outbox".equals(page)) detailText = "Outbox records loaded: "
@@ -7176,6 +7185,33 @@ public class C2PhoneView extends View {
             refreshSmsFromPhone();
             if ("messageRead".equals(page)) back();
             showNotice("SMS hidden in app");
+        } else if ("deleteAllMessages".equals(action)) {
+            // Hide-only bulk delete (parent direction 2026-10-15, pending
+            // Moti's real-vs-hide answer): every visible provider SMS joins
+            // the hidden set - phone SMS records stay untouched, matching
+            // deleteSms. App-local drafts and saved templates are cleared,
+            // matching the HTML v6.343 confirmdelete handler, which also
+            // lands on the Messaging menu with "Delete messages" selected.
+            int hidden = 0;
+            for (AndroidBackend.DeviceSms m : deviceSms)
+                if (hiddenSmsIds.add(m.id)) hidden++;
+            int draftCount = drafts.size();
+            drafts.clear();
+            saveDrafts();
+            int savedCount = savedSmsTemplates.size();
+            savedSmsTemplates.clear();
+            saveStringList("sms_templates_v1", savedSmsTemplates);
+            markedSmsIds.clear();
+            markedThreadIds.clear();
+            saveLongSet("sms_hidden", hiddenSmsIds);
+            refreshSmsFromPhone();
+            android.util.Log.i("C2Messages",
+                    "DELETE_ALL_MESSAGES hidden=" + hidden
+                            + " drafts=" + draftCount + " saved=" + savedCount);
+            history.clear();
+            page = "messaging";
+            sel = 12;
+            showNotice("Messages deleted");
         } else if ("deleteMarkedContacts".equals(action)) {
             if (demoMode) {
                 markedContactIndices.clear();
