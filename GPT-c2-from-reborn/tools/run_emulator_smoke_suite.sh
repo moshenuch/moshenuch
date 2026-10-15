@@ -54,6 +54,21 @@ else
   echo "::error::Add to contact core acceptance failed; see add-to-contact-results.txt"
   add_to_contact_core_failed=1
 fi
+clear_log_lists_failed=0
+if bash GPT-c2-from-reborn/tools/smoke_clear_log_lists_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS Message recipients list cleared via Clear log lists' "$results/clear-log-lists-results.txt" ||
+     ! grep -Fq 'PASS Missed calls list cleared via Clear log lists, provider unchanged' "$results/clear-log-lists-results.txt"; then
+    echo "::error::Clear log lists acceptance incomplete; see clear-log-lists-results.txt"
+    clear_log_lists_failed=1
+  fi
+else
+  echo "::error::Clear log lists acceptance failed; see clear-log-lists-results.txt"
+  clear_log_lists_failed=1
+fi
+if [[ -s "$results/clear-log-lists-results.txt" ]]; then
+  echo "===== clear-log-lists-results.txt ====="
+  cat "$results/clear-log-lists-results.txt" || true
+fi
 msg_recipients_failed=0
 if bash GPT-c2-from-reborn/tools/smoke_msg_recipients_emulator.sh "$results"; then
   if ! grep -Fq 'PASS empty Msg. recipients stays on Log with No numbers notice' "$results/msg-recipients-results.txt" ||
@@ -91,6 +106,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo
     cat "$results/android-back-results.txt"
     echo
+    echo "### C2 Clear log lists acceptance"
+    echo
+    if [[ -s "$results/clear-log-lists-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/clear-log-lists-results.txt" || true
+    else
+      echo "UNVERIFIED: Clear log lists probe did not produce a report."
+    fi
+    echo
     echo "### C2 Msg. recipients acceptance"
     echo
     if [[ -s "$results/msg-recipients-results.txt" ]]; then
@@ -118,6 +141,6 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" ]]; then
+if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" || "${clear_log_lists_failed:-0}" == "1" ]]; then
   exit 1
 fi
