@@ -114,6 +114,8 @@ cleanup_state() {
     adb shell content delete --uri content://call_log/calls --where "_id=$inserted_id_global" >/dev/null 2>&1 || true
     rm -f "$out/c2_inserted_id.txt"
   fi
+  adb unroot >/dev/null 2>&1 || true
+  adb wait-for-device || true
 }
 trap cleanup_state EXIT
 adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' > "$backup" || true
@@ -167,6 +169,16 @@ done
   section="C2"
   adb shell am force-stop "$package" || true
   now_ms="$(adb shell date +%s | tr -d '\r')000"
+  # The call_log provider refuses the shell user (uid 2000 lacks the call-log
+  # permissions) and the app does not declare WRITE_CALL_LOG, so seed as root:
+  # the CI emulator (google_apis userdebug) allows adb root. Root is scoped to
+  # this section; the EXIT trap unroots.
+  if ! adb root 2>&1 | grep -qi 'root'; then
+    echo "FAIL[C2] adb root unavailable on this emulator image" | tee -a "$result"
+    exit 1
+  fi
+  sleep 3
+  adb wait-for-device
   before_missed="$(adb shell content query --uri content://call_log/calls --projection number:type 2>&1 | tr -d '\r' | grep -c 'type=3' || true)"
   expected_hidden=$((before_missed + 1))
   insert_out="$(adb shell content insert --uri content://call_log/calls \
