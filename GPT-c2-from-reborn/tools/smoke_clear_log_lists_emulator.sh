@@ -210,9 +210,14 @@ done
     echo "FAIL[C2] provider row _id=$inserted_id changed by app-side clear: now='$after'" | tee -a "$result"
     exit 1
   fi
-  # in-app Missed calls page must be empty now
+  # In-app Missed calls page must be empty now. Back restores the Log
+  # selection (row 5, Clear log lists), so step UP four times to row 1
+  # (Missed calls) explicitly.
   tap RSK
-  tap DOWN
+  tap UP
+  tap UP
+  tap UP
+  tap UP
   tap OK
   sleep 1
   shot clear-log-lists-missed-empty
