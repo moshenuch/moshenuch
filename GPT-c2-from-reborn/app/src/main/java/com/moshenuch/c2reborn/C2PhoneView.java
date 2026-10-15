@@ -7436,12 +7436,20 @@ public class C2PhoneView extends View {
                 boolean scanFailed = false;
                 if (move && dir == 0 && deviceContactsActive) {
                     java.util.HashSet<Long> fresh = backend.loadContactsWithExtraData();
-                    if (fresh == null) {
+                    // Audit #18: multi-number status must also come from
+                    // fresh provider data at Yes time; the page-load
+                    // contactNumbersById cache could miss a number added
+                    // after the confirm and Move would lose it.
+                    java.util.HashMap<Long, ArrayList<String>> freshNumbers =
+                            backend.loadContactNumbersById();
+                    if (fresh == null || freshNumbers == null) {
                         scanFailed = true;
                     } else {
                         contactsWithExtraData.clear();
                         contactsWithExtraData.addAll(fresh);
                         extraDataScanOk = true;
+                        contactNumbersById.clear();
+                        contactNumbersById.putAll(freshNumbers);
                     }
                 }
                 // Counts-only diagnostic (CI acceptance found the destination
