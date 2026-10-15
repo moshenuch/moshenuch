@@ -151,7 +151,7 @@ finish() {
     local reseeded=0 name ncount
     while IFS=$'\t' read -r name ncount; do
       [[ -n "$name" ]] || continue
-      if ! provider_dump "$out/.pd-trap-raw.txt" | grep -qF "$name	"; then
+      if ! provider_dump "$out/.pd-trap-raw.txt" | grep -F "$name	">/dev/null; then
         local rid
         rid="$(adb shell content insert --uri content://com.android.contacts/raw_contacts \
           --bind starred:i:0 2>&1 | tr -d '\r' | grep -oE 'raw_contact_id=[0-9]+|/[0-9]+$' | grep -oE '[0-9]+' | head -1 || true)"
@@ -211,7 +211,7 @@ expect_foreground() {
   fi
 }
 marker_seen() {
-  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   local tries=0
@@ -384,17 +384,17 @@ if ! grep -qF "$mov_multi	2" "$out/move-copy-post-seed-dump.tsv"; then
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 2>&1 | tr -d '\r' | grep -qF "data1=$email_extra"; then
+     --projection data1 2>&1 | tr -d '\r' | grep -F "data1=$email_extra">/dev/null; then
   echo "UNVERIFIED extra-data seed $mov_extra is missing its email row ($email_extra)" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data3 2>&1 | tr -d '\r' | grep -qF "data3=$label_custom"; then
+     --projection data3 2>&1 | tr -d '\r' | grep -F "data3=$label_custom">/dev/null; then
   echo "UNVERIFIED custom-label seed $mov_label is missing its label row ($label_custom)" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/raw_contacts \
-     --projection account_name 2>&1 | tr -d '\r' | grep -qF "account_name=$sync_account"; then
+     --projection account_name 2>&1 | tr -d '\r' | grep -F "account_name=$sync_account">/dev/null; then
   echo "UNVERIFIED account-backed seed $mov_sync is missing its account ($sync_account)" | tee -a "$result"
   exit 1
 fi
@@ -490,7 +490,7 @@ if [[ "$f_provider" != "$((baseline_total + 6))" ]]; then
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 2>&1 | tr -d '\r' | grep -qE "data1=$mov_one\$"; then
+     --projection data1 2>&1 | tr -d '\r' | grep -E "data1=$mov_one\$">/dev/null; then
   echo "FAIL rollback did not restore $mov_one to the provider" | tee -a "$result"
   exit 1
 fi
@@ -531,37 +531,37 @@ if [[ "$after_move" != "$((multi_total + 4))" ]]; then
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
      --projection data1 2>&1 \
-     | tr -d '\r' | grep -qE "data1=$mov_multi\$"; then
+     | tr -d '\r' | grep -E "data1=$mov_multi\$">/dev/null; then
   echo "FAIL multi-number contact $mov_multi is gone after Move" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
      --projection data1 2>&1 \
-     | tr -d '\r' | grep -qF "data1=$email_extra"; then
+     | tr -d '\r' | grep -F "data1=$email_extra">/dev/null; then
   echo "FAIL extra-data contact $mov_extra lost its email row after Move" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
      --projection data3 2>&1 \
-     | tr -d '\r' | grep -qF "data3=$label_custom"; then
+     | tr -d '\r' | grep -F "data3=$label_custom">/dev/null; then
   echo "FAIL custom-label contact $mov_label lost its label row after Move" | tee -a "$result"
   exit 1
 fi
 echo 'PASS extra-data contact kept its email row after Move' | tee -a "$result"
 echo 'PASS custom-label contact kept its label row after Move' | tee -a "$result"
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 2>&1 | tr -d '\r' | grep -qE "data1=$mov_sync\$"; then
+     --projection data1 2>&1 | tr -d '\r' | grep -E "data1=$mov_sync\$">/dev/null; then
   echo "FAIL account-backed contact $mov_sync missing from the provider after Move" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/raw_contacts \
-     --projection account_name 2>&1 | tr -d '\r' | grep -qF "account_name=$sync_account"; then
+     --projection account_name 2>&1 | tr -d '\r' | grep -F "account_name=$sync_account">/dev/null; then
   echo "FAIL account-backed contact $mov_sync lost its account row after Move" | tee -a "$result"
   exit 1
 fi
 echo 'PASS account-backed contact kept out of Move' | tee -a "$result"
 if ! adb shell content query --uri content://com.android.contacts/data \
-     --projection data1 2>&1 | tr -d '\r' | grep -qF "data1=$num_noname"; then
+     --projection data1 2>&1 | tr -d '\r' | grep -F "data1=$num_noname">/dev/null; then
   echo "FAIL nameless contact ($num_noname) missing from the provider after Move" | tee -a "$result"
   exit 1
 fi
@@ -571,19 +571,19 @@ if [[ "$sim_after_move" != "$move_eligible" ]]; then
   echo "FAIL in-app SIM list holds $sim_after_move entries, expected $move_eligible" | tee -a "$result"
   exit 1
 fi
-if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_extra"; then
+if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_extra">/dev/null; then
   echo "FAIL extra-data contact $mov_extra landed in the SIM list on Move" | tee -a "$result"
   exit 1
 fi
-if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_label"; then
+if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_label">/dev/null; then
   echo "FAIL custom-label contact $mov_label landed in the SIM list on Move" | tee -a "$result"
   exit 1
 fi
-if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_sync"; then
+if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_sync">/dev/null; then
   echo "FAIL account-backed contact $mov_sync landed in the SIM list on Move" | tee -a "$result"
   exit 1
 fi
-if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$num_noname"; then
+if adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$num_noname">/dev/null; then
   echo "FAIL nameless contact ($num_noname) landed in the SIM list on Move" | tee -a "$result"
   exit 1
 fi
@@ -643,37 +643,37 @@ if [[ "$sim_after_copy" != "$singles" ]]; then
   echo "FAIL in-app SIM list holds $sim_after_copy entries after copy, expected $singles" | tee -a "$result"
   exit 1
 fi
-if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_extra"; then
+if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_extra">/dev/null; then
   echo "FAIL extra-data contact $mov_extra missing from the SIM list after Copy" | tee -a "$result"
   exit 1
 fi
-if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_label"; then
+if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_label">/dev/null; then
   echo "FAIL custom-label contact $mov_label missing from the SIM list after Copy" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
      --projection data3 2>&1 \
-     | tr -d '\r' | grep -qF "data3=$label_custom"; then
+     | tr -d '\r' | grep -F "data3=$label_custom">/dev/null; then
   echo "FAIL Copy disturbed the custom-label contact original (label row gone)" | tee -a "$result"
   exit 1
 fi
-if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$mov_sync"; then
+if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$mov_sync">/dev/null; then
   echo "FAIL account-backed contact $mov_sync missing from the SIM list after Copy" | tee -a "$result"
   exit 1
 fi
-if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -qF "$num_noname"; then
+if ! adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -F "$num_noname">/dev/null; then
   echo "FAIL nameless contact ($num_noname) missing from the SIM list after Copy" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/raw_contacts \
-     --projection account_name 2>&1 | tr -d '\r' | grep -qF "account_name=$sync_account"; then
+     --projection account_name 2>&1 | tr -d '\r' | grep -F "account_name=$sync_account">/dev/null; then
   echo "FAIL Copy disturbed the account-backed contact original (account row gone)" | tee -a "$result"
   exit 1
 fi
 echo 'PASS custom-label contact copied to SIM as name+number only' | tee -a "$result"
 if ! adb shell content query --uri content://com.android.contacts/data \
      --projection data1 2>&1 \
-     | tr -d '\r' | grep -qF "data1=$email_extra"; then
+     | tr -d '\r' | grep -F "data1=$email_extra">/dev/null; then
   echo "FAIL Copy disturbed the extra-data contact original (email row gone)" | tee -a "$result"
   exit 1
 fi
@@ -845,7 +845,7 @@ print(json.dumps(entries))
     exit 1
   fi
   # The visible notice text, as logged at the moment it was shown.
-  if ! adb logcat -d -s C2Contacts:I 2>/dev/null | grep -qF 'MOVE_CONTACTS_NOTICE text=Contacts changed; undo incomplete'; then
+  if ! adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F 'MOVE_CONTACTS_NOTICE text=Contacts changed; undo incomplete'>/dev/null; then
     echo 'FAIL undo-incomplete notice text was not logged when shown' | tee -a "$result"
     exit 1
   fi
