@@ -2293,10 +2293,15 @@ public class C2PhoneView extends View {
             return new String[]{"Options", voiceRecorder.isRecording() ? "Stop" : "Record", "Back"};
         if ("voiceRecordings".equals(page))
             return new String[]{"Options", voiceRecorder.isPlaying() ? "Stop" : "Play", "Back"};
-        if ("contactsNames".equals(page) ||
-                "calllog".equals(page) || "missed".equals(page) ||
-                "received".equals(page) || "dialled".equals(page))
+        if ("contactsNames".equals(page))
             return new String[]{"Options", "Details", "Back"};
+        if ("calllog".equals(page) || "missed".equals(page) ||
+                "received".equals(page) || "dialled".equals(page))
+            // Reference empty-list convention: only Back (inbox, drafts,
+            // outbox, sent, saved all do soft('','','Back')).
+            return callRecordForPage(page, 0) == null
+                    ? new String[]{"", "", "Back"}
+                    : new String[]{"Options", "Details", "Back"};
         if ("recipients".equals(page)) return new String[]{"", "Call", "Back"};
         if ("clearloglists".equals(page)) return new String[]{"", "Select", "Back"};
         if ("conversations".equals(page)) return new String[]{"Options", "Open", "Back"};
@@ -2371,8 +2376,13 @@ public class C2PhoneView extends View {
     private void drawConfirm(Canvas c) {
         // Nokia-style Canvas overlay: no Android AlertDialog or stock
         // "Confirm" heading. The normal C2 softkey bar supplies Yes/No.
+        // Dim the page behind the box (reference dimBackdrop): the list
+        // must not stay crisp around the confirm, so no half-clipped row
+        // shows. Soft bar (y>=286) stays bright for Yes/No.
         p.setShader(null);
         p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.argb(140, 0, 0, 0));
+        c.drawRect(0, 0, 240, 286, p);
         p.setColor(Color.rgb(7, 15, 25));
         c.drawRect(11, 93, 229, 208, p);
         p.setColor(Color.rgb(197, 211, 225));
