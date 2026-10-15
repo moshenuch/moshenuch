@@ -112,7 +112,13 @@ cleanup_state() {
   inserted_id_global="$(cat "$out/c2_inserted_id.txt" 2>/dev/null || true)"
   if [[ -n "$inserted_id_global" ]]; then
     adb shell content delete --uri content://call_log/calls --where "_id=$inserted_id_global" >/dev/null 2>&1 || true
+    leftover="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r' | grep -c "_id=$inserted_id_global" || true)"
     rm -f "$out/c2_inserted_id.txt"
+    if [[ "$leftover" != "0" ]]; then
+      echo "FAIL cleanup: seeded call-log row _id=$inserted_id_global still present after delete" | tee -a "$result"
+      exit 1
+    fi
+    echo "PASS seeded call-log row _id=$inserted_id_global deleted" | tee -a "$result"
   fi
   adb unroot >/dev/null 2>&1 || true
   adb wait-for-device || true
