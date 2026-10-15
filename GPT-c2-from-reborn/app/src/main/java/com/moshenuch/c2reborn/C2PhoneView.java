@@ -95,8 +95,11 @@ public class C2PhoneView extends View {
     // Android contact IDs map to all their numbers; one phonebook row per ID.
     private final HashMap<Long, ArrayList<String>> contactNumbersById = new HashMap<>();
     // Aggregates carrying data beyond name + one number (email, address,
-    // note, photo, extra raw contacts): skipped on Move to SIM (audit #16).
+    // note, photo, extra raw contacts, custom phone labels): skipped on
+    // Move to SIM (audit #16/#17). extraDataScanOk=false means the last
+    // scan failed and Move must refuse (fail closed).
     private final HashSet<Long> contactsWithExtraData = new HashSet<>();
+    private boolean extraDataScanOk = false;
     private final HashMap<Long, ArrayList<Long>> contactNumberRawIds = new HashMap<>();
     private final HashMap<Long, ArrayList<Long>> contactNumberDataIds = new HashMap<>();
     private long editTargetRawId = -1L, editTargetDataId = -1L;
@@ -472,6 +475,7 @@ public class C2PhoneView extends View {
             contacts.clear();
             contactNumbersById.clear();
             contactsWithExtraData.clear();
+            extraDataScanOk = true;
             markedContactIndices.clear();
             for (NativeAuditFixtures.ContactRow sample : NativeAuditFixtures.contacts()) {
                 contacts.add(new Contact(sample.name, sample.numbers[0],
@@ -504,7 +508,9 @@ public class C2PhoneView extends View {
             contactNumberRawIds.put(c.contactId, new ArrayList<>(c.numberRawIds));
             contactNumberDataIds.put(c.contactId, new ArrayList<>(c.numberDataIds));
         }
-        contactsWithExtraData.addAll(backend.loadContactsWithExtraData());
+        java.util.HashSet<Long> extraData = backend.loadContactsWithExtraData();
+        extraDataScanOk = extraData != null;
+        if (extraData != null) contactsWithExtraData.addAll(extraData);
         contactIndex = Math.min(contactIndex, Math.max(0, contacts.size() - 1));
     }
 
@@ -847,18 +853,35 @@ public class C2PhoneView extends View {
         return deviceContactsActive && contactsWithExtraData.contains(c.contactId);
     }
 
-    private String simSkipReason(int skippedMulti, int skippedData) {
-        return skippedMulti > 0 && skippedData > 0
-                ? "multiple numbers or extra data"
-                : skippedData > 0 ? "extra data" : "multiple numbers";
+    private String simSkipReason(int skippedMulti, int skippedData, int skippedNoName) {
+        String reason = "";
+        if (skippedMulti > 0) reason = "multiple numbers";
+        if (skippedData > 0) reason += (reason.isEmpty() ? "" : " or ") + "extra data";
+        if (skippedNoName > 0) reason += (reason.isEmpty() ? "" : " or ") + "no name";
+        return reason;
+    }
+
+    // A contact without a usable name cannot make the SIM round trip: the
+    // provider fills an empty display name with the number itself, and the
+    // SIM->phone return path refuses a blank name, which would strand the
+    // entry. Move excludes these in both directions (audit #17).
+    private boolean contactUnmovable(Contact c) {
+        String name = c.name == null ? "" : c.name.trim();
+        String number = c.number == null ? "" : c.number.trim();
+        // The provider may format the number it substitutes for a missing
+        // name, so compare normalized forms, not raw strings.
+        return name.isEmpty() || number.isEmpty()
+                || normalizeSimNumber(name).equals(normalizeSimNumber(number));
     }
 
     private int countSimEligible(ArrayList<Contact> source, boolean toSim, boolean move) {
-        if (!toSim) return source.size();
         int n = 0;
         for (Contact c : source) {
-            if (isMultiNumberContact(c)) continue;
-            if (move && contactHasExtraData(c)) continue;
+            if (move && contactUnmovable(c)) continue;
+            if (toSim) {
+                if (isMultiNumberContact(c)) continue;
+                if (move && contactHasExtraData(c)) continue;
+            }
             n++;
         }
         return n;
@@ -3241,38 +3264,58 @@ public class C2PhoneView extends View {
                         (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=empty dir=" + sel);
                 return;
             }
+            // Fail closed when the extra-data safety scan did not complete
+            // (audit #17): never offer a Move that skips nothing by mistake.
+            if (move && sel == 0 && deviceContactsActive && !extraDataScanOk) {
+                // Plain factual wording; no HTML source, disclosed.
+                showNotice("Contacts could not be checked; try again");
+                android.util.Log.i("C2Contacts",
+                        "MOVE_CONTACTS_REFUSED reason=scan_incomplete dir=" + sel);
+                return;
+            }
             int count = countSimEligible(source, sel == 0, move);
             if (count == 0) {
                 boolean anyMulti = false;
                 boolean anyData = false;
+                boolean anyNoName = false;
                 for (Contact c : source) {
-                    if (isMultiNumberContact(c)) anyMulti = true;
+                    if (move && contactUnmovable(c)) anyNoName = true;
+                    else if (isMultiNumberContact(c)) anyMulti = true;
                     else if (move && contactHasExtraData(c)) anyData = true;
                 }
                 // Only the multi-number wording comes from the HTML-era
-                // strings; the extra-data wordings are plain factual (no
-                // HTML source) and are disclosed with the change.
-                String reason = !anyMulti
-                        ? "Contacts with extra data cannot be moved to the SIM memory"
-                        : anyData
-                        ? "Contacts with multiple numbers or extra data cannot be moved to the SIM memory"
-                        : "Contacts with multiple numbers are not supported by the SIM memory";
+                // strings; the extra-data / no-name wordings are plain
+                // factual (no HTML source) and are disclosed with the change.
+                String reason;
+                String reasonCode;
+                if (anyMulti && !anyData && !anyNoName) {
+                    reason = "Contacts with multiple numbers are not supported by the SIM memory";
+                    reasonCode = "multinumber";
+                } else if (!anyMulti && anyData && !anyNoName) {
+                    reason = "Contacts with extra data cannot be moved to the SIM memory";
+                    reasonCode = "extradata";
+                } else if (!anyMulti && !anyData && anyNoName) {
+                    reason = "Contacts without a name cannot be moved to the SIM memory";
+                    reasonCode = "noname";
+                } else {
+                    reason = "These contacts cannot be moved to the SIM memory";
+                    reasonCode = "mixed";
+                }
                 showNotice(reason);
                 android.util.Log.i("C2Contacts",
                         (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason="
-                                + (!anyMulti ? "extradata" : anyData ? "mixed" : "multinumber")
-                                + " dir=" + sel);
+                                + reasonCode + " dir=" + sel);
                 return;
             }
             int skipMulti = 0;
             int skipData = 0;
-            if (sel == 0) {
-                for (Contact c : source) {
-                    if (isMultiNumberContact(c)) skipMulti++;
-                    else if (move && contactHasExtraData(c)) skipData++;
-                }
+            int skipNoName = 0;
+            for (Contact c : source) {
+                if (move && contactUnmovable(c)) skipNoName++;
+                else if (sel == 0 && isMultiNumberContact(c)) skipMulti++;
+                else if (move && sel == 0 && contactHasExtraData(c)) skipData++;
             }
-            int skipTotal = skipMulti + skipData;
+            int skipTotal = skipMulti + skipData + skipNoName;
             requestConfirm((move ? "moveContacts" : "copyContacts") + sel,
                     (move ? "Move contacts?" : "Copy contacts?")
                             + "\n\n" + count
@@ -3280,7 +3323,7 @@ public class C2PhoneView extends View {
                             // Skip disclosure added for audit #16 (no HTML
                             // source; plain factual wording, disclosed).
                             + (skipTotal > 0
-                                    ? "\n" + skipTotal + " skipped (" + simSkipReason(skipMulti, skipData) + ")"
+                                    ? "\n" + skipTotal + " skipped (" + simSkipReason(skipMulti, skipData, skipNoName) + ")"
                                     : ""));
             android.util.Log.i("C2Contacts",
                     (move ? "MOVE_CONTACTS_CONFIRM" : "COPY_CONTACTS_CONFIRM")
@@ -7384,6 +7427,20 @@ public class C2PhoneView extends View {
                 // source entries would both transfer into duplicates the
                 // prototype cannot represent. Wording drops "destination"
                 // from the HTML string; no HTML source, disclosed.
+                // Revalidate the extra-data safety set at commit time
+                // (audit #17): the page-load scan may be stale, and a failed
+                // scan refuses the Move instead of deleting unscanned data.
+                boolean scanFailed = false;
+                if (move && dir == 0 && deviceContactsActive) {
+                    java.util.HashSet<Long> fresh = backend.loadContactsWithExtraData();
+                    if (fresh == null) {
+                        scanFailed = true;
+                    } else {
+                        contactsWithExtraData.clear();
+                        contactsWithExtraData.addAll(fresh);
+                        extraDataScanOk = true;
+                    }
+                }
                 // Counts-only diagnostic (CI acceptance found the destination
                 // refusal not firing; this pinpoints fixture-load vs
                 // name-empty vs normalization without logging contact data).
@@ -7428,7 +7485,12 @@ public class C2PhoneView extends View {
                         if (duplicate) break;
                     }
                 }
-                if (sourceDuplicate) {
+                if (scanFailed) {
+                    // Plain factual wording; no HTML source, disclosed.
+                    showNotice("Contacts could not be checked; try again");
+                    android.util.Log.i("C2Contacts",
+                            "MOVE_CONTACTS_REFUSED reason=scan_incomplete dir=" + dirName);
+                } else if (sourceDuplicate) {
                     showNotice("Duplicate contacts not supported in this prototype");
                     android.util.Log.i("C2Contacts",
                             (move ? "MOVE" : "COPY") + "_CONTACTS_REFUSED reason=duplicate_source dir=" + dirName);
@@ -7442,11 +7504,16 @@ public class C2PhoneView extends View {
                     int failed = 0;
                     int skippedMulti = 0;
                     int skippedData = 0;
+                    int skippedNoName = 0;
                     ArrayList<Contact> completed = new ArrayList<>();
                     // Raw ids this batch inserted (SIM->phone), aligned with
                     // completed; rollback deletes exactly these (audit #16).
                     ArrayList<Long> completedRawIds = new ArrayList<>();
                     for (Contact c : new ArrayList<>(source)) {
+                        if (move && contactUnmovable(c)) {
+                            skippedNoName++;
+                            continue;
+                        }
                         if (dir == 0 && isMultiNumberContact(c)) {
                             skippedMulti++;
                             continue;
@@ -7539,17 +7606,22 @@ public class C2PhoneView extends View {
                                 (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
                                         + " dir=" + dirName
                                         + " done=" + done + " failed=" + failed
-                                        + " skipped=" + (skippedMulti + skippedData)
+                                        + " skipped=" + (skippedMulti + skippedData + skippedNoName)
                                         + " skipped_multi=" + skippedMulti
                                         + " skipped_data=" + skippedData
+                                        + " skipped_noname=" + skippedNoName
                                         + " rolled_back=" + (rolledBack ? 1 : 0)
                                         + " undone=" + undone);
                         // "Contacts changed; try again" is the HTML's own
                         // changed-list error. The undo-incomplete wording is
                         // plain factual (no HTML source), disclosed (audit #16).
-                        showNotice(rolledBack
+                        String failureNotice = rolledBack
                                 ? "Contacts changed; try again"
-                                : "Contacts changed; undo incomplete");
+                                : "Contacts changed; undo incomplete";
+                        // Logged so the probe can assert the exact notice
+                        // text shown to the user (audit #17).
+                        android.util.Log.i("C2Contacts", "MOVE_CONTACTS_NOTICE text=" + failureNotice);
+                        showNotice(failureNotice);
                     } else {
                         saveSimContacts();
                         if (deviceContactsActive) refreshContactsFromPhone();
@@ -7558,13 +7630,14 @@ public class C2PhoneView extends View {
                                 (move ? "MOVE_CONTACTS" : "COPY_CONTACTS")
                                         + " dir=" + dirName
                                         + " done=" + done + " failed=" + failed
-                                        + " skipped=" + (skippedMulti + skippedData)
+                                        + " skipped=" + (skippedMulti + skippedData + skippedNoName)
                                         + " skipped_multi=" + skippedMulti
-                                        + " skipped_data=" + skippedData);
-                        int skipped = skippedMulti + skippedData;
+                                        + " skipped_data=" + skippedData
+                                        + " skipped_noname=" + skippedNoName);
+                        int skipped = skippedMulti + skippedData + skippedNoName;
                         showNotice(done + (move ? " contacts moved" : " contacts copied")
                                 + (skipped > 0
-                                        ? "; " + skipped + " skipped (" + simSkipReason(skippedMulti, skippedData) + ")"
+                                        ? "; " + skipped + " skipped (" + simSkipReason(skippedMulti, skippedData, skippedNoName) + ")"
                                         : ""));
                     }
                 }
