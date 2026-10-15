@@ -980,15 +980,37 @@ fi
 echo 'PASS within-source duplicate batch refused (duplicate_source)' | tee -a "$result"
 shot movecopy-dup-source-refused
 # Remove the duplicate fixtures so the trap count guard sees its 8 rows.
+# Run 38811686679 left one of the two raws behind (silent delete), so the
+# removal logs the delete output and retries until both raws are gone.
 dup_rows="$(adb shell content query --uri content://com.android.contacts/data \
   --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -E 'data1=AAAC2MoveDup' || true)"
-while IFS= read -r line; do
+sed 's/^/  DUPROW: /' <<< "$dup_rows" >> "$result"
+dup_ids="$(while IFS= read -r line; do
   [[ -n "$line" ]] || continue
-  rid="$(sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line")"
+  sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' <<< "$line"
+done <<< "$dup_rows" | sort -u)"
+if [[ "$(grep -c . <<< "$dup_ids" || true)" != "2" ]]; then
+  echo "UNVERIFIED expected 2 duplicate-fixture raw ids, got: ${dup_ids:-none}" | tee -a "$result"
+  exit 1
+fi
+while IFS= read -r rid; do
   [[ "$rid" =~ ^[0-9]+$ ]] || continue
-  adb shell content delete --uri content://com.android.contacts/raw_contacts \
-    --where "_id=$rid" >/dev/null 2>&1 || true
-done <<< "$dup_rows"
+  for try in 1 2 3; do
+    del_out="$(adb shell content delete --uri content://com.android.contacts/raw_contacts \
+      --where "_id=$rid" 2>&1 | tr -d '\r' || true)"
+    echo "  DUPDEL rid=$rid try=$try: $del_out" >> "$result"
+    gone="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
+      --projection _id --where "_id=$rid" 2>&1 | tr -d '\r' | grep -c . || true)"
+    [[ "$gone" == "0" ]] && break
+    sleep 1
+  done
+done <<< "$dup_ids"
+left="$(adb shell content query --uri content://com.android.contacts/data \
+  --projection raw_contact_id:data1 2>&1 | tr -d '\r' | grep -cE 'data1=AAAC2MoveDup' || true)"
+if [[ "$left" != "0" ]]; then
+  echo "UNVERIFIED duplicate fixture rows remaining after delete: $left" | tee -a "$result"
+  exit 1
+fi
 if [[ "$(raw_count)" != "$((baseline_total + 9))" ]]; then
   echo "UNVERIFIED duplicate fixture removal left $(raw_count) raw contacts, expected $((baseline_total + 9))" | tee -a "$result"
   exit 1
