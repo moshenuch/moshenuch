@@ -138,6 +138,24 @@ if [[ -s "$results/delete-all-messages-results.txt" ]]; then
   cat "$results/delete-all-messages-results.txt"
   echo "===== end delete-all-messages-results.txt ====="
 fi
+if bash GPT-c2-from-reborn/tools/smoke_move_copy_contacts_emulator.sh "$results"; then
+  if ! grep -Fq 'PASS Move phone->SIM emptied provider and SIM list holds all' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Move from empty phone memory refused with Selected memory empty' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Move SIM->phone restored provider and emptied SIM list' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Copy phone->SIM kept provider and copied' "$results/move-copy-contacts-results.txt" ||
+     ! grep -Fq 'PASS Copy contacts No left provider and SIM list unchanged' "$results/move-copy-contacts-results.txt"; then
+    echo "::error::Move/Copy contacts acceptance incomplete; see move-copy-contacts-results.txt"
+    move_copy_contacts_failed=1
+  fi
+else
+  echo "::error::Move/Copy contacts acceptance failed; see move-copy-contacts-results.txt"
+  move_copy_contacts_failed=1
+fi
+if [[ -s "$results/move-copy-contacts-results.txt" ]]; then
+  echo "===== move-copy-contacts-results.txt ====="
+  cat "$results/move-copy-contacts-results.txt"
+  echo "===== end move-copy-contacts-results.txt ====="
+fi
 if ! bash GPT-c2-from-reborn/tools/smoke_video_report_emulator.sh "$results"; then
   echo "::warning::Video report receiver test failed"
 fi
@@ -193,6 +211,14 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
       echo "UNVERIFIED: Delete messages probe did not produce a report."
     fi
     echo
+    echo "### C2 Move/Copy contacts acceptance"
+    echo
+    if [[ -s "$results/move-copy-contacts-results.txt" ]]; then
+      grep -E '^(PASS|FAIL|UNVERIFIED)' "$results/move-copy-contacts-results.txt" || true
+    else
+      echo "UNVERIFIED: Move/Copy contacts probe did not produce a report."
+    fi
+    echo
     echo "### C2 Photo Delete Yes acceptance"
     echo
     if [[ -s "$results/photo-delete-results.txt" ]]; then
@@ -204,6 +230,6 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "The emulator cannot establish Oppo handset recording, audible microphone capture, or physical system gesture behaviour."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" || "${clear_log_lists_failed:-0}" == "1" || "${delete_all_contacts_failed:-0}" == "1" || "${delete_all_messages_failed:-0}" == "1" ]]; then
+if [[ "${add_to_contact_core_failed:-0}" == "1" || "${msg_recipients_failed:-0}" == "1" || "${clear_log_lists_failed:-0}" == "1" || "${delete_all_contacts_failed:-0}" == "1" || "${delete_all_messages_failed:-0}" == "1" || "${move_copy_contacts_failed:-0}" == "1" ]]; then
   exit 1
 fi
