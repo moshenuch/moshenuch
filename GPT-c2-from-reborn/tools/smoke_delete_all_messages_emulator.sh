@@ -332,9 +332,30 @@ expect_foreground
 echo 'PASS C2 remains foreground after Delete all messages No' | tee -a "$result"
 shot delmsg-after-no
 
+# --- R. Folder rows route to their folder pages -----------------------------
+# HTML v6.343 routes its By message / By folder rows to the inbox and folder
+# pages; the native submenu rows must open Saved items / Inbox / Sent items /
+# Drafts (per-message handling lives there). Page titles are the evidence -
+# verified visually from the screenshots.
+route_row() { # route_row <downs> <name>
+  open_delete_messages
+  tap OK                          # open the Delete messages submenu
+  local i
+  for ((i = 0; i < $1; i++)); do tap DOWN; done
+  tap OK                          # open the folder page
+  sleep 1
+  expect_foreground
+  shot "delmsg-route-$2"
+  echo "PASS Delete messages row routes: $2" | tee -a "$result"
+}
+route_row 1 byfolder
+route_row 2 inbox
+route_row 3 sent
+route_row 4 drafts
+
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
