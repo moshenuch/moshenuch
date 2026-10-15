@@ -73,6 +73,16 @@ trap capture_evidence EXIT
 foreground_package() {
   adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -1 || true
 }
+# Restore every runtime permission the suite relies on. BACK-denying the
+# startup sheet only touches the missing groups, but re-grant the full set
+# unconditionally so a wider denial can never leak into later probes.
+restore_permissions() {
+  for perm in READ_CONTACTS WRITE_CONTACTS READ_SMS SEND_SMS RECEIVE_SMS \
+              CALL_PHONE ANSWER_PHONE_CALLS READ_CALL_LOG \
+              READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE; do
+    adb shell pm grant "$package" "android.permission.$perm" 2>/dev/null || true
+  done
+}
 expect_foreground() {
   local fg
   fg="$(foreground_package)"
@@ -289,54 +299,86 @@ expect_foreground
 # (runs 38590863441, 38605594546), which is a probe-orchestration race, not an
 # app bypass - the refusal branch itself is covered by the wiring audit.
 section_e() {
-# Deterministic pre-state: revoke, relaunch, answer the startup sheet with
-# Deny, then VERIFY the permission is still denied. The sheet race can
-# re-grant WRITE_CONTACTS through a mistimed tap on Allow (runs 38590863441,
-# 38605594546); on a re-grant the whole round is retried (bounded), and if no
-# round lands a verified-denied state the section FAILS instead of testing
-# the wrong state.
+# Deterministic pre-state: revoke WRITE_CONTACTS, relaunch, and dismiss the
+# startup permission sheet with BACK (on GrantPermissionsActivity BACK denies
+# the request). The sheet is detected by FOREGROUND ACTIVITY, never by
+# uiautomator text: on this emulator image the sheet displays ~6s after the
+# cold start, so the old text-dump polling declared "sheet clear" before the
+# sheet was even visible (run 38684431984: 3 rounds x 8 dumps, no Deny found)
+# and earlier runs mistapped Allow (38590863441, 38605594546). After each
+# round the granted state AND grant flags are logged: USER_SET means the
+# sheet was answered; no USER_SET means a programmatic grant. A round only
+# counts when the state is verified denied AND C2 is foreground for the UI
+# drive; anything else is retried (bounded), then the section FAILS.
 denied_ready=0
 for round in 1 2 3; do
 adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 sleep 1
-perm_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(WRITE|READ)_CONTACTS' | head -4 | tr -d '\r')"
-echo "permission state after revoke (round $round): $perm_state" | tee -a "$result"
+pre_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS' | tr -d '\r')"
+echo "WRITE_CONTACTS after revoke (round $round): $pre_state" | tee -a "$result"
+if ! grep -q 'granted=false' <<< "$pre_state"; then
+  echo "FAIL WRITE_CONTACTS revoke did not take (round $round)" | tee -a "$result"; exit 1
+fi
 adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.MainActivity" >> "$result"
-sleep 2
-sheet_clear=0
-empty_dumps=0
-# grep exits 1 on no match; without the trailing || true the assignment would
-# trip set -e and kill the probe silently (run 38595627823).
-for attempt in 1 2 3 4 5 6 7 8; do
-  adb shell uiautomator dump /sdcard/c2-ui.xml >/dev/null 2>&1 || true
-  deny_bounds="$(adb shell cat /sdcard/c2-ui.xml 2>/dev/null | tr -d '\r' | grep -o 'text="Deny"[^>]*' | head -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]' || true)"
-  if [[ -z "$deny_bounds" ]]; then
-    empty_dumps=$((empty_dumps + 1))
-    # Two consecutive sheet-free dumps before declaring the sheet gone: the
-    # dialog can appear a beat after the cold launch.
-    if [[ "$empty_dumps" -ge 2 ]]; then sheet_clear=1; break; fi
+sheet_seen=0
+stable_app=0
+# 24 attempts x ~1s. The sheet can take ~6s to display on a loaded emulator
+# (install-probe logcat: START -> Displayed +5.9s), so never conclude "no
+# sheet" from the first app-foreground polls: require 3 steady app-foreground
+# polls AND (sheet answered or at least 12 attempts elapsed) before moving on.
+for attempt in $(seq 1 24); do
+  top="$(foreground_package)"
+  if [[ "$top" == *"permissioncontroller"* ]]; then
+    sheet_seen=1
+    stable_app=0
+    echo "BACK on permission sheet (round $round attempt $attempt): $top" >> "$result"
+    adb shell input keyevent KEYCODE_BACK
     sleep 1
     continue
   fi
-  empty_dumps=0
-  nums="$(grep -o '[0-9]*' <<< "$deny_bounds" | tr '\n' ' ' || true)"
-  read -r x1 y1 x2 y2 <<< "$nums"
-  echo "TAP permission-sheet Deny $(( (x1+x2)/2 )),$(( (y1+y2)/2 )) (round $round attempt $attempt)" | tee -a "$result"
-  adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
+  if [[ "$top" == *"$package/"* ]]; then
+    stable_app=$((stable_app + 1))
+    if [[ "$stable_app" -ge 3 && ( "$sheet_seen" == "1" || "$attempt" -ge 12 ) ]]; then break; fi
+  else
+    stable_app=0
+  fi
   sleep 1
 done
-adb shell rm -f /sdcard/c2-ui.xml 2>/dev/null || true
-if [[ "$sheet_clear" != "1" ]]; then
-  echo "round $round: could not clear the permission sheet after revoke" | tee -a "$result"
+post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS' | tr -d '\r')"
+echo "WRITE_CONTACTS after sheet handling (round $round): $post_state" | tee -a "$result"
+if ! grep -q 'granted=false' <<< "$post_state"; then
+  echo "round $round: WRITE_CONTACTS granted again (grant flags above identify who), retrying" | tee -a "$result"
   continue
 fi
-post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r')"
-if grep -q 'granted=false' <<< "$post_state"; then
+# Denied - but a BACK that beat the sheet animation can have finished
+# MainActivity, so C2 may not be foreground for the UI drive. One relaunch
+# recovers; the relaunch re-requests the permission, so pass the sheet again
+# and re-verify the denied state.
+fg="$(foreground_package)"
+if [[ "$fg" != *"$package/"* ]]; then
+  echo "round $round: denied but C2 not foreground ($fg); one relaunch" >> "$result"
+  adb shell am start -W -n "$package/.MainActivity" >> "$result"
+  sleep 2
+  for pass in 1 2 3 4 5 6; do
+    top="$(foreground_package)"
+    if [[ "$top" == *"permissioncontroller"* ]]; then
+      echo "BACK on post-relaunch sheet (round $round pass $pass)" >> "$result"
+      adb shell input keyevent KEYCODE_BACK
+      sleep 1
+      continue
+    fi
+    break
+  done
+  fg="$(foreground_package)"
+  post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS' | tr -d '\r')"
+  echo "WRITE_CONTACTS after relaunch (round $round): $post_state" >> "$result"
+fi
+if [[ "$fg" == *"$package/"* ]] && grep -q 'granted=false' <<< "$post_state"; then
   denied_ready=1
   break
 fi
-echo "round $round: WRITE_CONTACTS re-granted by the sheet race, retrying" | tee -a "$result"
+echo "round $round: denied state did not stabilize with C2 foreground, retrying" | tee -a "$result"
 done
 if [[ "$denied_ready" != "1" ]]; then
   echo "FAIL could not keep WRITE_CONTACTS denied after 3 revoke rounds" | tee -a "$result"; exit 1
@@ -357,10 +399,10 @@ require_marker 'ADD_TO_CONTACT_REFUSED reason=no_write_permission'
 if [[ "$(count_phone_rows "$perm_number")" != "0" ]]; then
   echo "FAIL write-permission-denied Add to contact wrote a row for $perm_number" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
-  adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+  restore_permissions
   exit 1
 fi
-adb shell pm grant "$package" android.permission.WRITE_CONTACTS 2>/dev/null || true
+restore_permissions
 echo "PASS Add to contact refused without WRITE_CONTACTS, provider unchanged" | tee -a "$result"
 expect_foreground
 }
