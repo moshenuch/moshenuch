@@ -274,7 +274,7 @@ jobs:
         working-directory: GPT-c2-from-reborn
         shell: bash
         run: |
-          bash -n tools/smoke_video_emulator.sh tools/smoke_photo_emulator.sh tools/smoke_gallery_capacity_emulator.sh tools/smoke_video_report_emulator.sh tools/smoke_add_to_contact_emulator.sh tools/smoke_photo_delete_emulator.sh tools/smoke_msg_recipients_emulator.sh tools/run_emulator_smoke_suite.sh
+          bash -n tools/smoke_video_emulator.sh tools/smoke_photo_emulator.sh tools/smoke_gallery_capacity_emulator.sh tools/smoke_video_report_emulator.sh tools/smoke_add_to_contact_emulator.sh tools/smoke_photo_delete_emulator.sh tools/smoke_msg_recipients_emulator.sh tools/smoke_clear_log_lists_emulator.sh tools/run_emulator_smoke_suite.sh
           python3 -m py_compile tools/check_recorded_mp4.py
 
       - name: Audit camera, Gallery and capture failure handling
