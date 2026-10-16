@@ -801,8 +801,8 @@ tap LSK                         # Yes
 sleep 2
 require_marker "MOVE_CONTACTS dir=phone2sim done=$move_eligible failed=0 skipped=$((multi_total + 8)) skipped_multi=$multi_total skipped_data=7 skipped_noname=1"
 after_move="$(raw_count)"
-if [[ "$after_move" != "$((multi_total + 7))" ]]; then
-  echo "FAIL Move left $after_move raw contacts, expected the $multi_total multi-number + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name contacts" | tee -a "$result"
+if [[ "$after_move" != "$((multi_total + 8))" ]]; then
+  echo "FAIL Move left $after_move raw contacts, expected the $multi_total multi-number + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name + family-echo contacts" | tee -a "$result"
   exit 1
 fi
 if ! adb shell content query --uri content://com.android.contacts/data \
