@@ -621,6 +621,85 @@ public final class AndroidBackend {
         return out;
     }
 
+    /** True while C2 holds the device default SMS app role. */
+    public boolean isDefaultSmsApp() {
+        return context.getPackageName().equals(Telephony.Sms.getDefaultSmsPackage(context));
+    }
+
+    /**
+     * Real provider delete of the given SMS rows. Only callable while
+     * isDefaultSmsApp(); without the role the provider refuses writes.
+     * Returns the number of rows actually deleted.
+     */
+    public int deleteSmsByIds(java.util.Collection<Long> ids) {
+        int deleted = 0;
+        if (ids == null) return 0;
+        for (Long id : ids) {
+            if (id == null) continue;
+            try {
+                deleted += resolver.delete(Telephony.Sms.CONTENT_URI,
+                        Telephony.Sms._ID + "=" + id, null);
+            } catch (RuntimeException ignored) {
+                // Row vanished or provider refused; count what succeeded.
+            }
+        }
+        return deleted;
+    }
+
+    /** Real provider delete of every SMS in the given threads. */
+    public int deleteSmsThreads(java.util.Collection<Long> threadIds) {
+        int deleted = 0;
+        if (threadIds == null) return 0;
+        for (Long threadId : threadIds) {
+            if (threadId == null) continue;
+            try {
+                deleted += resolver.delete(Telephony.Sms.CONTENT_URI,
+                        Telephony.Sms.THREAD_ID + "=" + threadId, null);
+            } catch (RuntimeException ignored) {
+                // Count what succeeded.
+            }
+        }
+        return deleted;
+    }
+
+    /** Every provider SMS row id (ids only, no load cap); empty on failure. */
+    public ArrayList<Long> loadAllSmsIds() {
+        ArrayList<Long> out = new ArrayList<>();
+        Cursor c = null;
+        try {
+            c = resolver.query(Telephony.Sms.CONTENT_URI,
+                    new String[]{Telephony.Sms._ID}, null, null, null);
+            while (c != null && c.moveToNext()) out.add(c.getLong(0));
+        } catch (RuntimeException ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        return out;
+    }
+
+    /** Real provider delete of EVERY SMS row, beyond any UI load window. */
+    public int deleteAllSmsRows() {
+        try {
+            return resolver.delete(Telephony.Sms.CONTENT_URI, null, null);
+        } catch (RuntimeException ex) {
+            return -1;
+        }
+    }
+
+    /** Total provider SMS rows; -1 when unreadable. */
+    public int countSmsRows() {
+        Cursor c = null;
+        try {
+            c = resolver.query(Telephony.Sms.CONTENT_URI,
+                    new String[]{Telephony.Sms._ID}, null, null, null);
+            return c == null ? -1 : c.getCount();
+        } catch (RuntimeException ex) {
+            return -1;
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
     public boolean sendSms(String number, String body) {
         if (!has(Manifest.permission.SEND_SMS)) return false;
         try {
