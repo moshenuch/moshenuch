@@ -11,6 +11,8 @@
 #     destinations; provider and hidden set untouched by the sweep).
 #  D. Default-SMS role (granted via cmd role): inbound SMS persists
 #     end-to-end (emu sms send -> SMS_DELIVER receiver -> provider row,
+#     multipart + same-second dedupe + malformed skip), an external sms:
+#     link prefills Compose and sending stores a SENT row, then
 #     visible after app restart) and Delete all messages then really
 #     deletes every provider SMS row. The role is restored afterwards.
 # Full provider rows (address/body/date/type/read) are snapshotted
@@ -573,7 +575,36 @@ else
     echo 'PASS inbound SMS visible in Inbox after app restart (provider row durable, screenshot evidence)' | tee -a "$result"
   fi
 
-  # D3. Real delete: Delete all messages now removes every provider row.
+  # D2s. External sms: link + outbound sent history while default. Cold
+  # start through the SENDTO intent (exercises the onCreate path): Compose
+  # opens prefilled, OK sends, and a SENT row lands in the provider. The
+  # console SMS path is not needed for this section.
+  sendto_body="C2probe5150"
+  sendto_number="07700903010"
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:${sendto_number}?body=${sendto_body}" "$package" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_OPEN recipient=$sendto_number bodylen=${#sendto_body}"
+  shot delmsg-sendto-compose
+  tap OK                          # recipient+body prefilled (focus=body): OK sends
+  sleep 2
+  require_marker 'SENT_ROW stored id='
+  sent_row=""
+  for i in 1 2 3 4 5; do
+    sent_row="$(adb shell content query --uri content://sms --projection _id:type:body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$sendto_body" | grep -F "type=2" | head -1 || true)"
+    [[ -n "$sent_row" ]] && break
+    sleep 1
+  done
+  if [[ -z "$sent_row" ]]; then
+    echo 'FAIL outbound SMS while default: no SENT provider row for the probe body' | tee -a "$result"
+    exit 1
+  fi
+  echo 'PASS sms: link prefilled Compose from a cold start and sending stored a SENT provider row (type=2)' | tee -a "$result"
+
+  # D3. Real delete: Delete all messages now removes every provider row
+  # (inbound, multipart, redelivery and the sent row alike).
   seed_prefs_fixture
   rows_before_real="$(sms_rows)"
   real_expected="$(grep -c . <<< "$rows_before_real" || true)"
@@ -618,7 +649,7 @@ fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-confirm-real delmsg-after-real; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-confirm-real delmsg-after-real; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
