@@ -80,7 +80,7 @@
         </receiver>
         <service
             android:name=".C2HeadlessSmsSendService"
-            android:permission="android.permission.SEND_RESPONSE_VIA_MESSAGE"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
