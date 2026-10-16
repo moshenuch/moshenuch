@@ -83,12 +83,12 @@ finish() {
     if [[ -n "$seeded_sms_ids" ]]; then
       while IFS= read -r sms_id; do
         [[ "$sms_id" =~ ^[0-9]+$ ]] || continue
-        del_out="$(adb shell content delete --uri content://sms --where "_id=$sms_id" 2>&1 | tr -d '\r' || true)"
+        del_out="$(adb shell content delete --uri content://sms --where "_id=$sms_id" < /dev/null 2>&1 | tr -d '\r' || true)"
         if grep -qiE 'exception|denied|error' <<< "$del_out"; then
           echo "FAIL cleanup: SMS provider delete of _id=$sms_id errored: $del_out" | tee -a "$result"
           continue
         fi
-        q_out="$(adb shell content query --uri content://sms --projection _id 2>&1 | tr -d '\r' || true)"
+        q_out="$(adb shell content query --uri content://sms --projection _id < /dev/null 2>&1 | tr -d '\r' || true)"
         if grep -qiE 'exception|denied|error' <<< "$q_out"; then
           echo "FAIL cleanup: SMS provider query after delete errored: $q_out" | tee -a "$result"
           continue
@@ -148,7 +148,7 @@ count_phone_rows() {
   phone_rows | grep -c "data1=$1" || true
 }
 marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
-  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   # Logcat and tap delivery lag on a loaded emulator; give the marker a few
@@ -369,7 +369,7 @@ for round in 1 2 3; do
 adb shell pm revoke "$package" android.permission.READ_CONTACTS 2>&1 | tee -a "$result" || true
 adb shell pm revoke "$package" android.permission.WRITE_CONTACTS 2>&1 | tee -a "$result" || true
 sleep 1
-pre_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(READ|WRITE)_CONTACTS: granted' | tr -d '\r')"
+pre_state="$(adb shell dumpsys package "$package" | grep -E 'android.permission.(READ|WRITE)_CONTACTS: granted' | tr -d '\r' || true)"
 echo "contacts state after revoke (round $round): $pre_state" | tee -a "$result"
 if [[ "$(grep -c 'granted=false' <<< "$pre_state")" != "2" ]]; then
   echo "FAIL contacts revoke did not take (round $round)" | tee -a "$result"; exit 1
@@ -400,7 +400,7 @@ for attempt in $(seq 1 24); do
   fi
   sleep 1
 done
-post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r')"
+post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r' || true)"
 echo "WRITE_CONTACTS after sheet handling (round $round): $post_state" | tee -a "$result"
 if ! grep -q 'granted=false' <<< "$post_state"; then
   echo "round $round: WRITE_CONTACTS granted again (grant flags above identify who), retrying" | tee -a "$result"
@@ -422,7 +422,7 @@ if [[ -z "$pid_after" || -n "$pid_before" && "$pid_after" != "$pid_before" ]]; t
   echo "round $round: pm grant READ_CONTACTS killed the app process (pid $pid_before -> $pid_after); round void" | tee -a "$result"
   continue
 fi
-post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r')"
+post_state="$(adb shell dumpsys package "$package" | grep 'android.permission.WRITE_CONTACTS: granted' | tr -d '\r' || true)"
 echo "WRITE_CONTACTS after READ re-grant (round $round): $post_state" >> "$result"
 if ! grep -q 'granted=false' <<< "$post_state"; then
   echo "round $round: WRITE_CONTACTS granted after READ re-grant, retrying" | tee -a "$result"
