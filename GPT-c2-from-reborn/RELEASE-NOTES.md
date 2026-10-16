@@ -1,3 +1,16 @@
+## SENDTO links, verified sent history, and a hardened sent-result receiver — 17 October 2026
+
+- **External sms:/smsto: links now work.** They open Compose with the recipient and body prefilled, cold start or warm. This closes known limit (a) from v2.03.16. Three guards keep links safe: a comma, semicolon, or encoded (%2C/%3B) recipient list is rejected - Compose opens with the recipient blank and the notice "Several recipients; enter one", and the joined string can never be sent; a body over 1600 characters (10 SMS) is cut on a code-point boundary with the notice "Message cut to 1600 characters" (one combined notice when both fire); and a link that arrives while a message is being written keeps that work as a draft first - editing a saved draft updates its slot, a new message becomes a new draft.
+- **Sent history while C2 is default is now real and probed.** A new internal (non-exported) send-result receiver collects the radio's per-part results and writes the provider row on the outcome: SENT when every part reports OK, FAILED on any rejection. The row is no longer written at submit time. This closes known limit (c) from v2.03.16; the submit-time notice says delivery is unconfirmed until then.
+- **Receiver hardening:** per-send aggregates are persisted, so a process death between parts still completes; a duplicate result after completion never writes a second row; aggregates older than 10 minutes expire into FAILED rows rather than sitting silent; malformed callbacks are validated and dropped.
+- MainActivity is now singleTop, so an external link start while C2 is open routes to the running instance instead of stacking a second compose.
+- **Known limits (audit #33):** expiry is lazy - it runs on the next send result or app start, not on a timer; a send result arriving while C2 is not the default SMS app is not recorded in provider history; a process death between the provider insert and the completion marker can duplicate one sent row; the surrogate-boundary cut, duplicate-callback and lost-callback paths are code-audited only (the emulator cannot broadcast to a non-exported receiver).
+- Still open from before: quick-reply (respond-via-message) remains an inert stub, and the role grant was tested with permissions pre-granted, not through a fresh-install permission lifecycle. The recommendation stands: keep the current SMS app as default.
+- Emulator acceptance (Android 11): cold-start SENDTO prefill with send and exactly one SENT row verified (address and body); comma, semicolon and encoded-comma lists rejected with an empty recipient; over-1600 body cut with a notice and an exact-1600 body passed through uncut; an in-progress compose kept as a draft across a plain external start under singleTop; all prior delete-all-messages, contacts and Move/Copy gates green.
+- APK **v2.03.17** / pinned HTML **v6.343**.
+
+---
+
 ## Early default-SMS support and real SMS delete — 16 October 2026
 
 - **C2 is NOT ready to be the default SMS app yet.** This build adds the first plumbing and proves it on the Android 11 emulator. Nothing in the app asks for the role; only Android Settings > Apps > Default apps > SMS app can set it, and the recommendation is to keep the current SMS app as default for now.
