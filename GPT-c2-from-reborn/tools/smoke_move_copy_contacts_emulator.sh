@@ -1291,7 +1291,7 @@ require_marker 'MOVE_CONTACTS_CONFIRM dir=phone2sim'
 tap LSK                         # Yes
 sleep 2
 require_marker 'MOVE_CONTACTS_REFUSED reason=duplicate_source dir=phone2sim'
-if [[ "$(raw_count)" != "$((baseline_total + 12))" || "$(sim_count)" != "$sim_before_w" ]]; then
+if [[ "$(raw_count)" != "$((baseline_total + 13))" || "$(sim_count)" != "$sim_before_w" ]]; then
   echo "FAIL within-source duplicate refusal changed state (provider $(raw_count), SIM $(sim_count) was $sim_before_w)" | tee -a "$result"
   exit 1
 fi
