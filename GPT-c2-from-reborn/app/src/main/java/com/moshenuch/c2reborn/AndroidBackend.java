@@ -423,12 +423,19 @@ public final class AndroidBackend {
         }
     }
 
-    /** True while a live (not soft-deleted) raw contact with this id
-     *  exists. Used by the SIM->phone rollback: when a delete fails the
-     *  SIM entry is only restored if the phone copy is actually gone,
-     *  otherwise the contact would sit in both places (audit #20). */
-    public boolean rawContactLive(long rawContactId) {
-        if (!has(Manifest.permission.READ_CONTACTS) || rawContactId <= 0) return false;
+    public static final int RAW_ABSENT = 0;
+    public static final int RAW_LIVE = 1;
+    public static final int RAW_UNKNOWN = -1;
+
+    /** Tri-state liveness of a raw contact (audit #21): RAW_LIVE while a
+     *  live (not soft-deleted) row with this id exists, RAW_ABSENT when it
+     *  is confirmed gone, RAW_UNKNOWN when the query itself failed. The
+     *  SIM->phone rollback restores the SIM entry only on RAW_ABSENT - a
+     *  query failure must not masquerade as absence, or the contact would
+     *  be duplicated into the SIM list while the phone copy is still
+     *  there. */
+    public int rawContactState(long rawContactId) {
+        if (!has(Manifest.permission.READ_CONTACTS) || rawContactId <= 0) return RAW_UNKNOWN;
         Cursor c = null;
         try {
             c = resolver.query(
@@ -437,9 +444,10 @@ public final class AndroidBackend {
                     ContactsContract.RawContacts.DELETED + "=0 AND "
                             + ContactsContract.RawContacts._ID + "=?",
                     new String[]{String.valueOf(rawContactId)}, null);
-            return c != null && c.moveToFirst();
+            if (c == null) return RAW_UNKNOWN;
+            return c.moveToFirst() ? RAW_LIVE : RAW_ABSENT;
         } catch (Exception e) {
-            return false;
+            return RAW_UNKNOWN;
         } finally {
             if (c != null) c.close();
         }
