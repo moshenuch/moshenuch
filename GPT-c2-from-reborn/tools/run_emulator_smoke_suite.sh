@@ -132,6 +132,10 @@ if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results
      ! grep -Fq 'PASS sms: link with several recipients opens Compose with an empty recipient and a notice' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS sms: link body over 1600 characters is cut with a notice' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS sms: link while composing keeps the in-progress message as a draft' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: exactly one SENT row with the correct address and body for the probe send' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: semicolon recipient list rejected with an empty recipient and a notice' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: encoded-comma recipient list rejected with an empty recipient and a notice' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: link body of exactly 1600 characters passes through uncut' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS inbound SMS visible in Inbox after app restart' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS Delete all messages under default-SMS role really deleted every provider SMS' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS real Delete all messages also cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
