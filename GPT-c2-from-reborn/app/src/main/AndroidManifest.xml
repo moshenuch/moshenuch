@@ -62,6 +62,9 @@
             android:exported="false"
             android:grantUriPermissions="true" />
         <receiver
+            android:name=".C2SentResultReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".C2SmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
