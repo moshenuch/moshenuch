@@ -102,17 +102,27 @@ finish() {
       fi
     done <<< "$seeded_sms_ids"
   fi
-  # Give the SMS role back exactly as found.
+  # Give the SMS role back exactly as found. When C2 already held it, the
+  # probe changed nothing, so cleanup must not strip the role either.
   if [[ "$role_granted" == "1" ]]; then
-    adb shell cmd role remove-role-holder android.app.role.SMS "$package" < /dev/null >/dev/null 2>&1 || true
-    if [[ -n "$role_prev_holder" && "$role_prev_holder" != "$package" ]]; then
-      adb shell cmd role add-role-holder android.app.role.SMS "$role_prev_holder" < /dev/null >/dev/null 2>&1 || true
-    fi
-    holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
-    if [[ "$holder_after" == "$package" ]]; then
-      echo "FAIL cleanup: SMS role still held by C2 after restore" | tee -a "$result"
+    if [[ "$role_prev_holder" == "$package" ]]; then
+      holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+      if [[ "$holder_after" == "$package" ]]; then
+        echo 'PASS SMS role unchanged after probe (C2 already held it)' | tee -a "$result"
+      else
+        echo "FAIL cleanup: SMS role lost (expected C2, holder: ${holder_after:-none})" | tee -a "$result"
+      fi
     else
-      echo "PASS SMS role restored after probe (holder: ${holder_after:-none})" | tee -a "$result"
+      adb shell cmd role remove-role-holder android.app.role.SMS "$package" < /dev/null >/dev/null 2>&1 || true
+      if [[ -n "$role_prev_holder" ]]; then
+        adb shell cmd role add-role-holder android.app.role.SMS "$role_prev_holder" < /dev/null >/dev/null 2>&1 || true
+      fi
+      holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+      if [[ "$holder_after" != "$role_prev_holder" ]]; then
+        echo "FAIL cleanup: SMS role holder is ${holder_after:-none}, expected ${role_prev_holder:-none}" | tee -a "$result"
+      else
+        echo "PASS SMS role restored after probe (holder: ${holder_after:-none})" | tee -a "$result"
+      fi
     fi
   fi
   # Restore the prefs exactly as found (or remove the fixture), so the
@@ -432,6 +442,89 @@ else
     fi
     require_marker 'SMS_DELIVER stored parts=1'
     echo "PASS inbound SMS persisted end-to-end under default-SMS role (emu sms send -> provider id=$inbound_id)" | tee -a "$result"
+
+    # D1b. Multipart: a 300-char GSM-7 text arrives as 2 SMS_DELIVER parts
+    # and must be stored as ONE provider row with the full body.
+    multipart_body="MultipartC2probe $(printf 'x%.0s' $(seq 1 290))"
+    adb logcat -c || true
+    emu_out="$(adb emu sms send "$inbound_number" "$multipart_body" 2>&1 || true)"
+    if grep -qiE 'error|refused|KO' <<< "$emu_out"; then
+      echo "UNVERIFIED adb emu sms send unavailable for multipart section: $emu_out" | tee -a "$result"
+    else
+      multi_ok=0
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        got="$(adb shell content query --uri content://sms --projection body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$multipart_body" | head -1 || true)"
+        [[ -n "$got" ]] && { multi_ok=1; break; }
+        sleep 1
+      done
+      if [[ "$multi_ok" != "1" ]]; then
+        echo 'FAIL multipart inbound SMS: no provider row holds the full concatenated body' | tee -a "$result"
+        adb logcat -d -s C2Messages:I 2>/dev/null | tail -20 | tee -a "$result" || true
+        exit 1
+      fi
+      multi_parts="$(adb logcat -d -s C2Messages:I 2>/dev/null | grep -oE 'SMS_DELIVER stored parts=[0-9]+' | tail -1 || true)"
+      if [[ "$multi_parts" != 'SMS_DELIVER stored parts=2' && "$multi_parts" != 'SMS_DELIVER stored parts=3' ]]; then
+        echo "FAIL expected multipart store marker (parts=2 or 3), last marker: ${multi_parts:-none}" | tee -a "$result"
+        exit 1
+      fi
+      echo "PASS inbound multipart SMS stored as one provider row with the full body (${multi_parts#SMS_DELIVER stored parts=} parts concatenated)" | tee -a "$result"
+    fi
+
+    # D1c. Redelivery: the same message arriving twice is stored once. The
+    # emulator stamps each send with the current time (second resolution),
+    # so a true same-timestamp redelivery only happens when both sends land
+    # in the same second; both outcomes are asserted explicitly.
+    redup_body="C2redeliveryProbe"
+    adb logcat -c || true
+    emu_out="$(adb emu sms send "$inbound_number" "$redup_body" 2>&1 || true)"
+    emu_out2="$(adb emu sms send "$inbound_number" "$redup_body" 2>&1 || true)"
+    if grep -qiE 'error|refused|KO' <<< "$emu_out$emu_out2"; then
+      echo "UNVERIFIED adb emu sms send unavailable for redelivery section: $emu_out $emu_out2" | tee -a "$result"
+      redup_skip=1
+    fi
+    sleep 3
+    if [[ "${redup_skip:-0}" == "1" ]]; then
+      redup_rows="skipped"
+      redup_count="skipped"
+    else
+    redup_rows="$(adb shell content query --uri content://sms --projection _id:date:body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$redup_body" || true)"
+    redup_count="$(grep -c . <<< "$redup_rows" || true)"
+    if [[ "$redup_count" == "1" ]]; then
+      require_marker 'SMS_DELIVER skipped reason=duplicate'
+      echo 'PASS SMS redelivery deduped (same sender+timestamp+body stored once)' | tee -a "$result"
+    elif [[ "$redup_count" == "2" ]]; then
+      d1="$(sed -n '1s/.*date=\([0-9][0-9]*\).*/\1/p' <<< "$redup_rows")"
+      d2="$(sed -n '2s/.*date=\([0-9][0-9]*\).*/\1/p' <<< "$redup_rows")"
+      if [[ -n "$d1" && "$d1" == "$d2" ]]; then
+        echo "FAIL SMS redelivery stored twice with identical sender+timestamp+body (date=$d1)" | tee -a "$result"
+        exit 1
+      fi
+      echo "PASS SMS redelivery not reproducible on this image (emulator stamped distinct dates $d1 vs $d2); both rows legitimately stored" | tee -a "$result"
+    else
+      echo "FAIL SMS redelivery section: expected 1 or 2 provider rows for the probe text, found $redup_count" | tee -a "$result"
+      exit 1
+    fi
+    fi
+
+    # D1d. Malformed delivery: an SMS_DELIVER broadcast with no pdu payload
+    # must be logged and skipped, never crash, never store a row. Shell can
+    # send protected broadcasts; if this image refuses, the section reports
+    # UNVERIFIED instead of guessing.
+    rows_before_malformed="$(sms_rows | grep -c . || true)"
+    adb logcat -c || true
+    bc_out="$(adb shell am broadcast -a android.provider.Telephony.SMS_DELIVER -n "$package/.C2SmsReceiver" < /dev/null 2>&1 || true)"
+    sleep 2
+    if grep -qiE 'SecurityException|Permission Denial' <<< "$bc_out"; then
+      echo "UNVERIFIED shell cannot inject an empty SMS_DELIVER broadcast on this image: $bc_out" | tee -a "$result"
+    else
+      require_marker 'SMS_DELIVER skipped reason=no_parts'
+      rows_after_malformed="$(sms_rows | grep -c . || true)"
+      if [[ "$rows_after_malformed" != "$rows_before_malformed" ]]; then
+        echo "FAIL malformed SMS_DELIVER changed provider rows ($rows_before_malformed -> $rows_after_malformed)" | tee -a "$result"
+        exit 1
+      fi
+      echo 'PASS malformed SMS_DELIVER (no pdu payload) logged and skipped, provider unchanged' | tee -a "$result"
+    fi
 
     # D2. Visible in the app after a full restart (Inbox reads the provider;
     # a restart proves the row is durable, not cached).
