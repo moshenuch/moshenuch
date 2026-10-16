@@ -4227,28 +4227,37 @@ public class C2PhoneView extends View {
     /** External sms:/smsto: link: open Compose with recipient/body prefilled. */
     public void openComposeFromExternal(String number, String body) {
         // An in-progress compose is unsent work: keep it as a draft before
-        // the link replaces it (audit #31 item 1).
+        // the link replaces it (audit #31 item 1). Editing a saved draft
+        // updates that slot in place; a new unsaved message becomes a new
+        // draft (audit #32 item 3).
         if (!recipient.trim().isEmpty() || !messageBody.trim().isEmpty()) {
             android.util.Log.i("C2Messages", "SENDTO_DRAFT_SAVED recipient=" + recipient
                     + " bodylen=" + messageBody.length());
             saveCurrentDraft();
         }
         String n = number == null ? "" : number.trim();
+        String notice = "";
         if (n.indexOf(',') >= 0 || n.indexOf(';') >= 0) {
             // A recipient list is not one address; never send to the joined
-            // string (audit #31 item 2).
+            // string (audit #31 item 2). The number arrives URI-decoded, so
+            // encoded separators (%2C/%3B) are caught here too.
             android.util.Log.i("C2Messages", "SENDTO_MULTI list=" + n);
             n = "";
-            showNotice("Several recipients; enter one");
+            notice = "Several recipients; enter one";
         }
         String b = body == null ? "" : body;
-        if (b.length() > 1600) {
-            // External bodies are clamped to 10 SMS segments, with a notice,
-            // never silently (audit #31 item 3).
-            android.util.Log.i("C2Messages", "SENDTO_TRUNCATED from=" + b.length() + " to=1600");
-            b = b.substring(0, 1600);
-            showNotice("Message cut to 1600 characters");
+        int codePoints = b.codePointCount(0, b.length());
+        if (codePoints > 1600) {
+            // External bodies are clamped to 1600 characters (10 SMS) with a
+            // notice, never silently; the cut lands on a code-point boundary
+            // so a surrogate pair is never split (audit #31 item 3, #32
+            // item 4). One notice covers both rejections (audit #32 item 5).
+            android.util.Log.i("C2Messages", "SENDTO_TRUNCATED from=" + codePoints + " to=1600");
+            b = b.substring(0, b.offsetByCodePoints(0, 1600));
+            notice = notice.isEmpty() ? "Message cut to 1600 characters"
+                    : notice + ". Message cut to 1600 characters";
         }
+        if (!notice.isEmpty()) showNotice(notice);
         recipient = n;
         messageBody = b;
         composeFocus = recipient.isEmpty() ? 0 : 1;
