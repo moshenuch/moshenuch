@@ -190,6 +190,9 @@ public class MainActivity extends Activity {
         }
         requestPhonePermissions();
         requestStartupMediaAfterPhonePermissions();
+        // Expire any send-result aggregates left over 10 minutes (process
+        // death between parts) into FAILED rows (audit #32 item 1).
+        C2SentResultReceiver.sweepExpired(this);
         handleSendToIntent(getIntent());
         // Emulator acceptance fixture. Debug-build only and only accessible
         // through this app's PRIVATE preferences (not an exported intent).
