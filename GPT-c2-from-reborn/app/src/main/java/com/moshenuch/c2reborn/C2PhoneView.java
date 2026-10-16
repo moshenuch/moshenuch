@@ -7502,6 +7502,36 @@ public class C2PhoneView extends View {
                                 + " destination=" + destination.size()
                                 + " matches=" + preflightMatches
                                 + " empty_names=" + (emptySourceNames ? 1 : 0));
+                // CI-only deterministic rollback window (debug builds only;
+                // never present in release behavior): when the smoke probe
+                // arms the gate file, hold the batch until it signals (or a
+                // bounded timeout) so it can inject its mid-batch failure.
+                if (BuildConfig.DEBUG) {
+                    java.io.File fGate =
+                            new java.io.File(getContext().getFilesDir(), "move_preflight_gate");
+                    if (fGate.exists()) {
+                        long fStart = System.currentTimeMillis();
+                        android.util.Log.i("C2Contacts",
+                                "MOVE_PREFLIGHT_GATE armed dir=" + dirName);
+                        java.io.File fGo =
+                                new java.io.File(getContext().getFilesDir(), "move_preflight_go");
+                        while (System.currentTimeMillis() - fStart < 20000) {
+                            if (fGo.exists()) break;
+                            try {
+                                Thread.sleep(50);
+                            } catch (InterruptedException ignored) {
+                                break;
+                            }
+                        }
+                        boolean fSignaled = fGo.exists();
+                        fGo.delete();
+                        fGate.delete();
+                        android.util.Log.i("C2Contacts",
+                                "MOVE_PREFLIGHT_GATE released dir=" + dirName
+                                        + " signaled=" + (fSignaled ? 1 : 0)
+                                        + " waited_ms=" + (System.currentTimeMillis() - fStart));
+                    }
+                }
                 boolean sourceDuplicate = false;
                 for (int i = 0; i < source.size() && !sourceDuplicate; i++) {
                     for (int j = i + 1; j < source.size(); j++) {
