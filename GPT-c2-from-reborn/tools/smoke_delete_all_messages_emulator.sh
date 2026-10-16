@@ -623,16 +623,19 @@ else
   tap OK                          # recipient+body prefilled (focus=body): OK sends
   sleep 2
   require_marker 'SENT_ROW stored id='
-  sent_row=""
+  sent_rows=""
   for i in 1 2 3 4 5; do
-    sent_row="$(adb shell content query --uri content://sms --projection _id:type:body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$sendto_body" | grep -F "type=2" | head -1 || true)"
-    [[ -n "$sent_row" ]] && break
+    sent_rows="$(adb shell content query --uri content://sms --projection _id:type:address:body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$sendto_body" || true)"
+    [[ -n "$(grep -F 'type=2' <<< "$sent_rows" || true)" ]] && break
     sleep 1
   done
-  if [[ -z "$sent_row" ]]; then
-    echo 'FAIL outbound SMS while default: no SENT provider row for the probe body' | tee -a "$result"
+  # Exactly one SENT row, for the right address and body (audit #32 probe).
+  sent_count="$(grep -F 'type=2' <<< "$sent_rows" | grep -cF "address=$sendto_number" || true)"
+  if [[ "$sent_count" != "1" ]]; then
+    echo "FAIL outbound SMS while default: expected exactly one SENT row for address=$sendto_number body=$sendto_body, found $sent_count" | tee -a "$result"
     exit 1
   fi
+  echo 'PASS sms: exactly one SENT row with the correct address and body for the probe send' | tee -a "$result"
   if [[ "$sendto_retried" == 1 ]]; then
     echo 'PASS sms: link prefilled Compose from a cold start (one foreground retry) and sending stored a SENT provider row (type=2)' | tee -a "$result"
   else
@@ -666,8 +669,9 @@ else
   echo 'PASS sms: link body over 1600 characters is cut with a notice' | tee -a "$result"
 
   # D2s-d. A link that arrives while a compose is in progress keeps the
-  # in-progress message as a draft (audit #31 item 1). --activity-single-top
-  # delivers to the running instance, exercising the onNewIntent path.
+  # in-progress message as a draft (audit #31 item 1). MainActivity is
+  # singleTop (audit #32 item 2), so this plain external start is delivered
+  # to the running instance through onNewIntent - no stacking second compose.
   adb shell am force-stop "$package"
   adb shell am start -W -n "$package/.MainActivity" >> "$result"
   sleep 2
@@ -679,7 +683,7 @@ else
   # The C2 UI reads digits from on-screen keypad taps, not IME key events.
   for d in 0 7 9 0 0 0 0 5 0 0 3; do tap "$d"; done
   adb logcat -c || true
-  adb shell am start -W --activity-single-top -a android.intent.action.SENDTO -d "sms:07700903014?body=C2link2" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903014?body=C2link2" -n "$package/.MainActivity" >> "$result" 2>&1 || true
   sleep 2
   expect_foreground
   require_marker "SENDTO_DRAFT_SAVED recipient=07900005003 bodylen=0"
@@ -691,6 +695,46 @@ else
   fi
   shot delmsg-sendto-draftkept
   echo 'PASS sms: link while composing keeps the in-progress message as a draft' | tee -a "$result"
+
+  # D2s-e. A semicolon-separated list is rejected the same way (audit #31
+  # item 2, semicolon variant).
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903016;07700903017?body=C2semi" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_MULTI list=07700903016;07700903017"
+  require_marker "SENDTO_OPEN recipient= bodylen=6"
+  shot delmsg-sendto-semilist
+  echo 'PASS sms: semicolon recipient list rejected with an empty recipient and a notice' | tee -a "$result"
+
+  # D2s-f. An encoded comma (%2C) is decoded before the separator check, so
+  # the list is still rejected (audit #32 probe).
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903013%2C07700903015?body=C2enc" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_MULTI list=07700903013,07700903015"
+  require_marker "SENDTO_OPEN recipient= bodylen=5"
+  shot delmsg-sendto-enclist
+  echo 'PASS sms: encoded-comma recipient list rejected with an empty recipient and a notice' | tee -a "$result"
+
+  # D2s-g. A body of exactly 1600 characters passes through uncut and no
+  # truncation marker fires (audit #32 item 4 probe).
+  exact_body="$(printf 'y%.0s' $(seq 1 1600))"
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903010?body=$exact_body" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_OPEN recipient=07700903010 bodylen=1600"
+  if marker_seen "SENDTO_TRUNCATED"; then
+    echo 'FAIL exact-1600 body was truncated' | tee -a "$result"
+    exit 1
+  fi
+  shot delmsg-sendto-exact1600
+  echo 'PASS sms: link body of exactly 1600 characters passes through uncut' | tee -a "$result"
 
   # D3. Real delete: Delete all messages now removes every provider row
   # (inbound, multipart, redelivery and the sent row alike).
@@ -738,7 +782,7 @@ fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-sendto-fail delmsg-sendto-multi delmsg-sendto-truncated delmsg-sendto-draftkept delmsg-confirm-real delmsg-after-real; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-sendto-fail delmsg-sendto-multi delmsg-sendto-truncated delmsg-sendto-draftkept delmsg-sendto-semilist delmsg-sendto-enclist delmsg-sendto-exact1600 delmsg-confirm-real delmsg-after-real; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
