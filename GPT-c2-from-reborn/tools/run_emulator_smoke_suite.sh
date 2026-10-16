@@ -127,7 +127,7 @@ if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results
      ! grep -Fq 'PASS folder-route sweep left provider rows unchanged' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS inbound SMS persisted end-to-end under default-SMS role' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS inbound multipart SMS stored as one provider row' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS SMS redelivery' "$results/delete-all-messages-results.txt" ||
+     ! grep -Eq 'PASS (same-second identical SMS stored once|SMS redelivery not reproducible)' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS inbound SMS visible in Inbox after app restart' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS Delete all messages under default-SMS role really deleted every provider SMS' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS real Delete all messages also cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
