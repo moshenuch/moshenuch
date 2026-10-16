@@ -613,27 +613,31 @@ fi
 # Since audit #20 the Yes-time revalidation refuses the batch when a
 # contact vanished since the confirm (section G2 covers that refusal), so
 # deleting mov_two BEFORE Yes no longer reaches the rollback. The failure
-# is injected mid-batch instead: contacts are processed in display-name
-# order (AAAC2DelOne, AAAC2DelTwo, AAAC2MoveOne, then mov_two), so an
-# on-device watchdog deletes mov_two's raw contact the moment MoveOne's
-# name row disappears; the app's conditional delete then affects 0 rows,
-# the op fails and everything already moved must come back. A clean run
-# (the app beat the watchdog) is retried after a full state reset.
+# is injected mid-batch instead: six pad contacts widen the batch, an
+# on-device watchdog deletes mov_two's raw contact the moment the FIRST
+# contact (AAAC2DelOne) disappears, and the app's conditional delete then
+# affects 0 rows - the op fails and everything already moved must come
+# back. A clean run (the app beat the watchdog) is retried after a full
+# state reset. Contacts are processed in display-name order: DelOne,
+# DelTwo, MoveOne, six AAAC2MovePad*, then mov_two.
+f_pads="AAAC2MovePad1 AAAC2MovePad2 AAAC2MovePad3 AAAC2MovePad4 AAAC2MovePad5 AAAC2MovePad6"
 f_pass=0
 for f_attempt in 1 2 3; do
   echo "rollback-failure attempt $f_attempt" >> "$result"
-  # Deterministic starting state: empty SIM list, exactly the four
-  # eligible contacts present (a lost race leaves all four on the SIM).
+  # Deterministic starting state: empty SIM list, exactly the expected
+  # contacts present (a lost race leaves the whole batch on the SIM).
   adb shell am force-stop "$package" || true
   printf '%s\n' \
     '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
     '<map>' \
     '<string name="sim_contacts_v1">[]</string>' \
     '</map>' | adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'"
-  for f_name in AAAC2DelOne AAAC2DelTwo "$mov_one" "$mov_two"; do
+  f_n=0
+  for f_name in AAAC2DelOne AAAC2DelTwo "$mov_one" $f_pads "$mov_two"; do
+    f_n=$((f_n + 1))
     f_old="$(adb shell content query --uri content://com.android.contacts/data \
       --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
-      | grep -E "data1=$f_name\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
+      | grep -E "data1=$f_name\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1 || true)"
     if [[ "$f_old" =~ ^[0-9]+$ ]]; then
       adb shell content delete --uri content://com.android.contacts/raw_contacts \
         --where "_id=$f_old" < /dev/null >/dev/null 2>&1 || true
@@ -643,6 +647,7 @@ for f_attempt in 1 2 3; do
       AAAC2DelTwo) seed_contact AAAC2DelTwo 07900000092 >/dev/null ;;
       "$mov_one") seed_contact "$mov_one" "$num_one" >/dev/null ;;
       "$mov_two") seed_contact "$mov_two" "$num_two" >/dev/null ;;
+      AAAC2MovePad*) seed_contact "$f_name" "079000008$f_n" >/dev/null ;;
     esac
   done
   open_contacts_menu
@@ -651,20 +656,20 @@ for f_attempt in 1 2 3; do
   adb logcat -c || true
   tap OK                          # From phone to SIM
   sleep 1
-  require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$move_eligible"
+  require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$((move_eligible + 6))"
   shot movecopy-rollback-confirm
   two_id="$(adb shell content query --uri content://com.android.contacts/data \
     --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
-    | grep -E "data1=$mov_two\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
+    | grep -E "data1=$mov_two\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1 || true)"
   if [[ ! "$two_id" =~ ^[0-9]+$ ]]; then
     echo "UNVERIFIED could not resolve $mov_two raw id for the failure fixture" | tee -a "$result"
     exit 1
   fi
   # Watchdog on device (an adb round trip per poll is slower than the
-  # window): the moment $mov_one's name row is gone the batch has just
-  # passed it, so delete mov_two's raw now.
+  # window): the moment DelOne's name row is gone the batch has started,
+  # and eight contacts sit between it and mov_two.
   adb shell 'for i in $(seq 1 600); do
-  n=$(content query --uri content://com.android.contacts/data --projection data1 2>/dev/null | tr -d "\r" | grep -c "data1=AAAC2MoveOne$" || true)
+  n=$(content query --uri content://com.android.contacts/data --projection data1 2>/dev/null | tr -d "\r" | grep -c "data1=AAAC2DelOne$" || true)
   if [ "$n" = "0" ]; then
     content delete --uri content://com.android.contacts/raw_contacts --where "_id='"$two_id"'" >/dev/null 2>&1
     echo "watchdog deleted mov_two raw_contact_id='"$two_id"'"
@@ -672,7 +677,7 @@ for f_attempt in 1 2 3; do
   fi
 done' > /tmp/f_watchdog.out 2>&1 < /dev/null &
   f_watch_pid=$!
-  tap LSK                         # Yes: mov_one moves, mov_two fails -> rollback
+  tap LSK                         # Yes: nine contacts move, mov_two fails -> rollback
   wait "$f_watch_pid" || true
   sed "s/^/  attempt $f_attempt /" /tmp/f_watchdog.out >> "$result"
   sleep 4
@@ -683,7 +688,7 @@ done' > /tmp/f_watchdog.out 2>&1 < /dev/null &
     echo "  attempt $f_attempt: app beat the watchdog (clean move); resetting and retrying" >> "$result"
     continue
   fi
-  if ! grep -qF "done=3 failed=1 skipped=$((multi_total + 7)) skipped_multi=$multi_total skipped_data=6 skipped_noname=1 rolled_back=1 undone=3" <<< "$f_marker"; then
+  if ! grep -qF "done=9 failed=1 skipped=$((multi_total + 7)) skipped_multi=$multi_total skipped_data=6 skipped_noname=1 rolled_back=1 undone=9" <<< "$f_marker"; then
     echo "FAIL unexpected rollback marker: $f_marker" | tee -a "$result"
     exit 1
   fi
@@ -694,8 +699,8 @@ done' > /tmp/f_watchdog.out 2>&1 < /dev/null &
     echo "FAIL rollback left $f_sim entries in the SIM list" | tee -a "$result"
     exit 1
   fi
-  if [[ "$f_provider" != "$((baseline_total + 9))" ]]; then
-    echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 9)) (baseline + mov_one re-added + multi + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name)" | tee -a "$result"
+  if [[ "$f_provider" != "$((baseline_total + 9 + 6))" ]]; then
+    echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 9 + 6)) (baseline + mov_one re-added + 6 pads + multi + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name)" | tee -a "$result"
     exit 1
   fi
   if ! adb shell content query --uri content://com.android.contacts/data \
@@ -712,7 +717,16 @@ if [[ "$f_pass" != "1" ]]; then
   echo 'UNVERIFIED mid-batch failure injection never landed: the watchdog lost the race on all 3 attempts (markers above)' | tee -a "$result"
   exit 1
 fi
-# Re-seed mov_two for the remaining sections.
+# Drop the pads and re-seed mov_two for the remaining sections.
+for f_name in $f_pads; do
+  f_old="$(adb shell content query --uri content://com.android.contacts/data \
+    --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
+    | grep -E "data1=$f_name\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1 || true)"
+  if [[ "$f_old" =~ ^[0-9]+$ ]]; then
+    adb shell content delete --uri content://com.android.contacts/raw_contacts \
+      --where "_id=$f_old" < /dev/null >/dev/null 2>&1 || true
+  fi
+done
 seed_contact "$mov_two" "$num_two" >/dev/null
 
 # --- E. Empty SIM memory is refused ------------------------------------------
