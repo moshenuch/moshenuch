@@ -160,7 +160,7 @@ if bash GPT-c2-from-reborn/tools/smoke_move_copy_contacts_emulator.sh "$results"
      ! grep -Fq 'PASS structured-name contact kept out of Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS same-count mutation between confirm and Yes refused the Move' "$results/move-copy-contacts-results.txt" ||
      ! grep -Fq 'PASS custom-label contact copied to SIM as name+number only' "$results/move-copy-contacts-results.txt" ||
-     ! grep -Fq 'PASS rollback failure reported honestly: rolled_back=0' "$results/move-copy-contacts-results.txt"; then
+     ! grep -Fq 'PASS vanished insert restored to SIM and counted as undone: rolled_back=1' "$results/move-copy-contacts-results.txt"; then
     echo "::error::Move/Copy contacts acceptance incomplete; see move-copy-contacts-results.txt"
     move_copy_contacts_failed=1
   fi
