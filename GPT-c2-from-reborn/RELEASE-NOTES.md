@@ -1,3 +1,16 @@
+## Early default-SMS support and real SMS delete — 16 October 2026
+
+- **C2 is NOT ready to be the default SMS app yet.** This build adds the first plumbing and proves it on the Android 11 emulator. Nothing in the app asks for the role; only Android Settings > Apps > Default apps > SMS app can set it, and the recommendation is to keep the current SMS app as default for now.
+- **Inbound MMS (picture/group messages) are NOT saved while C2 is default.** SMS only for now; the inert WAP_PUSH receiver logs and drops them. This is the main reason not to switch the default yet.
+- New while C2 is the default SMS app: incoming SMS are stored in the phone and show up in Conversations/Inbox, surviving a restart. Multipart SMS are stored whole; a redelivered duplicate (same sender, sent timestamp and body, arriving within seconds) is stored once. **Residual, documented:** a genuinely distinct identical text from the same sender inside the same second is also stored once (at-most-once for that second). A multipart delivery with a missing segment is dropped whole rather than stored truncated. Malformed or empty deliveries are logged and skipped; the receiver never throws.
+- New while C2 is the default SMS app: deleting a message, a conversation, or all messages really deletes them from the phone. The confirm says so plainly first (permanence, the count, and on Delete all that MMS are not included), and the storage mode is pinned when the confirm opens: if the default-SMS setting changes before Yes, the delete refuses with "Default SMS app changed; try again" and nothing is touched. Drafts and saved templates clear only after the provider delete actually succeeded.
+- If C2 is NOT the default SMS app, delete keeps the current behavior: messages are hidden inside C2 only and stay in the phone's SMS store. Delete all now hides every SMS on the phone, not only the ones already loaded.
+- Emulator acceptance (Android 11): inbound single-part and multipart SMS persisted end-to-end and visible after restart; same-second identical delivery stored once; malformed delivery (no pdu payload) skipped with the provider unchanged; real Delete all removed exactly the provider rows present and left it empty; the SMS role was restored exactly as found after the probe. Null-part multipart rejection is code-audited only (the emulator console cannot inject malformed multipart PDUs).
+- Probe hardening: the delete-all-contacts and delete-all-messages probes refuse to run off-emulator; SMS role holder is read from dumpsys role because this API 30 image lacks `cmd role get-role-holders`.
+- APK **v2.03.16** / pinned HTML **v6.343**.
+
+---
+
 ## Move/Copy contacts data-loss fix and hardened transfer acceptance — 16 October 2026
 
 - **Fix (real defect, data loss):** Move/Copy contacts could lose data when the contact list changed between the confirm page and Yes, or when a batch op failed mid-transfer. The batch now revalidates against fresh provider data at Yes time and refuses with the HTML's own "Contacts changed; try again" when a contact lost its number or name, vanished, or had its value mutated since the confirm; a contact that gained a number is skipped as multi-number instead. **v2.03.14 users should avoid Move/Copy contacts** - that build's CI run was cancelled before the full acceptance completed; this release replaces it.
