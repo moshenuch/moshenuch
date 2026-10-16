@@ -4224,6 +4224,18 @@ public class C2PhoneView extends View {
         showNotice("Ending call");
     }
 
+    /** External sms:/smsto: link: open Compose with recipient/body prefilled. */
+    public void openComposeFromExternal(String number, String body) {
+        recipient = number == null ? "" : number;
+        messageBody = body == null ? "" : body;
+        composeFocus = recipient.isEmpty() ? 0 : 1;
+        editingDraftIndex = -1;
+        history.clear();
+        go("compose");
+        android.util.Log.i("C2Messages", "SENDTO_OPEN recipient=" + recipient
+                + " bodylen=" + messageBody.length());
+    }
+
     private void sendMessage() {
         if (demoMode) {
             showNotice("DEMO: Sending real SMS is disabled");
@@ -4242,6 +4254,14 @@ public class C2PhoneView extends View {
         if (!backend.sendSms(recipient.trim(), messageBody)) {
             showNotice("SMS permission required");
             return;
+        }
+        if (backend.isDefaultSmsApp()) {
+            // The default SMS app owns sent history; without the role the
+            // provider refuses the write and the row stays unsaved.
+            long sentId = backend.insertSentSms(recipient.trim(), messageBody);
+            android.util.Log.i("C2Messages", "SENT_ROW stored id=" + sentId);
+        } else {
+            android.util.Log.i("C2Messages", "SENT_ROW skipped reason=not_default");
         }
         recordMsgRecipient(recipient.trim());
         if (editingDraftIndex >= 0 && editingDraftIndex < drafts.size()) {
