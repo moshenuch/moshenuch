@@ -625,14 +625,15 @@ fi
 # Since audit #20 the Yes-time revalidation refuses the batch when a
 # contact vanished since the confirm (section G2 covers that refusal), so
 # deleting mov_two BEFORE Yes no longer reaches the rollback. The failure
-# is injected mid-batch instead: six pad contacts widen the batch, an
+# is injected mid-batch instead: fifty pad contacts widen the batch, an
 # on-device watchdog deletes mov_two's raw contact the moment the app
-# logs its post-revalidation preflight marker, and the app's conditional
-# delete then affects 0 rows - the op fails and everything already moved
-# must come back. A clean run (the app beat the watchdog) is retried after a full
+# logs its post-revalidation preflight marker (logcat streaming latency
+# beat six pads - run 38843223876), and the app's conditional delete then
+# affects 0 rows - the op fails and everything already moved must come
+# back. A clean run (the app beat the watchdog) is retried after a full
 # state reset. Contacts are processed in display-name order: DelOne,
-# DelTwo, MoveOne, six AAAC2MovePad*, then mov_two.
-f_pads="AAAC2MovePad1 AAAC2MovePad2 AAAC2MovePad3 AAAC2MovePad4 AAAC2MovePad5 AAAC2MovePad6"
+# DelTwo, MoveOne, fifty AAAC2MovePad*, then mov_two.
+f_pads="$(for f_i in $(seq 1 50); do printf 'AAAC2MovePad%d ' "$f_i"; done)"
 f_pass=0
 for f_attempt in 1 2 3; do
   echo "rollback-failure attempt $f_attempt" >> "$result"
@@ -668,7 +669,7 @@ for f_attempt in 1 2 3; do
   adb logcat -c || true
   tap OK                          # From phone to SIM
   sleep 1
-  require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$((move_eligible + 6))"
+  require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$((move_eligible + 50))"
   shot movecopy-rollback-confirm
   two_id="$(adb shell content query --uri content://com.android.contacts/data \
     --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
@@ -686,7 +687,7 @@ for f_attempt in 1 2 3; do
 content delete --uri content://com.android.contacts/raw_contacts --where "_id='"$two_id"'" >/dev/null 2>&1
 echo "watchdog deleted mov_two raw_contact_id='"$two_id"'"' > /tmp/f_watchdog.out 2>&1 < /dev/null &
   f_watch_pid=$!
-  tap LSK                         # Yes: nine contacts move, mov_two fails -> rollback
+  tap LSK                         # Yes: 53 contacts move, mov_two fails -> rollback
   wait "$f_watch_pid" || true
   sed "s/^/  attempt $f_attempt /" /tmp/f_watchdog.out >> "$result"
   sleep 4
@@ -697,7 +698,7 @@ echo "watchdog deleted mov_two raw_contact_id='"$two_id"'"' > /tmp/f_watchdog.ou
     echo "  attempt $f_attempt: app beat the watchdog (clean move); resetting and retrying" >> "$result"
     continue
   fi
-  if ! grep -qF "done=9 failed=1 skipped=$((multi_total + 8)) skipped_multi=$multi_total skipped_data=7 skipped_noname=1 rolled_back=1 undone=9" <<< "$f_marker"; then
+  if ! grep -qF "done=53 failed=1 skipped=$((multi_total + 8)) skipped_multi=$multi_total skipped_data=7 skipped_noname=1 rolled_back=1 undone=53" <<< "$f_marker"; then
     echo "FAIL unexpected rollback marker: $f_marker" | tee -a "$result"
     exit 1
   fi
@@ -708,8 +709,8 @@ echo "watchdog deleted mov_two raw_contact_id='"$two_id"'"' > /tmp/f_watchdog.ou
     echo "FAIL rollback left $f_sim entries in the SIM list" | tee -a "$result"
     exit 1
   fi
-  if [[ "$f_provider" != "$((baseline_total + 10 + 6))" ]]; then
-    echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 10 + 6)) (baseline + mov_one re-added + 6 pads + multi + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name + family-echo)" | tee -a "$result"
+  if [[ "$f_provider" != "$((baseline_total + 10 + 50))" ]]; then
+    echo "FAIL provider holds $f_provider rows after rollback, expected $((baseline_total + 10 + 50)) (baseline + mov_one re-added + 50 pads + multi + extra-data + custom-label + account-backed + nameless + non-mobile + primary + structured-name + family-echo)" | tee -a "$result"
     exit 1
   fi
   if ! adb shell content query --uri content://com.android.contacts/data \
