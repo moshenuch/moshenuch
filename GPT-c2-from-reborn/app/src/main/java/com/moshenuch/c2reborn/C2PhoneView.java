@@ -7482,15 +7482,15 @@ public class C2PhoneView extends View {
                 showNotice("Default SMS app changed; try again");
             } else {
             int draftCount = drafts.size();
-            drafts.clear();
-            saveDrafts();
             int savedCount = savedSmsTemplates.size();
-            savedSmsTemplates.clear();
-            saveStringList("sms_templates_v1", savedSmsTemplates);
             markedSmsIds.clear();
             markedThreadIds.clear();
             boolean landAfterDelete = true;
             if (demoMode) {
+            drafts.clear();
+            saveDrafts();
+            savedSmsTemplates.clear();
+            saveStringList("sms_templates_v1", savedSmsTemplates);
                 // HTML performs confirmdelete in demo too, then restores its
                 // demo thread. Native demo messages are regenerated fixtures,
                 // so performing = clearing fixture ids from the hidden set.
@@ -7516,6 +7516,12 @@ public class C2PhoneView extends View {
                     showNotice("Messages could not be deleted");
                     landAfterDelete = false;
                 } else {
+                // App-local stores clear only after the provider delete
+                // succeeded; otherwise they would be gone for nothing.
+                drafts.clear();
+                saveDrafts();
+                savedSmsTemplates.clear();
+                saveStringList("sms_templates_v1", savedSmsTemplates);
                 hiddenSmsIds.clear();
                 saveLongSet("sms_hidden", hiddenSmsIds);
                 refreshSmsFromPhone();
@@ -7528,6 +7534,10 @@ public class C2PhoneView extends View {
                 // so bulk delete is in-app only: every provider SMS joins
                 // the hidden set (ALL row ids, not just the loaded window)
                 // and phone SMS records stay untouched, matching deleteSms.
+                drafts.clear();
+                saveDrafts();
+                savedSmsTemplates.clear();
+                saveStringList("sms_templates_v1", savedSmsTemplates);
                 int hidden = 0;
                 for (Long id : backend.loadAllSmsIds())
                     if (hiddenSmsIds.add(id)) hidden++;
