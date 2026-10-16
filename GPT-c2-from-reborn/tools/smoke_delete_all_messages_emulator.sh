@@ -637,6 +637,59 @@ else
     echo 'PASS sms: link prefilled Compose from a cold start and sending stored a SENT provider row (type=2)' | tee -a "$result"
   fi
 
+  # D2s-b. A recipient list is not one address: Compose opens with the
+  # recipient blank and a notice; the joined string can never be sent
+  # (audit #31 item 2).
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903011,07700903012?body=C2multi" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_MULTI list=07700903011,07700903012"
+  require_marker "SENDTO_OPEN recipient= bodylen=7"
+  shot delmsg-sendto-multi
+  echo 'PASS sms: link with several recipients opens Compose with an empty recipient and a notice' | tee -a "$result"
+
+  # D2s-c. External bodies are cut at 1600 characters with a notice, never
+  # silently (audit #31 item 3).
+  long_body="$(printf 'x%.0s' $(seq 1 1700))"
+  adb shell am force-stop "$package"
+  adb logcat -c || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903010?body=$long_body" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_TRUNCATED from=1700 to=1600"
+  require_marker "SENDTO_OPEN recipient=07700903010 bodylen=1600"
+  shot delmsg-sendto-truncated
+  echo 'PASS sms: link body over 1600 characters is cut with a notice' | tee -a "$result"
+
+  # D2s-d. A link that arrives while a compose is in progress keeps the
+  # in-progress message as a draft (audit #31 item 1). --activity-single-top
+  # delivers to the running instance, exercising the onNewIntent path.
+  adb shell am force-stop "$package"
+  adb shell am start -W -n "$package/.MainActivity" >> "$result"
+  sleep 2
+  expect_foreground
+  tap OK                          # home menu grid
+  tap RIGHT; tap DOWN; tap OK     # Messaging menu (selection row 0)
+  tap OK                          # "Create message"
+  sleep 1
+  adb shell input text "07900005003" < /dev/null
+  sleep 1
+  adb logcat -c || true
+  adb shell am start -W --activity-single-top -a android.intent.action.SENDTO -d "sms:07700903014?body=C2link2" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  sleep 2
+  expect_foreground
+  require_marker "SENDTO_DRAFT_SAVED recipient=07900005003 bodylen=0"
+  require_marker "SENDTO_OPEN recipient=07700903014 bodylen=7"
+  prefs_dump="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
+  if ! grep -Fq '07900005003' <<< "$prefs_dump"; then
+    echo 'FAIL in-progress compose was not kept as a draft after the SENDTO link' | tee -a "$result"
+    exit 1
+  fi
+  shot delmsg-sendto-draftkept
+  echo 'PASS sms: link while composing keeps the in-progress message as a draft' | tee -a "$result"
+
   # D3. Real delete: Delete all messages now removes every provider row
   # (inbound, multipart, redelivery and the sent row alike).
   seed_prefs_fixture
@@ -683,7 +736,7 @@ fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-sendto-fail delmsg-confirm-real delmsg-after-real; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-sendto-fail delmsg-sendto-multi delmsg-sendto-truncated delmsg-sendto-draftkept delmsg-confirm-real delmsg-after-real; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
