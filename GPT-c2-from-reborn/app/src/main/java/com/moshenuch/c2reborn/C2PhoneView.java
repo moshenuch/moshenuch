@@ -7611,6 +7611,7 @@ public class C2PhoneView extends View {
                         // path; the wording is the HTML's own changed-list
                         // error).
                         int undone = 0;
+                        int vanished = 0;
                         for (int idx = 0; idx < completed.size(); idx++) {
                             Contact c = completed.get(idx);
                             boolean back;
@@ -7636,14 +7637,27 @@ public class C2PhoneView extends View {
                                     // copy, so it is restored anyway.
                                     long rawId = completedRawIds.get(idx);
                                     back = backend.deleteRawContact(rawId);
-                                    if (back || !backend.rawContactLive(rawId)) {
+                                    if (!back) {
+                                        int rawState = backend.rawContactState(rawId);
+                                        if (rawState == AndroidBackend.RAW_ABSENT) {
+                                            // The row vanished without us;
+                                            // the restored SIM entry is the
+                                            // only copy, so the undo IS
+                                            // complete for this contact -
+                                            // counted, no warning
+                                            // (audit #21).
+                                            back = true;
+                                            vanished++;
+                                            simContacts.add(c);
+                                        }
+                                        // RAW_LIVE / RAW_UNKNOWN: the SIM
+                                        // entry is not re-added, so the
+                                        // contact can never sit in both
+                                        // places; undone < done, so the
+                                        // undo-incomplete notice shows.
+                                    } else {
                                         simContacts.add(c);
                                     }
-                                    // Delete failed while the row stays
-                                    // live: the phone copy remains and the
-                                    // SIM entry is not re-added (no
-                                    // duplicate); undone < done, so the
-                                    // undo-incomplete notice shows.
                                 } else {
                                     if (move) simContacts.add(c);
                                     if (deviceContactsActive) {
@@ -7678,7 +7692,8 @@ public class C2PhoneView extends View {
                                         + " skipped_data=" + skippedData
                                         + " skipped_noname=" + skippedNoName
                                         + " rolled_back=" + (rolledBack ? 1 : 0)
-                                        + " undone=" + undone);
+                                        + " undone=" + undone
+                                        + " vanished=" + vanished);
                         // "Contacts changed; try again" is the HTML's own
                         // changed-list error. The undo-incomplete wording is
                         // plain factual (no HTML source), disclosed (audit #16).
