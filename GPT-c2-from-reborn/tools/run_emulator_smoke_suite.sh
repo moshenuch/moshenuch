@@ -129,6 +129,9 @@ if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results
      ! grep -Fq 'PASS inbound multipart SMS stored as one provider row' "$results/delete-all-messages-results.txt" ||
      ! grep -Eq 'PASS (same-second identical SMS stored once|SMS redelivery not reproducible)' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS sms: link prefilled Compose from a cold start and sending stored a SENT provider row' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: link with several recipients opens Compose with an empty recipient and a notice' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: link body over 1600 characters is cut with a notice' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS sms: link while composing keeps the in-progress message as a draft' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS inbound SMS visible in Inbox after app restart' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS Delete all messages under default-SMS role really deleted every provider SMS' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS real Delete all messages also cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
