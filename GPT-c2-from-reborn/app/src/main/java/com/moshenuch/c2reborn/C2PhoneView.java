@@ -7506,7 +7506,9 @@ public class C2PhoneView extends View {
                 // never present in release behavior): when the smoke probe
                 // arms the gate file, hold the batch until it signals (or a
                 // bounded timeout) so it can inject its mid-batch failure.
-                if (BuildConfig.DEBUG) {
+                boolean debuggable = (getContext().getApplicationInfo().flags
+                        & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+                if (debuggable) {
                     java.io.File fGate =
                             new java.io.File(getContext().getFilesDir(), "move_preflight_gate");
                     if (fGate.exists()) {
