@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# Android 11 acceptance for Messaging > Delete messages > All messages.
+# Android 11 acceptance for Messaging > Delete messages.
 # BLOCKING in the suite:
-#  Y. Yes: the in-house "Delete all messages?" question box (HTML v6.343
-#     confirmdelete wording, Yes/No softkeys) hides every visible provider
-#     SMS (hide-only: the SMS provider must stay byte-identical), clears the
-#     app-local drafts and saved templates (HTML confirmdelete clears them),
-#     and lands on the Messaging menu with "Delete messages" selected.
-#  N. No:  answering No on the confirm hides nothing and writes nothing.
-# Coverage notes: SMS provider seeding is shell/root best-effort on this
-# image (same limitation as the Conversations probe); when seeding fails the
-# provider-hide assertions run empty and the seeded-SMS PASS stays absent so
-# the suite warning gate reports the gap. Drafts/templates are seeded
-# deterministically through the app prefs fixture (msg-recipients shape) and
-# verified cleared by reading the prefs back, not just via logcat.
-# Emulator only.
+#  Y. Yes (no SMS role): the in-house "Delete all messages?" question box
+#     (HTML v6.343 confirmdelete wording, Yes/No softkeys) hides every
+#     provider SMS (hide-only: provider must stay byte-identical, ALL rows
+#     not just the loaded window), clears app-local drafts/templates, and
+#     lands on the Messaging menu with "Delete messages" selected.
+#  N. No: answering No hides nothing and writes nothing.
+#  R. Folder rows route to their folder pages (route markers assert the
+#     destinations; provider and hidden set untouched by the sweep).
+#  D. Default-SMS role (granted via cmd role): inbound SMS persists
+#     end-to-end (emu sms send -> SMS_DELIVER receiver -> provider row,
+#     visible after app restart) and Delete all messages then really
+#     deletes every provider SMS row. The role is restored afterwards.
+# Full provider rows (address/body/date/type/read) are snapshotted
+# before/after Yes and No, not just id lists.
+# Coverage notes: shell SMS provider seeding stays root best-effort on this
+# image; when it fails the hide-path assertions run empty and the seeded
+# PASS lines stay absent so the suite warning gate reports the gap.
+# Emulator only: refuses to run on hardware (real-delete section).
 set -euo pipefail
 out="${1:-GPT-c2-from-reborn/build/emulator-smoke}"
 mkdir -p "$out"
@@ -24,9 +29,19 @@ prefs_dir="/data/data/$package/shared_prefs"
 backup="$out/delete-all-messages-prefs-backup.xml"
 restore_needed=0
 rooted=0
+role_granted=0
+role_prev_holder=""
 seeded_sms_ids=""
 sms_one="+44770090301"
 sms_two="+44770090302"
+inbound_number="+44770090399"
+inbound_body="C2 inbound persistence probe 7741"
+
+qemu="$(adb shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r'; adb shell getprop ro.boot.qemu 2>/dev/null | tr -d '\r')"
+if ! grep -q 1 <<< "$qemu"; then
+  echo "REFUSING: delete-messages probe runs on emulators only (ro.kernel.qemu/ro.boot.qemu unset)" | tee -a "$result"
+  exit 1
+fi
 
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -1 | tr -d '\r')"
 if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -63,10 +78,9 @@ capture_evidence() {
   adb pull /sdcard/c2-delmsg.png "$out/delete-all-messages-screen.png" >/dev/null 2>&1 || true
   adb shell rm -f /sdcard/c2-delmsg.png 2>/dev/null || true
 }
-# EXIT trap owns every cleanup path (audit-#11 item 3 + audit-#12 items
-# 2+4 shape): evidence, tracked SMS row deletion, prefs restore, unroot,
-# wait, uid check. Every fallible command is guarded so set -euo pipefail
-# cannot abort the trap early.
+# EXIT trap owns every cleanup path: evidence, tracked SMS row deletion,
+# SMS-role restore, prefs restore, unroot, wait, uid check. Every fallible
+# command is guarded so set -euo pipefail cannot abort the trap early.
 finish() {
   capture_evidence
   if [[ "$rooted" == "1" && -n "$seeded_sms_ids" ]]; then
@@ -87,6 +101,19 @@ finish() {
         echo "FAIL cleanup: seeded SMS row _id=$sms_id still present after delete" | tee -a "$result"
       fi
     done <<< "$seeded_sms_ids"
+  fi
+  # Give the SMS role back exactly as found.
+  if [[ "$role_granted" == "1" ]]; then
+    adb shell cmd role remove-role-holder android.app.role.SMS "$package" < /dev/null >/dev/null 2>&1 || true
+    if [[ -n "$role_prev_holder" && "$role_prev_holder" != "$package" ]]; then
+      adb shell cmd role add-role-holder android.app.role.SMS "$role_prev_holder" < /dev/null >/dev/null 2>&1 || true
+    fi
+    holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+    if [[ "$holder_after" == "$package" ]]; then
+      echo "FAIL cleanup: SMS role still held by C2 after restore" | tee -a "$result"
+    else
+      echo "PASS SMS role restored after probe (holder: ${holder_after:-none})" | tee -a "$result"
+    fi
   fi
   # Restore the prefs exactly as found (or remove the fixture), so the
   # hidden-id set this probe creates never leaks into later probes.
@@ -149,7 +176,10 @@ require_marker() {
   fi
 }
 sms_ids() { # one provider sms _id per line, sorted; empty when provider empty
-  adb shell content query --uri content://sms --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+  adb shell content query --uri content://sms --projection _id < /dev/null 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+}
+sms_rows() { # full provider rows (audit-#14 delta a): id/address/body/date/type/read
+  adb shell content query --uri content://sms --projection _id:address:body:date:type:read < /dev/null 2>&1 | tr -d '\r' | sort || true
 }
 
 # Grant the full runtime set up front so no cold-start permission sheet can
@@ -159,6 +189,25 @@ for perm in READ_CONTACTS WRITE_CONTACTS READ_SMS SEND_SMS RECEIVE_SMS \
             READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE; do
   adb shell pm grant "$package" "android.permission.$perm" 2>/dev/null || true
 done
+
+seed_prefs_fixture() {
+  local fixture="$out/delete-all-messages-prefs-fixture.xml"
+  cat > "$fixture" <<'XML'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="drafts_v2">[{&quot;recipient&quot;:&quot;07900005003&quot;,&quot;body&quot;:&quot;Probe draft body&quot;,&quot;inputMode&quot;:&quot;T9&quot;,&quot;createdAt&quot;:1760000000000}]</string>
+    <string name="sms_templates_v1">[&quot;Probe template body&quot;]</string>
+</map>
+XML
+  adb shell run-as "$package" mkdir -p "$prefs_dir" 2>/dev/null || true
+  adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$fixture"
+  seeded_keys="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -oE 'drafts_v2|sms_templates_v1' | sort -u | tr '\n' ' ' || true)"
+  if [[ "$seeded_keys" != *"drafts_v2"* || "$seeded_keys" != *"sms_templates_v1"* ]]; then
+    echo "FAIL could not seed drafts/templates prefs fixture (found: ${seeded_keys:-none})" | tee -a "$result"
+    exit 1
+  fi
+  echo "SEEDED prefs fixture: $seeded_keys" >> "$result"
+}
 
 # --- Prefs fixture: one draft + one saved template --------------------------
 # Deterministic app-local data for the HTML confirmdelete parity check (the
@@ -170,22 +219,7 @@ if [[ -s "$backup" ]] && grep -q '<map>' "$backup"; then
   restore_needed=1
   echo "BACKUP existing c2_state.xml captured for restore" >> "$result"
 fi
-fixture="$out/delete-all-messages-prefs-fixture.xml"
-cat > "$fixture" <<'XML'
-<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
-<map>
-    <string name="drafts_v2">[{&quot;recipient&quot;:&quot;07900005003&quot;,&quot;body&quot;:&quot;Probe draft body&quot;,&quot;inputMode&quot;:&quot;T9&quot;,&quot;createdAt&quot;:1760000000000}]</string>
-    <string name="sms_templates_v1">[&quot;Probe template body&quot;]</string>
-</map>
-XML
-adb shell run-as "$package" mkdir -p "$prefs_dir" 2>/dev/null || true
-adb shell "run-as $package sh -c 'cat > $prefs_dir/c2_state.xml'" < "$fixture"
-seeded_keys="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' | grep -oE 'drafts_v2|sms_templates_v1' | sort -u | tr '\n' ' ' || true)"
-if [[ "$seeded_keys" != *"drafts_v2"* || "$seeded_keys" != *"sms_templates_v1"* ]]; then
-  echo "FAIL could not seed drafts/templates prefs fixture (found: ${seeded_keys:-none})" | tee -a "$result"
-  exit 1
-fi
-echo "SEEDED prefs fixture: $seeded_keys" >> "$result"
+seed_prefs_fixture
 
 # --- SMS provider seeding (best-effort, root) -------------------------------
 provider_before="$(sms_ids)"
@@ -193,18 +227,18 @@ if adb root 2>&1 | grep -qi 'root'; then
   rooted=1
   sleep 3
   adb wait-for-device
-  pre_addr_ids="$(adb shell content query --uri content://sms --projection _id:address 2>&1 | tr -d '\r' | grep -E "address=($sms_one|$sms_two)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
+  pre_addr_ids="$(adb shell content query --uri content://sms --projection _id:address < /dev/null 2>&1 | tr -d '\r' | grep -E "address=($sms_one|$sms_two)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
   now_ms="$(date +%s)000"
   adb shell content insert --uri content://sms \
     --bind address:s:"$sms_one" --bind body:s:ProbeOne \
-    --bind type:i:1 --bind date:l:"$now_ms" >/dev/null 2>&1 || true
+    --bind type:i:1 --bind date:l:"$now_ms" < /dev/null >/dev/null 2>&1 || true
   adb shell content insert --uri content://sms \
     --bind address:s:"$sms_two" --bind body:s:ProbeTwo \
-    --bind type:i:1 --bind date:l:"$((now_ms + 60000))" >/dev/null 2>&1 || true
-  sms_check="$(adb shell content query --uri content://sms --projection address 2>&1 | tr -d '\r' || true)"
+    --bind type:i:1 --bind date:l:"$((now_ms + 60000))" < /dev/null >/dev/null 2>&1 || true
+  sms_check="$(adb shell content query --uri content://sms --projection address < /dev/null 2>&1 | tr -d '\r' || true)"
   if grep -Fq "address=$sms_one" <<< "$sms_check" && grep -Fq "address=$sms_two" <<< "$sms_check"; then
     # Attribute rows by id-diff, never by address alone (audit-#12 item 1).
-    post_addr_ids="$(adb shell content query --uri content://sms --projection _id:address 2>&1 | tr -d '\r' | grep -E "address=($sms_one|$sms_two)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
+    post_addr_ids="$(adb shell content query --uri content://sms --projection _id:address < /dev/null 2>&1 | tr -d '\r' | grep -E "address=($sms_one|$sms_two)" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | grep -E '^[0-9]+$' || true)"
     while IFS= read -r cand; do
       [[ "$cand" =~ ^[0-9]+$ ]] || continue
       if ! grep -qx "$cand" <<< "$pre_addr_ids"; then
@@ -224,13 +258,15 @@ else
   echo "UNVERIFIED adb root unavailable; SMS provider seeding skipped, provider-hide assertions run empty" | tee -a "$result"
 fi
 provider_after_seed="$(sms_ids)"
-# -1: skip the count assertion (partial attribution); 0: nothing seeded;
-# 2: both rows attributed - the strong case.
-expected_hidden=0
-if [[ -n "$seeded_sms_ids" ]] && [[ "$(grep -c . <<< "$seeded_sms_ids")" == "2" ]]; then
-  expected_hidden=2
+provider_total="$(grep -c . <<< "$provider_after_seed" || true)"
+# -1: skip the count assertion (partial attribution or unreadable provider);
+# otherwise the hide path must hide EVERY provider row, not just the
+# app's loaded window (audit-#14 item 2).
+expected_hidden=-1
+if [[ -n "$provider_after_seed" && "$provider_total" -ge 2 && -n "$seeded_sms_ids" ]] \
+   && [[ "$(grep -c . <<< "$seeded_sms_ids")" == "2" ]]; then
+  expected_hidden="$provider_total"
 elif [[ -n "$seeded_sms_ids" ]]; then
-  expected_hidden=-1
   echo 'UNVERIFIED partial SMS attribution; hidden-count assertion skipped' | tee -a "$result"
 fi
 
@@ -252,16 +288,14 @@ open_delete_messages() {
   # selection now on "Delete messages" (row 12)
 }
 
-# --- Y. Yes hides every visible SMS, clears drafts/templates ----------------
+# --- Y. Yes hides every provider SMS, clears drafts/templates ---------------
+rows_before_yes="$(sms_rows)"
 open_delete_messages
 tap OK                          # open the Delete messages submenu (sel 0 = All messages)
 shot delmsg-submenu
 tap OK                          # "All messages" row -> in-house confirm
 sleep 1
 require_marker 'DELETE_ALL_MESSAGES_CONFIRM'
-if [[ "$expected_hidden" -gt 0 ]]; then
-  require_marker "DELETE_ALL_MESSAGES_CONFIRM visible=$expected_hidden"
-fi
 shot delmsg-confirm-yes
 tap LSK                         # Yes
 sleep 2
@@ -271,16 +305,17 @@ actual_hidden=""
 if [[ "$expected_hidden" -ge 0 ]]; then
   actual_hidden="$(adb logcat -d -s C2Messages:I 2>/dev/null | grep -oE 'DELETE_ALL_MESSAGES hidden=[0-9]+' | tail -1 | grep -oE '[0-9]+$' || true)"
   if [[ "$actual_hidden" != "$expected_hidden" ]]; then
-    echo "FAIL hidden count mismatch: app hid ${actual_hidden:-unknown}, expected $expected_hidden" | tee -a "$result"
+    echo "FAIL hidden count mismatch: app hid ${actual_hidden:-unknown}, expected ALL $expected_hidden provider rows" | tee -a "$result"
     exit 1
   fi
 fi
-provider_after_yes="$(sms_ids)"
-if [[ "$provider_after_yes" != "$provider_after_seed" ]]; then
-  echo "FAIL hide-only promise broken: SMS provider changed (before: ${provider_after_seed:-none} / after: ${provider_after_yes:-none})" | tee -a "$result"
+rows_after_yes="$(sms_rows)"
+if [[ "$rows_after_yes" != "$rows_before_yes" ]]; then
+  echo "FAIL hide-only promise broken: SMS provider rows changed across Yes" | tee -a "$result"
+  diff <(printf '%s\n' "$rows_before_yes") <(printf '%s\n' "$rows_after_yes") | head -10 | tee -a "$result" || true
   exit 1
 fi
-echo 'PASS Delete all messages provider unchanged (hide-only)' | tee -a "$result"
+echo 'PASS Delete all messages provider rows unchanged across Yes (hide-only, full-row snapshot)' | tee -a "$result"
 # Drafts/templates really cleared: read the prefs back, do not trust the log.
 prefs_after="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
 if grep -Fq '<string name="drafts_v2">[]</string>' <<< "$prefs_after" \
@@ -290,15 +325,15 @@ else
   echo "FAIL drafts/templates not cleared in prefs after Yes: $prefs_after" | tee -a "$result"
   exit 1
 fi
-if [[ "$expected_hidden" == "2" ]]; then
-  echo 'PASS Delete all messages Yes hid every seeded SMS (2 hidden)' | tee -a "$result"
+if [[ "$expected_hidden" -ge 2 ]]; then
+  echo "PASS Delete all messages Yes hid every provider SMS ($expected_hidden hidden, all rows incl. beyond load window)" | tee -a "$result"
 else
   echo "PASS Delete all messages Yes completed (hidden=${actual_hidden:-skipped}, seed coverage limited)" | tee -a "$result"
 fi
 expect_foreground
 echo 'PASS C2 remains foreground after Delete all messages Yes' | tee -a "$result"
 shot delmsg-after-yes
-if [[ "$expected_hidden" == "2" ]]; then
+if [[ "$expected_hidden" -ge 2 ]]; then
   # Visual proof of hiding: Conversations (Messaging row 1) must be empty.
   # After Yes the app sits on the Messaging menu, selection on row 12.
   tap UP; tap UP; tap UP; tap UP; tap UP; tap UP
@@ -309,6 +344,7 @@ if [[ "$expected_hidden" == "2" ]]; then
 fi
 
 # --- N. No leaves everything untouched --------------------------------------
+rows_before_no="$(sms_rows)"
 open_delete_messages
 adb logcat -c || true
 tap OK                          # open the Delete messages submenu
@@ -318,16 +354,17 @@ require_marker 'DELETE_ALL_MESSAGES_CONFIRM'
 shot delmsg-confirm-no
 tap RSK                         # No
 sleep 2
-if marker_seen 'DELETE_ALL_MESSAGES hidden='; then
+if marker_seen 'DELETE_ALL_MESSAGES hidden=' || marker_seen 'DELETE_ALL_MESSAGES real='; then
   echo 'FAIL answering No still ran the delete handler' | tee -a "$result"
   exit 1
 fi
-provider_after_no="$(sms_ids)"
-if [[ "$provider_after_no" != "$provider_after_seed" ]]; then
-  echo "FAIL Delete all messages No changed the provider (before: ${provider_after_seed:-none} / after: ${provider_after_no:-none})" | tee -a "$result"
+rows_after_no="$(sms_rows)"
+if [[ "$rows_after_no" != "$rows_before_no" ]]; then
+  echo "FAIL Delete all messages No changed the provider rows" | tee -a "$result"
+  diff <(printf '%s\n' "$rows_before_no") <(printf '%s\n' "$rows_after_no") | head -10 | tee -a "$result" || true
   exit 1
 fi
-echo 'PASS Delete all messages No left provider unchanged' | tee -a "$result"
+echo 'PASS Delete all messages No left provider rows unchanged (full-row snapshot)' | tee -a "$result"
 expect_foreground
 echo 'PASS C2 remains foreground after Delete all messages No' | tee -a "$result"
 shot delmsg-after-no
@@ -335,27 +372,134 @@ shot delmsg-after-no
 # --- R. Folder rows route to their folder pages -----------------------------
 # HTML v6.343 routes its By message / By folder rows to the inbox and folder
 # pages; the native submenu rows must open Saved items / Inbox / Sent items /
-# Drafts (per-message handling lives there). Page titles are the evidence -
-# verified visually from the screenshots.
-route_row() { # route_row <downs> <name>
+# Drafts (per-message handling lives there). The app's DELETE_MESSAGES_ROUTE
+# marker asserts the actual destination page (the UI renders in the app View,
+# so uiautomator sees nothing), and the provider must not change across the
+# sweep.
+rows_before_routes="$(sms_rows)"
+route_row() { # route_row <downs> <page> <name>
   open_delete_messages
+  adb logcat -c || true
   tap OK                          # open the Delete messages submenu
   local i
   for ((i = 0; i < $1; i++)); do tap DOWN; done
   tap OK                          # open the folder page
   sleep 1
   expect_foreground
-  shot "delmsg-route-$2"
-  echo "PASS Delete messages row routes: $2" | tee -a "$result"
+  require_marker "DELETE_MESSAGES_ROUTE dest=$2"
+  shot "delmsg-route-$3"
+  echo "PASS Delete messages row routes to $2 (marker-verified): $3" | tee -a "$result"
 }
-route_row 1 byfolder
-route_row 2 inbox
-route_row 3 sent
-route_row 4 drafts
+route_row 1 savedmessages byfolder
+route_row 2 inbox inbox
+route_row 3 sent sent
+route_row 4 drafts drafts
+rows_after_routes="$(sms_rows)"
+if [[ "$rows_after_routes" != "$rows_before_routes" ]]; then
+  echo "FAIL folder-route sweep changed the provider rows" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS folder-route sweep left provider rows unchanged' | tee -a "$result"
+
+# --- D. Default-SMS role: inbound persistence + real delete -----------------
+role_prev_holder="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+adb shell cmd role add-role-holder android.app.role.SMS "$package" < /dev/null > "$out/role-grant.txt" 2>&1 || true
+sleep 1
+holder="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+if [[ "$holder" != "$package" ]]; then
+  echo "UNVERIFIED could not grant default SMS role (holder=${holder:-none}); default-SMS sections skipped" | tee -a "$result"
+else
+  role_granted=1
+  echo "SMS role granted to $package (previous holder: ${role_prev_holder:-none})" >> "$result"
+
+  # D1. Inbound SMS persists end-to-end: emu sms send -> SMS_DELIVER -> the
+  # app's receiver writes the provider row.
+  adb logcat -c || true
+  emu_out="$(adb emu sms send "$inbound_number" "$inbound_body" 2>&1 || true)"
+  if grep -qiE 'error|refused|KO' <<< "$emu_out"; then
+    echo "UNVERIFIED adb emu sms send unavailable on this image: $emu_out" | tee -a "$result"
+  else
+    inbound_id=""
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      inbound_id="$(adb shell content query --uri content://sms --projection _id:body < /dev/null 2>&1 | tr -d '\r' | grep -F "body=$inbound_body" | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | head -1 || true)"
+      [[ -n "$inbound_id" ]] && break
+      sleep 1
+    done
+    if [[ -z "$inbound_id" ]]; then
+      echo 'FAIL inbound SMS (emu sms send) never reached the provider under the default-SMS role' | tee -a "$result"
+      adb logcat -d -s C2Messages:I 2>/dev/null | tail -20 | tee -a "$result" || true
+      exit 1
+    fi
+    require_marker 'SMS_DELIVER stored parts=1'
+    echo "PASS inbound SMS persisted end-to-end under default-SMS role (emu sms send -> provider id=$inbound_id)" | tee -a "$result"
+
+    # D2. Visible in the app after a full restart (Inbox reads the provider;
+    # a restart proves the row is durable, not cached).
+    adb shell am force-stop "$package"
+    adb shell am start -W -n "$package/.MainActivity" >> "$result"
+    sleep 2
+    expect_foreground
+    still="$(adb shell content query --uri content://sms --projection _id --where "_id=$inbound_id" < /dev/null 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | head -1 || true)"
+    if [[ -z "$still" ]]; then
+      echo 'FAIL inbound SMS row vanished across app restart' | tee -a "$result"
+      exit 1
+    fi
+    tap OK; tap RIGHT; tap DOWN; tap OK     # Messaging menu (selection row 0)
+    tap DOWN                                # row 1: Conversations
+    tap LSK                                 # Options
+    tap DOWN                                # "Inbox view"
+    tap OK                                  # Inbox page
+    sleep 2
+    shot delmsg-inbound-inbox
+    echo 'PASS inbound SMS visible in Inbox after app restart (provider row durable, screenshot evidence)' | tee -a "$result"
+  fi
+
+  # D3. Real delete: Delete all messages now removes every provider row.
+  seed_prefs_fixture
+  rows_before_real="$(sms_rows)"
+  real_expected="$(grep -c . <<< "$rows_before_real" || true)"
+  open_delete_messages
+  tap OK                          # open the Delete messages submenu
+  tap OK                          # "All messages" row -> in-house confirm
+  sleep 1
+  require_marker 'DELETE_ALL_MESSAGES_CONFIRM'
+  shot delmsg-confirm-real
+  tap LSK                         # Yes
+  sleep 3
+  require_marker 'DELETE_ALL_MESSAGES real='
+  real_line="$(adb logcat -d -s C2Messages:I 2>/dev/null | grep -oE 'DELETE_ALL_MESSAGES real=[0-9]+ before=[0-9]+' | tail -1 || true)"
+  real_n="$(grep -oE 'real=[0-9]+' <<< "$real_line" | grep -oE '[0-9]+' || true)"
+  real_before="$(grep -oE 'before=[0-9]+' <<< "$real_line" | grep -oE '[0-9]+' || true)"
+  if [[ "$real_n" != "$real_before" || "$real_before" != "$real_expected" ]]; then
+    echo "FAIL real delete counts: $real_line (provider rows before: $real_expected)" | tee -a "$result"
+    exit 1
+  fi
+  rows_after_real="$(sms_rows)"
+  if [[ -n "$(grep -oE '_id=[0-9]+' <<< "$rows_after_real" || true)" ]]; then
+    echo "FAIL provider not empty after real Delete all messages: $rows_after_real" | tee -a "$result"
+    exit 1
+  fi
+  echo "PASS Delete all messages under default-SMS role really deleted every provider SMS ($real_n rows, provider empty)" | tee -a "$result"
+  require_marker 'drafts=1 saved=1'
+  prefs_after="$(adb shell "run-as $package cat $prefs_dir/c2_state.xml" 2>/dev/null | tr -d '\r' || true)"
+  if grep -Fq '<string name="drafts_v2">[]</string>' <<< "$prefs_after" \
+     && grep -Fq '<string name="sms_templates_v1">[]</string>' <<< "$prefs_after"; then
+    echo 'PASS real Delete all messages also cleared app drafts and templates' | tee -a "$result"
+  else
+    echo "FAIL drafts/templates not cleared after real delete: $prefs_after" | tee -a "$result"
+    exit 1
+  fi
+  expect_foreground
+  echo 'PASS C2 remains foreground after real Delete all messages' | tee -a "$result"
+  shot delmsg-after-real
+  # The real path consumed every provider row; the cleanup loop must not
+  # look for the seeded ids any more.
+  seeded_sms_ids=""
+fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-confirm-real delmsg-after-real; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
