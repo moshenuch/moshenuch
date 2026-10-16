@@ -190,6 +190,7 @@ public class MainActivity extends Activity {
         }
         requestPhonePermissions();
         requestStartupMediaAfterPhonePermissions();
+        handleSendToIntent(getIntent());
         // Emulator acceptance fixture. Debug-build only and only accessible
         // through this app's PRIVATE preferences (not an exported intent).
         // This exercises Nokia Report without depending on a camera failure.
@@ -1254,6 +1255,19 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (phoneView != null && C2InCallService.hasCall()) phoneView.onTelecomCallUpdated();
+        handleSendToIntent(intent);
+    }
+
+    /** External sms:/smsto: link: prefill Compose with recipient and body. */
+    private void handleSendToIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_SENDTO.equals(intent.getAction())) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        String scheme = data.getScheme();
+        if (!"sms".equals(scheme) && !"smsto".equals(scheme)) return;
+        if (phoneView == null) return;
+        phoneView.openComposeFromExternal(data.getSchemeSpecificPart(),
+                data.getQueryParameter("body"));
     }
 
     private void hideSystemUi() {
