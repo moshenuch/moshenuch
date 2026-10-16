@@ -975,6 +975,80 @@ if [[ "$(raw_count)" != "$((baseline_total + 10))" ]]; then
 fi
 expect_foreground
 
+# --- G2. Number removal / contact disappearance between confirm and Yes -----
+# (audit #20): each must be treated as a changed list and refused, never
+# fall through and delete a now-numberless or vanished aggregate.
+for g2_case in loss gone; do
+  if [[ "$g2_case" == "loss" ]]; then
+    g2_name="AAAC2MutLoss"; g2_num="07900077001"
+  else
+    g2_name="AAAC2MutGone"; g2_num="07900077002"
+  fi
+  seed_contact "$g2_name" "$g2_num" >/dev/null
+  open_contacts_menu
+  tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
+  tap OK                          # Move contacts submenu (sel 0 = From phone to SIM)
+  adb logcat -c || true
+  tap OK                          # From phone to SIM
+  sleep 1
+  require_marker "MOVE_CONTACTS_CONFIRM dir=phone2sim count=$((move_eligible + 1))"
+  g2_id="$(adb shell content query --uri content://com.android.contacts/data \
+    --projection raw_contact_id:data1 2>&1 | tr -d '\r' \
+    | grep -E "data1=$g2_name\$" | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
+  if [[ ! "$g2_id" =~ ^[0-9]+$ ]]; then
+    echo "UNVERIFIED could not resolve $g2_name raw id for the $g2_case fixture" | tee -a "$result"
+    exit 1
+  fi
+  if [[ "$g2_case" == "loss" ]]; then
+    g2_data_id="$(adb shell content query --uri content://com.android.contacts/data \
+      --projection _id:mimetype --where "raw_contact_id=$g2_id" 2>&1 | tr -d '\r' \
+      | grep -F 'phone_v2' | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | head -1)"
+    if [[ ! "$g2_data_id" =~ ^[0-9]+$ ]]; then
+      echo "UNVERIFIED could not resolve $g2_name phone row id for the loss fixture" | tee -a "$result"
+      exit 1
+    fi
+    adb shell content delete --uri content://com.android.contacts/data \
+      --where "_id=$g2_data_id" < /dev/null >/dev/null 2>&1 || true
+    if adb shell content query --uri content://com.android.contacts/data \
+         --projection _id:mimetype --where "raw_contact_id=$g2_id" 2>&1 | tr -d '\r' \
+         | grep -F 'phone_v2' >/dev/null; then
+      echo "UNVERIFIED number removal for $g2_name did not land" | tee -a "$result"
+      exit 1
+    fi
+  else
+    adb shell content delete --uri content://com.android.contacts/raw_contacts \
+      --where "_id=$g2_id" < /dev/null >/dev/null 2>&1 || true
+  fi
+  tap LSK                         # Yes
+  sleep 2
+  require_marker 'MOVE_CONTACTS_REFUSED reason=changed dir=phone2sim'
+  if [[ "$g2_case" == "loss" ]]; then
+    # Refusal changed nothing: the numberless contact is still there.
+    if [[ "$(raw_count)" != "$((baseline_total + 11))" || "$(sim_count)" != "0" ]]; then
+      echo "FAIL loss refusal changed state (provider $(raw_count), SIM $(sim_count))" | tee -a "$result"
+      exit 1
+    fi
+    echo 'PASS number removed between confirm and Yes refused the Move' | tee -a "$result"
+  else
+    # Refusal changed nothing beyond the fixture's own deletion.
+    if [[ "$(raw_count)" != "$((baseline_total + 10))" || "$(sim_count)" != "0" ]]; then
+      echo "FAIL gone refusal changed state (provider $(raw_count), SIM $(sim_count))" | tee -a "$result"
+      exit 1
+    fi
+    echo 'PASS contact deleted between confirm and Yes refused the Move' | tee -a "$result"
+  fi
+  shot "movecopy-$g2_case-refused"
+  if [[ "$g2_case" == "loss" ]]; then
+    adb shell content delete --uri content://com.android.contacts/raw_contacts \
+      --where "_id=$g2_id" < /dev/null >/dev/null 2>&1 || true
+  fi
+  if [[ "$(raw_count)" != "$((baseline_total + 10))" ]]; then
+    echo "UNVERIFIED $g2_case fixture removal left $(raw_count) raw contacts, expected $((baseline_total + 10))" | tee -a "$result"
+    exit 1
+  fi
+  expect_foreground
+done
+
 # --- C. Copy phone -> SIM (multi-number skipped) ------------------------------
 open_contacts_menu
 tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
