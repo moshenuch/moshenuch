@@ -32,6 +32,23 @@ rooted=0
 role_granted=0
 role_prev_holder=""
 seeded_sms_ids=""
+
+# This image's cmd role has add/remove but NOT get-role-holders ("Unknown
+# command" on API 30), so read the holder from dumpsys role instead: find
+# the SMS role block, then the package list on its holders line.
+get_sms_holder() {
+  adb shell dumpsys role < /dev/null 2>/dev/null | tr -d '\r' | awk '
+    /android\.app\.role\.SMS/ {inblock=1; next}
+    inblock && /app\.role\./ {inblock=0}
+    inblock && /[Hh]olders/ {
+      line=$0
+      sub(/^[^=]*=/, "", line)
+      sub(/.*\[/, "", line); sub(/\].*/, "", line)
+      gsub(/,/, " ", line); gsub(/^ +| +$/, "", line)
+      split(line, a, " "); if (a[1] != "") print a[1]
+      exit
+    }'
+}
 sms_one="+44770090301"
 sms_two="+44770090302"
 inbound_number="+44770090399"
@@ -106,7 +123,7 @@ finish() {
   # probe changed nothing, so cleanup must not strip the role either.
   if [[ "$role_granted" == "1" ]]; then
     if [[ "$role_prev_holder" == "$package" ]]; then
-      holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+      holder_after="$(get_sms_holder)"
       if [[ "$holder_after" == "$package" ]]; then
         echo 'PASS SMS role unchanged after probe (C2 already held it)' | tee -a "$result"
       else
@@ -117,7 +134,7 @@ finish() {
       if [[ -n "$role_prev_holder" ]]; then
         adb shell cmd role add-role-holder android.app.role.SMS "$role_prev_holder" < /dev/null >/dev/null 2>&1 || true
       fi
-      holder_after="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+      holder_after="$(get_sms_holder)"
       if [[ "$holder_after" != "$role_prev_holder" ]]; then
         echo "FAIL cleanup: SMS role holder is ${holder_after:-none}, expected ${role_prev_holder:-none}" | tee -a "$result"
       else
@@ -412,12 +429,16 @@ fi
 echo 'PASS folder-route sweep left provider rows unchanged' | tee -a "$result"
 
 # --- D. Default-SMS role: inbound persistence + real delete -----------------
-role_prev_holder="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+role_prev_holder="$(get_sms_holder)"
 adb shell cmd role add-role-holder android.app.role.SMS "$package" < /dev/null > "$out/role-grant.txt" 2>&1 || true
 sleep 1
-holder="$(adb shell cmd role get-role-holders android.app.role.SMS < /dev/null 2>&1 | tr -d '\r' | head -1 || true)"
+holder="$(get_sms_holder)"
 if [[ "$holder" != "$package" ]]; then
   echo "UNVERIFIED could not grant default SMS role (holder=${holder:-none}); default-SMS sections skipped" | tee -a "$result"
+  echo "--- cmd role add-role-holder output ---" >> "$result"
+  cat "$out/role-grant.txt" >> "$result" 2>/dev/null || true
+  echo "--- dumpsys role (SMS block) ---" >> "$result"
+  adb shell dumpsys role < /dev/null 2>/dev/null | tr -d '\r' | grep -A3 'app.role.SMS' >> "$result" || true
 else
   role_granted=1
   echo "SMS role granted to $package (previous holder: ${role_prev_holder:-none})" >> "$result"
