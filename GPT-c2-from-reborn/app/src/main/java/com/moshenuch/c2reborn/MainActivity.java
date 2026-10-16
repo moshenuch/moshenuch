@@ -1266,8 +1266,23 @@ public class MainActivity extends Activity {
         String scheme = data.getScheme();
         if (!"sms".equals(scheme) && !"smsto".equals(scheme)) return;
         if (phoneView == null) return;
-        phoneView.openComposeFromExternal(data.getSchemeSpecificPart(),
-                data.getQueryParameter("body"));
+        // sms:/smsto: URIs are opaque (no //), so Uri.getQueryParameter throws
+        // UnsupportedOperationException on Android 11: parse the recipient and
+        // body from the raw string instead.
+        String rest = data.toString().substring(scheme.length() + 1);
+        String number = rest;
+        String body = null;
+        int q = rest.indexOf('?');
+        if (q >= 0) {
+            number = rest.substring(0, q);
+            for (String pair : rest.substring(q + 1).split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && "body".equals(Uri.decode(pair.substring(0, eq)))) {
+                    body = Uri.decode(pair.substring(eq + 1));
+                }
+            }
+        }
+        phoneView.openComposeFromExternal(Uri.decode(number), body);
     }
 
     private void hideSystemUi() {
