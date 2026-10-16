@@ -1146,8 +1146,9 @@ fi
 # not enforced against the contacts provider on this emulator and pm
 # revoke kills the app process mid-handler; external row deletion is the
 # only injection that reaches the rollback-failure path.) The watchdog
-# targets the last insert because the rollback reaches it last; if the app
-# beats the watchdog the attempt rolls back cleanly and retries.
+# targets the middle insert: early enough to spot, late enough that the
+# forward rollback has not reached it; if the app beats the watchdog the
+# attempt rolls back cleanly and retries.
 rb_pass=0
 rb_done=0
 rb_undone=0
@@ -1190,25 +1191,26 @@ print(json.dumps(entries))
   tap OK
   sleep 1
   require_marker 'MOVE_CONTACTS_CONFIRM dir=sim2phone count=51'
-  # Watchdog: the moment the LAST insert (AAAC2Rb50) is visible, delete its
-  # raw contact. The rollback reaches it last, maximising the window.
-  (
-    for i in $(seq 1 100); do
-      rid="$(adb shell content query --uri content://com.android.contacts/data \
-        --projection raw_contact_id:data1 2>/dev/null | tr -d '\r' \
-        | grep -F 'data1=AAAC2Rb50' | head -1 \
-        | sed -n 's/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p')"
-      if [[ "$rid" =~ ^[0-9]+$ ]]; then
-        adb shell content delete --uri content://com.android.contacts/raw_contacts \
-          --where "_id=$rid" >/dev/null 2>&1 || true
-        echo "  attempt $attempt watchdog deleted last insert (raw contact $rid)" >> "$result"
-        break
-      fi
-    done
-  ) &
+  # Watchdog: delete the MIDDLE insert (AAAC2Rb25) the moment it is
+  # visible. It appears early enough to spot, and the forward rollback only
+  # reaches it after undoing the first 24, so the delete has the whole
+  # second half of the batch plus those undos to land in. The poll loop
+  # runs ON DEVICE inside one adb session: a host-side adb round trip per
+  # poll (~0.5s) is slower than the rollback window and missed it on every
+  # attempt (run 38823784696).
+  adb shell 'rid=""
+for i in $(seq 1 400); do
+  rid=$(content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 2>/dev/null | tr -d "\r" | grep -F "data1=AAAC2Rb25" | head -1 | sed -n "s/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p")
+  if [ -n "$rid" ]; then
+    content delete --uri content://com.android.contacts/raw_contacts --where "_id=$rid" >/dev/null 2>&1
+    echo "watchdog deleted middle insert raw_contact_id=$rid"
+    break
+  fi
+done' > /tmp/rb_watchdog.out 2>&1 < /dev/null &
   rb_watch_pid=$!
   tap LSK                         # Yes
   wait "$rb_watch_pid" || true
+  sed "s/^/  attempt $attempt /" /tmp/rb_watchdog.out >> "$result"
   sleep 4
   require_marker 'MOVE_CONTACTS dir=sim2phone'
   marker_line="$(adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F 'MOVE_CONTACTS dir=sim2phone' | tail -1)"
