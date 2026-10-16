@@ -7517,7 +7517,7 @@ public class C2PhoneView extends View {
                                 "MOVE_PREFLIGHT_GATE armed dir=" + dirName);
                         java.io.File fGo =
                                 new java.io.File(getContext().getFilesDir(), "move_preflight_go");
-                        while (System.currentTimeMillis() - fStart < 5000) {
+                        while (System.currentTimeMillis() - fStart < 8000) {
                             if (fGo.exists()) break;
                             try {
                                 Thread.sleep(50);
@@ -7655,7 +7655,7 @@ public class C2PhoneView extends View {
                                         "MOVE_ROLLBACK_GATE armed dir=" + dirName);
                                 java.io.File rGo = new java.io.File(
                                         getContext().getFilesDir(), "move_rollback_go");
-                                while (System.currentTimeMillis() - rStart < 5000) {
+                                while (System.currentTimeMillis() - rStart < 8000) {
                                     if (rGo.exists()) break;
                                     try {
                                         Thread.sleep(50);
