@@ -220,13 +220,15 @@ public final class AndroidBackend {
             if (c != null) c.close();
         }
         // Structured-name content the SIM display name cannot hold
-        // (audit #19/#20): phonetic parts and the data10/data11 style
-        // fields are never derivable from the display name, and neither
-        // are genuine structural parts - restore writes the bare display
-        // name, so Given+Family that merely re-spell a multi-token display
-        // name would still be lost on the round trip. The only pass is the
-        // provider's echo of a ONE-TOKEN display name into identical
-        // components: a single token carries no structure to lose.
+        // (audit #19/#20/#21): phonetic parts and any structural part
+        // beyond GIVEN_NAME are never derivable from the display name -
+        // restore writes the bare display name, so even a family name that
+        // exactly echoes a one-token display name would be dropped. The
+        // only pass is the provider's echo of the display name into
+        // GIVEN_NAME alone, which carries nothing the display name does
+        // not. The data10/data11 style fields are provider-guessed
+        // metadata, re-derived on restore, so they are not exclusion
+        // grounds.
         c = null;
         try {
             c = resolver.query(
@@ -265,20 +267,23 @@ public final class AndroidBackend {
                     }
                 }
                 if (!extra) {
-                    StringBuilder joined = new StringBuilder();
+                    // Prefix/middle/family/suffix (columns 2, 4, 5, 6) are
+                    // always content the SIM entry cannot hold.
                     for (int i = 2; i <= 6; i++) {
+                        if (i == 3) continue;
                         String v = c.getString(i);
                         if (v != null && !v.trim().isEmpty()) {
-                            if (joined.length() > 0) joined.append(' ');
-                            joined.append(v.trim());
+                            extra = true;
+                            break;
                         }
                     }
-                    if (joined.length() > 0) {
-                        String display = c.getString(1);
-                        String disp = display == null ? "" : display.trim();
-                        extra = !joined.toString().equals(disp)
-                                || disp.matches("(?s).*\\s.*");
-                    }
+                }
+                if (!extra) {
+                    String given = c.getString(3);
+                    String display = c.getString(1);
+                    String disp = display == null ? "" : display.trim();
+                    extra = given != null && !given.trim().isEmpty()
+                            && !given.trim().equals(disp);
                 }
                 if (extra) out.add(c.getLong(0));
             }
