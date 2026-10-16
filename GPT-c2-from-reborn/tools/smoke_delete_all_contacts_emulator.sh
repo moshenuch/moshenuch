@@ -23,6 +23,14 @@ del_two="AAAC2DelTwo"
 num_one="07900005001"
 num_two="07900005002"
 
+# Hard guard (audit-#14 item 5): this probe deletes every provider contact.
+# Refuse to run anywhere but an emulator.
+qemu="$(adb shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r'; adb shell getprop ro.boot.qemu 2>/dev/null | tr -d '\r')"
+if ! grep -q 1 <<< "$qemu"; then
+  echo "REFUSING: delete-all-contacts probe runs on emulators only (ro.kernel.qemu/ro.boot.qemu unset)" | tee -a "$result"
+  exit 1
+fi
+
 size="$(adb shell wm size | sed -n 's/.*: //p' | tail -1 | tr -d '\r')"
 if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
   echo 'UNVERIFIED display geometry unavailable' | tee -a "$result"; exit 1
