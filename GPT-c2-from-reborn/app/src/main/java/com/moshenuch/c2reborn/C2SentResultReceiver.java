@@ -38,7 +38,7 @@ public class C2SentResultReceiver extends BroadcastReceiver {
     private static final String KEY_COMPLETED = "completed";
     private static final long EXPIRY_MS = 10 * 60 * 1000;
     private static final int MAX_PARTS = 50;
-    private static final int MAX_COMPLETED = 32;
+    private static final int MAX_COMPLETED = 256;
 
     @Override
     public void onReceive(Context context, Intent intent) {
