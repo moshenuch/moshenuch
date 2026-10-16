@@ -7463,7 +7463,17 @@ public class C2PhoneView extends View {
                         for (Contact c : source) {
                             ArrayList<String> nums = contactNumbersById.get(c.contactId);
                             String freshName = freshNames.get(c.contactId);
-                            if (nums != null && nums.size() == 1 && freshName != null
+                            // Audit #20: a contact that lost its number or
+                            // its name (or vanished) since the confirm is a
+                            // changed list - refuse, never fall through and
+                            // delete a now-numberless aggregate. A contact
+                            // that GAINED a number is skipped as
+                            // multi-number below, not refused.
+                            if (nums == null || nums.size() < 1 || freshName == null) {
+                                changedValues = true;
+                                break;
+                            }
+                            if (nums.size() == 1
                                     && (!freshName.equals(c.name)
                                             || !normalizeSimNumber(nums.get(0))
                                                     .equals(normalizeSimNumber(c.number)))) {
@@ -7616,10 +7626,29 @@ public class C2PhoneView extends View {
                                         ? backend.addContact(c.name, c.number)
                                         : contacts.add(c));
                             } else {
-                                if (move) simContacts.add(c);
-                                if (deviceContactsActive) {
-                                    back = backend.deleteRawContact(completedRawIds.get(idx));
+                                if (move && deviceContactsActive) {
+                                    // Audit #20: delete FIRST, restore the
+                                    // SIM entry after. Restoring first
+                                    // means a failed delete of a still-live
+                                    // row leaves the contact in BOTH
+                                    // places. When the row already vanished
+                                    // the SIM entry is the only surviving
+                                    // copy, so it is restored anyway.
+                                    long rawId = completedRawIds.get(idx);
+                                    back = backend.deleteRawContact(rawId);
+                                    if (back || !backend.rawContactLive(rawId)) {
+                                        simContacts.add(c);
+                                    }
+                                    // Delete failed while the row stays
+                                    // live: the phone copy remains and the
+                                    // SIM entry is not re-added (no
+                                    // duplicate); undone < done, so the
+                                    // undo-incomplete notice shows.
                                 } else {
+                                    if (move) simContacts.add(c);
+                                    if (deviceContactsActive) {
+                                        back = backend.deleteRawContact(completedRawIds.get(idx));
+                                    } else {
                                     back = false;
                                     for (int i = contacts.size() - 1; i >= 0; i--) {
                                         Contact d = contacts.get(i);
@@ -7629,6 +7658,7 @@ public class C2PhoneView extends View {
                                             break;
                                         }
                                     }
+                                }
                                 }
                             }
                             if (back) undone++;
