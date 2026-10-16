@@ -113,20 +113,28 @@ if [[ -s "$results/delete-all-contacts-results.txt" ]]; then
   cat "$results/delete-all-contacts-results.txt"
   echo "===== end delete-all-contacts-results.txt ====="
 fi
+delete_all_messages_failed=0
 if bash GPT-c2-from-reborn/tools/smoke_delete_all_messages_emulator.sh "$results"; then
   if ! grep -Fq 'PASS Delete all messages cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete all messages provider unchanged (hide-only)' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete all messages No left provider unchanged' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete all messages provider rows unchanged across Yes (hide-only, full-row snapshot)' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete all messages No left provider rows unchanged (full-row snapshot)' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS C2 remains foreground after Delete all messages Yes' "$results/delete-all-messages-results.txt" ||
      ! grep -Fq 'PASS C2 remains foreground after Delete all messages No' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete messages row routes: byfolder' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete messages row routes: inbox' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete messages row routes: sent' "$results/delete-all-messages-results.txt" ||
-     ! grep -Fq 'PASS Delete messages row routes: drafts' "$results/delete-all-messages-results.txt"; then
+     ! grep -Fq 'PASS Delete messages row routes to savedmessages (marker-verified): byfolder' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes to inbox (marker-verified): inbox' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes to sent (marker-verified): sent' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete messages row routes to drafts (marker-verified): drafts' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS folder-route sweep left provider rows unchanged' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS inbound SMS persisted end-to-end under default-SMS role' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS inbound SMS visible in Inbox after app restart' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS Delete all messages under default-SMS role really deleted every provider SMS' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS real Delete all messages also cleared app drafts and templates' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS C2 remains foreground after real Delete all messages' "$results/delete-all-messages-results.txt" ||
+     ! grep -Fq 'PASS SMS role restored after probe' "$results/delete-all-messages-results.txt"; then
     echo "::error::Delete all messages acceptance incomplete; see delete-all-messages-results.txt"
     delete_all_messages_failed=1
   fi
-  if ! grep -Fq 'PASS Delete all messages Yes hid every seeded SMS' "$results/delete-all-messages-results.txt"; then
+  if ! grep -Fq 'PASS Delete all messages Yes hid every provider SMS' "$results/delete-all-messages-results.txt"; then
     echo "::warning::Delete all messages SMS-provider coverage incomplete (SMS shell seeding is best-effort); see delete-all-messages-results.txt"
   fi
 else
