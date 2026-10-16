@@ -1341,21 +1341,22 @@ fi
 # --- R. Rollback failure is reported honestly ---------------------------------
 # SIM list: 50 valid entries then one with a blank number. Move SIM->phone
 # inserts the valid ones, then the blank-number insert fails (malformed
-# entry; the batch rolls back). A watchdog deletes the LAST inserted row
-# behind the app's back the moment it appears, so that op's reverse delete
-# comes up empty. Since audit #21 a confirmed-absent row whose SIM entry is
-# restored counts as a COMPLETE undo: the app must log rolled_back=1 with
-# undone == done and vanished=1, and show the ordinary changed-list notice
-# (not "undo incomplete"). The probe asserts the exact post-failure state:
-# provider holds no AAAC2Rb rows (watchdog removed one, the rollback
-# removed the rest), the SIM list still holds all 51 fixture entries, and
-# the app logged the visible notice text. (AppOps denial is
-# not enforced against the contacts provider on this emulator and pm
-# revoke kills the app process mid-handler; external row deletion is the
-# only injection that reaches the rollback-failure path.) The watchdog
-# targets the middle insert: early enough to spot, late enough that the
-# forward rollback has not reached it; if the app beats the watchdog the
-# attempt rolls back cleanly and retries.
+# entry; the batch rolls back). The injection is deterministic: debuggable
+# builds park at a rollback gate right before the undo loop, and the
+# probe's watchdog deletes the middle insert (AAAC2Rb25) - at that point a
+# completed, still-live row - then releases the gate. Since audit #21 a
+# confirmed-absent row whose SIM entry is restored counts as a COMPLETE
+# undo: the app must log rolled_back=1 with undone == done and vanished=1,
+# and show the ordinary changed-list notice (not "undo incomplete"). The
+# probe asserts the exact post-failure state: provider holds no AAAC2Rb
+# rows (watchdog removed one, the rollback removed the rest), the SIM list
+# still holds all 51 fixture entries, and the app logged the visible
+# notice text. (AppOps denial is not enforced against the contacts
+# provider on this emulator and pm revoke kills the app process
+# mid-handler; external row deletion is the only injection that reaches
+# the rollback-failure path.) The gate replaces the old poll-loop
+# watchdog, whose delete could land on an already-undone row and still
+# report a hit - run 38860246788 lost exactly that way (vanished=0).
 rb_pass=0
 rb_done=0
 rb_undone=0
@@ -1380,6 +1381,7 @@ print(json.dumps(entries))
 ')"
   sim_escaped="$(python3 -c 'import sys, html; print(html.escape(sys.stdin.read().strip(), quote=True))' <<< "$sim_json")"
   adb shell am force-stop "$package" || true
+  adb shell "run-as $package rm -f files/move_rollback_gate files/move_rollback_go" < /dev/null >/dev/null 2>&1 || true
   printf '%s\n' \
     '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
     '<map>' \
@@ -1398,22 +1400,17 @@ print(json.dumps(entries))
   tap OK
   sleep 1
   require_marker 'MOVE_CONTACTS_CONFIRM dir=sim2phone count=51'
-  # Watchdog: delete the MIDDLE insert (AAAC2Rb25) the moment it is
-  # visible. It appears early enough to spot, and the forward rollback only
-  # reaches it after undoing the first 24, so the delete has the whole
-  # second half of the batch plus those undos to land in. The poll loop
-  # runs ON DEVICE inside one adb session: a host-side adb round trip per
-  # poll (~0.5s) is slower than the rollback window and missed it on every
-  # attempt (run 38823784696).
-  adb shell 'rid=""
-for i in $(seq 1 400); do
-  rid=$(content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 2>/dev/null | tr -d "\r" | grep -F "data1=AAAC2Rb25" | head -1 | sed -n "s/.*raw_contact_id=\([0-9][0-9]*\).*/\1/p")
-  if [ -n "$rid" ]; then
-    content delete --uri content://com.android.contacts/raw_contacts --where "_id=$rid" >/dev/null 2>&1
-    echo "watchdog deleted middle insert raw_contact_id=$rid"
-    break
-  fi
-done' > /tmp/rb_watchdog.out 2>&1 < /dev/null &
+  # Deterministic gate: arm before Yes; the app parks at MOVE_ROLLBACK_GATE
+  # right before the undo loop, the watchdog deletes AAAC2Rb25 (a live,
+  # completed insert) and releases the gate.
+  adb shell "run-as $package touch files/move_rollback_gate" < /dev/null >/dev/null 2>&1
+  timeout 90 adb shell "logcat -s C2Contacts:I | grep -m1 'MOVE_ROLLBACK_GATE armed dir=sim2phone' >/dev/null 2>&1
+echo 'watchdog saw the rollback gate'
+rid=\$(content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 2>/dev/null | tr -d \"\r\" | grep -F \"data1=AAAC2Rb25\" | head -1 | sed -n \"s/.*raw_contact_id=\\([0-9][0-9]*\\).*/\\1/p\")
+content delete --uri content://com.android.contacts/raw_contacts --where \"_id=\$rid\" >/dev/null 2>&1
+echo \"watchdog deleted middle insert raw_contact_id=\$rid\"
+run-as $package touch files/move_rollback_go
+echo 'watchdog released the rollback gate'" > /tmp/rb_watchdog.out 2>&1 < /dev/null &
   rb_watch_pid=$!
   tap LSK                         # Yes
   wait "$rb_watch_pid" || true
