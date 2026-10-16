@@ -72,12 +72,12 @@ finish() {
   if [[ "$rooted" == "1" && -n "$seeded_sms_ids" ]]; then
     while IFS= read -r sms_id; do
       [[ "$sms_id" =~ ^[0-9]+$ ]] || continue
-      del_out="$(adb shell content delete --uri content://sms --where "_id=$sms_id" 2>&1 | tr -d '\r' || true)"
+      del_out="$(adb shell content delete --uri content://sms --where "_id=$sms_id" < /dev/null 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$del_out"; then
         echo "FAIL cleanup: SMS provider delete of _id=$sms_id errored: $del_out" | tee -a "$result"
         continue
       fi
-      q_out="$(adb shell content query --uri content://sms --projection _id 2>&1 | tr -d '\r' || true)"
+      q_out="$(adb shell content query --uri content://sms --projection _id < /dev/null 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$q_out"; then
         echo "FAIL cleanup: SMS provider query after delete errored: $q_out" | tee -a "$result"
         continue
@@ -130,7 +130,7 @@ expect_foreground() {
   fi
 }
 marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
-  adb logcat -d -s C2Messages:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Messages:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   # Logcat and tap delivery lag on a loaded emulator; give the marker a few
