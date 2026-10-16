@@ -248,6 +248,12 @@ public final class AndroidBackend {
                     new String[]{
                             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE},
                     null);
+            // data10/data11 (full-name / phonetic-name STYLE) are queried
+            // for the audit but are NOT exclusion grounds: the provider
+            // auto-guesses them on every insert (run 38832662935 flagged
+            // every plain contact when they were), they carry no user
+            // content, and the provider re-derives them on restore.
+            // Phonetic CONTENT is already excluded via data7..data9.
             if (c == null) return null;
             while (c.moveToNext()) {
                 boolean extra = false;
@@ -256,15 +262,6 @@ public final class AndroidBackend {
                     if (v != null && !v.trim().isEmpty()) {
                         extra = true;
                         break;
-                    }
-                }
-                if (!extra) {
-                    for (int i = 10; i <= 11; i++) {
-                        String v = c.getString(i);
-                        if (v != null && !v.trim().isEmpty() && !"0".equals(v.trim())) {
-                            extra = true;
-                            break;
-                        }
                     }
                 }
                 if (!extra) {
