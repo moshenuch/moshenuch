@@ -74,7 +74,7 @@ expect_foreground() {
   fi
 }
 marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
-  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Contacts:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   # Logcat and tap delivery lag on a loaded emulator; give the marker a few
