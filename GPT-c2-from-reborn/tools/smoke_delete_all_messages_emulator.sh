@@ -439,6 +439,8 @@ if [[ "$holder" != "$package" ]]; then
   cat "$out/role-grant.txt" >> "$result" 2>/dev/null || true
   echo "--- dumpsys role (SMS block) ---" >> "$result"
   adb shell dumpsys role < /dev/null 2>/dev/null | tr -d '\r' | grep -A3 'app.role.SMS' >> "$result" || true
+  echo "--- logcat RoleManager ---" >> "$result"
+  adb shell logcat -d < /dev/null 2>/dev/null | grep -iE 'rolemanager|role' | tail -15 >> "$result" || true
 else
   role_granted=1
   echo "SMS role granted to $package (previous holder: ${role_prev_holder:-none})" >> "$result"
