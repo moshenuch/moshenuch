@@ -752,17 +752,67 @@ public final class AndroidBackend {
         }
     }
 
+    /** Failed-send row, written when the radio rejects a send (audit #31
+     *  item 4). Role-guarded like insertSentSms: -1 without the role. */
+    public long insertFailedSms(String number, String body) {
+        if (!isDefaultSmsApp()) return -1;
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(Telephony.Sms.ADDRESS, number);
+        values.put(Telephony.Sms.BODY, body);
+        values.put(Telephony.Sms.DATE, System.currentTimeMillis());
+        values.put(Telephony.Sms.READ, 1);
+        values.put(Telephony.Sms.SEEN, 1);
+        values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_FAILED);
+        try {
+            android.net.Uri row = resolver.insert(Telephony.Sms.CONTENT_URI, values);
+            if (row == null) return -1;
+            try {
+                return Long.parseLong(row.getLastPathSegment());
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        } catch (RuntimeException ex) {
+            return -1;
+        }
+    }
+
     public boolean sendSms(String number, String body) {
         if (!has(Manifest.permission.SEND_SMS)) return false;
         try {
             SmsManager sm = SmsManager.getDefault();
             ArrayList<String> parts = sm.divideMessage(body);
-            if (parts.size() <= 1) sm.sendTextMessage(number, null, body, null, null);
-            else sm.sendMultipartTextMessage(number, null, parts, null, null);
+            long sendId = SEND_ID.getAndIncrement();
+            if (parts.size() <= 1) {
+                sm.sendTextMessage(number, null, body,
+                        sentResultIntent(number, body, sendId, 0, 1), null);
+            } else {
+                ArrayList<android.app.PendingIntent> sentIntents = new ArrayList<>();
+                for (int i = 0; i < parts.size(); i++)
+                    sentIntents.add(sentResultIntent(number, body, sendId, i, parts.size()));
+                sm.sendMultipartTextMessage(number, null, parts, sentIntents, null);
+            }
             return true;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicLong SEND_ID =
+            new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis());
+
+    private android.app.PendingIntent sentResultIntent(String number, String body,
+            long sendId, int partIndex, int partCount) {
+        Intent intent = new Intent(context, C2SentResultReceiver.class)
+                .setAction(C2SentResultReceiver.ACTION_SMS_SENT_RESULT)
+                .putExtra(C2SentResultReceiver.EXTRA_NUMBER, number)
+                .putExtra(C2SentResultReceiver.EXTRA_BODY, body)
+                .putExtra(C2SentResultReceiver.EXTRA_SEND_ID, sendId)
+                .putExtra(C2SentResultReceiver.EXTRA_PART_INDEX, partIndex)
+                .putExtra(C2SentResultReceiver.EXTRA_PART_COUNT, partCount);
+        return android.app.PendingIntent.getBroadcast(context,
+                (int) (sendId * 31 + partIndex), intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                        | android.app.PendingIntent.FLAG_IMMUTABLE);
     }
 
     public boolean placeCall(String number) {
