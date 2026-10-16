@@ -512,7 +512,7 @@ else
     redup_count="$(grep -c . <<< "$redup_rows" || true)"
     if [[ "$redup_count" == "1" ]]; then
       require_marker 'SMS_DELIVER skipped reason=duplicate'
-      echo 'PASS SMS redelivery deduped (same sender+timestamp+body stored once)' | tee -a "$result"
+      echo 'PASS same-second identical SMS stored once via the dedupe key (the emulator cannot distinguish a true redelivery from a genuine same-second resend; either way exactly one row)' | tee -a "$result"
     elif [[ "$redup_count" == "2" ]]; then
       d1="$(sed -n '1s/.*date=\([0-9][0-9]*\).*/\1/p' <<< "$redup_rows")"
       d2="$(sed -n '2s/.*date=\([0-9][0-9]*\).*/\1/p' <<< "$redup_rows")"
@@ -546,6 +546,9 @@ else
       fi
       echo 'PASS malformed SMS_DELIVER (no pdu payload) logged and skipped, provider unchanged' | tee -a "$result"
     fi
+    # Null-part multipart rejection (reason=partial) cannot be injected from
+    # the emulator console (it only sends well-formed text PDUs): code-audited.
+    echo 'NOTE null-part multipart rejection (SMS_DELIVER skipped reason=partial) is code-audited only; the emulator console cannot inject malformed multipart PDUs' | tee -a "$result"
 
     # D2. Visible in the app after a full restart (Inbox reads the provider;
     # a restart proves the row is durable, not cached).
