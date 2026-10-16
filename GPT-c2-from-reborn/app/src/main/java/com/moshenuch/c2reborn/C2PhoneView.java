@@ -7638,6 +7638,41 @@ public class C2PhoneView extends View {
                         done++;
                     }
                     if (failed > 0) {
+                        // CI-only deterministic rollback-failure injection
+                        // (debuggable builds only; never present in release
+                        // behavior): when the smoke probe arms the rollback
+                        // gate file, park BEFORE the undo loop until it
+                        // signals, so it can delete one of the just-inserted
+                        // rows out from under the undo.
+                        boolean debuggableRollback = (getContext().getApplicationInfo().flags
+                                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+                        if (debuggableRollback) {
+                            java.io.File rGate = new java.io.File(
+                                    getContext().getFilesDir(), "move_rollback_gate");
+                            if (rGate.exists()) {
+                                long rStart = System.currentTimeMillis();
+                                android.util.Log.i("C2Contacts",
+                                        "MOVE_ROLLBACK_GATE armed dir=" + dirName);
+                                java.io.File rGo = new java.io.File(
+                                        getContext().getFilesDir(), "move_rollback_go");
+                                while (System.currentTimeMillis() - rStart < 20000) {
+                                    if (rGo.exists()) break;
+                                    try {
+                                        Thread.sleep(50);
+                                    } catch (InterruptedException ignored) {
+                                        break;
+                                    }
+                                }
+                                boolean rSignaled = rGo.exists();
+                                rGo.delete();
+                                rGate.delete();
+                                android.util.Log.i("C2Contacts",
+                                        "MOVE_ROLLBACK_GATE released dir=" + dirName
+                                                + " signaled=" + (rSignaled ? 1 : 0)
+                                                + " waited_ms="
+                                                + (System.currentTimeMillis() - rStart));
+                            }
+                        }
                         // Batch rollback: no partial transfer survives a
                         // failure (stricter than HTML, which has no failure
                         // path; the wording is the HTML's own changed-list
