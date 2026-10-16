@@ -1,3 +1,15 @@
+## Move/Copy contacts data-loss fix and hardened transfer acceptance — 16 October 2026
+
+- **Fix (real defect, data loss):** Move/Copy contacts could lose data when the contact list changed between the confirm page and Yes, or when a batch op failed mid-transfer. The batch now revalidates against fresh provider data at Yes time and refuses with the HTML's own "Contacts changed; try again" when a contact lost its number or name, vanished, or had its value mutated since the confirm; a contact that gained a number is skipped as multi-number instead. **v2.03.14 users should avoid Move/Copy contacts** - that build's CI run was cancelled before the full acceptance completed; this release replaces it.
+- **Fix (real defect):** a failed batch op previously left a partial transfer in place. The batch now rolls back completely: phone-to-SIM restores the provider rows it deleted; SIM-to-phone deletes exactly the raw rows it inserted (conditional on the row still being live) and restores the SIM entries. A row deleted out-of-band before its undo counts as a complete undo (its SIM entry is restored) and is reported in the log's `vanished=` count; an undo that cannot complete shows "Contacts changed; undo incomplete" instead of claiming success.
+- Extra-data safety scan hardened: contacts with anything beyond a plain mobile number (extra MIME rows, multiple numbers, custom labels, non-mobile types, primary flags, account-backed rows, or structured names beyond a Given-only echo of the display name) are kept out of Move with a three-bucket skip disclosure. All batch deletes are conditional, so an already-vanished row can never be counted as a successful delete.
+- **Known limits:** phone-to-SIM rollback re-adds contacts under new raw contact ids (Android does not preserve ids); preservation of provider-guessed StructuredName style fields (data10/data11) is untested emulator provider behaviour.
+- **CI transparency:** two deterministic failure-injection gates (MOVE_PREFLIGHT_GATE, MOVE_ROLLBACK_GATE) exist only in debuggable builds and only when the emulator probe arms them through app-private files; release builds never read them. The app also logs a counts-only MOVE_PREFLIGHT line (sizes and match counts, no contact data) unconditionally.
+- Android 11 emulator acceptance: all 25 Move/Copy gates green in a single run, including mid-batch failure rollback (phone-to-SIM), an out-of-band delete during the SIM-to-phone rollback (vanished=1, undo still complete), number-removed / contact-deleted / value-mutated refusals between confirm and Yes, duplicate-source and duplicate-destination refusals, and the full extra-data exclusion set.
+- APK **v2.03.15** / pinned HTML **v6.343**.
+
+---
+
 ## Writable raw-contact targeting and probe hardening — 14 October 2026
 
 - **Fix (audit, real defect):** Add to contact wrote to the aggregate's first raw contact id, which can belong to a read-only account when an aggregate merges several raw contacts. The picker now resolves the aggregate's first writable raw contact (skipping read-only and deleted rows) and refuses with "Contact is read-only" when the aggregate has nothing writable.
