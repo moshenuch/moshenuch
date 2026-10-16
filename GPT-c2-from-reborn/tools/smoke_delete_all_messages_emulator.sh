@@ -583,7 +583,12 @@ else
   sendto_number="07700903010"
   adb shell am force-stop "$package"
   adb logcat -c || true
-  adb shell am start -W -a android.intent.action.SENDTO -d "sms:${sendto_number}?body=${sendto_body}" "$package" >> "$result" 2>&1 || true
+  # Record the installed SENDTO filter for the report, then deliver the
+  # intent to MainActivity explicitly: an implicit start with the package
+  # restriction resumed a leftover probe app (c2shareprobe) on this image
+  # instead of C2, so resolution itself is not what this section tests.
+  adb shell dumpsys package "$package" < /dev/null 2>/dev/null | tr -d '\r' | grep -B2 -A8 'android.intent.action.SENDTO' >> "$result" || true
+  adb shell am start -W -a android.intent.action.SENDTO -d "sms:${sendto_number}?body=${sendto_body}" -n "$package/.MainActivity" >> "$result" 2>&1 || true
   sleep 2
   expect_foreground
   require_marker "SENDTO_OPEN recipient=$sendto_number bodylen=${#sendto_body}"
