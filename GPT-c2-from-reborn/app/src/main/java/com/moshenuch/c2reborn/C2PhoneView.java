@@ -4226,8 +4226,31 @@ public class C2PhoneView extends View {
 
     /** External sms:/smsto: link: open Compose with recipient/body prefilled. */
     public void openComposeFromExternal(String number, String body) {
-        recipient = number == null ? "" : number;
-        messageBody = body == null ? "" : body;
+        // An in-progress compose is unsent work: keep it as a draft before
+        // the link replaces it (audit #31 item 1).
+        if (!recipient.trim().isEmpty() || !messageBody.trim().isEmpty()) {
+            android.util.Log.i("C2Messages", "SENDTO_DRAFT_SAVED recipient=" + recipient
+                    + " bodylen=" + messageBody.length());
+            saveCurrentDraft();
+        }
+        String n = number == null ? "" : number.trim();
+        if (n.indexOf(',') >= 0 || n.indexOf(';') >= 0) {
+            // A recipient list is not one address; never send to the joined
+            // string (audit #31 item 2).
+            android.util.Log.i("C2Messages", "SENDTO_MULTI list=" + n);
+            n = "";
+            showNotice("Several recipients; enter one");
+        }
+        String b = body == null ? "" : body;
+        if (b.length() > 1600) {
+            // External bodies are clamped to 10 SMS segments, with a notice,
+            // never silently (audit #31 item 3).
+            android.util.Log.i("C2Messages", "SENDTO_TRUNCATED from=" + b.length() + " to=1600");
+            b = b.substring(0, 1600);
+            showNotice("Message cut to 1600 characters");
+        }
+        recipient = n;
+        messageBody = b;
         composeFocus = recipient.isEmpty() ? 0 : 1;
         editingDraftIndex = -1;
         history.clear();
@@ -4255,14 +4278,8 @@ public class C2PhoneView extends View {
             showNotice("SMS permission required");
             return;
         }
-        if (backend.isDefaultSmsApp()) {
-            // The default SMS app owns sent history; without the role the
-            // provider refuses the write and the row stays unsaved.
-            long sentId = backend.insertSentSms(recipient.trim(), messageBody);
-            android.util.Log.i("C2Messages", "SENT_ROW stored id=" + sentId);
-        } else {
-            android.util.Log.i("C2Messages", "SENT_ROW skipped reason=not_default");
-        }
+        // The SENT/FAILED provider row is written by C2SentResultReceiver on
+        // the radio's send result, not here on submit (audit #31 item 4).
         recordMsgRecipient(recipient.trim());
         if (editingDraftIndex >= 0 && editingDraftIndex < drafts.size()) {
             drafts.remove(editingDraftIndex);
