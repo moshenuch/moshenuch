@@ -207,6 +207,9 @@ public class C2PhoneView extends View {
     private String confirmText = "";
     private String lastSoftbarLog = "";
     private String confirmAction = "";
+    // SMS-delete confirms pin the storage mode (real provider delete vs
+    // in-app hide) when the question opens; Yes refuses if it changed.
+    private Boolean smsConfirmRealDelete;
     private boolean locked = false;
     private int unlockStep = 0;
     private String[] optionItems = new String[0];
@@ -3161,7 +3164,17 @@ public class C2PhoneView extends View {
                 // HTML v6.343 confirmdelete flow: in-house "Delete all messages?"
                 // question box, Yes/No softkeys.
                 refreshSmsFromPhone();
-                requestConfirm("deleteAllMessages", "Delete all messages?");
+                boolean real = smsRealDeleteActive();
+                if (real) {
+                    int rows = backend.countSmsRows();
+                    requestConfirm("deleteAllMessages",
+                            "Delete all messages? Permanently deletes "
+                                    + (rows >= 0 ? rows + " SMS" : "every SMS")
+                                    + " from the phone. MMS are not included.");
+                } else {
+                    requestConfirm("deleteAllMessages", "Delete all messages?");
+                }
+                smsConfirmRealDelete = real;
                 android.util.Log.i("C2Messages",
                         "DELETE_ALL_MESSAGES_CONFIRM visible=" + deviceSms.size());
             } else {
@@ -6422,8 +6435,21 @@ public class C2PhoneView extends View {
                     showNotice("No conversation selected");
                 } else {
                     int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
-                    requestConfirm("deleteThreads", smsRealDeleteActive() ? "Are you sure?"
-                            : "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
+                    boolean real = smsRealDeleteActive();
+                    String msg;
+                    if (real) {
+                        HashSet<Long> t = new HashSet<>();
+                        if (!markedThreadIds.isEmpty()) t.addAll(markedThreadIds);
+                        else if (sel >= 0 && sel < smsThreads.size()) t.add(smsThreads.get(sel).threadId);
+                        int msgs = backend.countSmsRowsInThreads(t);
+                        msg = "Permanently delete " + n + (n == 1 ? " conversation" : " conversations")
+                                + (msgs >= 0 ? " (" + msgs + (msgs == 1 ? " message" : " messages") + ")" : "")
+                                + " from the phone's messages?";
+                    } else {
+                        msg = "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.";
+                    }
+                    requestConfirm("deleteThreads", msg);
+                    smsConfirmRealDelete = real;
                 }
             } else if ("Inbox view >".equals(choice)) go("inbox");
             else if ("New message >".equals(choice)) {
@@ -6484,8 +6510,11 @@ public class C2PhoneView extends View {
             } else if ("Delete".equals(choice)) {
                 if (m != null || !markedSmsIds.isEmpty()) {
                     int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
-                    requestConfirm("deleteSms", smsRealDeleteActive() ? "Are you sure?"
+                    boolean real = smsRealDeleteActive();
+                    requestConfirm("deleteSms", real
+                            ? "Permanently delete " + n + (n == 1 ? " message" : " messages") + " from the phone's messages?"
                             : "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
+                    smsConfirmRealDelete = real;
                 } else showNotice("No message selected");
             } else if ("Call".equals(choice) && m != null) startCall(m.address);
             else if ("Go to Drafts".equals(choice)) go("drafts");
@@ -6541,8 +6570,13 @@ public class C2PhoneView extends View {
             } else if ("Call".equals(choice)) startCall(selected.address);
             else if ("Copy as template".equals(choice)) saveSmsAsTemplate(selected);
             else if ("Use detail".equals(choice)) showSmsUseDetails(selected);
-            else if ("Delete".equals(choice)) requestConfirm("deleteSms", smsRealDeleteActive()
-                    ? "Are you sure?" : "Hide this message in the app? Phone SMS unchanged.");
+            else if ("Delete".equals(choice)) {
+                boolean real = smsRealDeleteActive();
+                requestConfirm("deleteSms", real
+                        ? "Permanently delete this message from the phone's messages?"
+                        : "Hide this message in the app? Phone SMS unchanged.");
+                smsConfirmRealDelete = real;
+            }
             else if ("Forward".equals(choice)) forwardSmsCopy(selected);
             else if ("Edit".equals(choice)) {
                 // Editing a received provider SMS is not permitted; make a copy in Compose.
@@ -7131,6 +7165,7 @@ public class C2PhoneView extends View {
     }
 
     private void requestConfirm(String action, String text) {
+        smsConfirmRealDelete = null;
         confirmAction = action;
         confirmText = text;
         confirmOpen = true;
@@ -7368,14 +7403,26 @@ public class C2PhoneView extends View {
             HashSet<Long> targets = new HashSet<>();
             if (!markedThreadIds.isEmpty()) targets.addAll(markedThreadIds);
             else if (sel >= 0 && sel < smsThreads.size()) targets.add(smsThreads.get(sel).threadId);
-            if (smsRealDeleteActive()) {
+            boolean pinnedReal = Boolean.TRUE.equals(smsConfirmRealDelete);
+            smsConfirmRealDelete = null;
+            if (pinnedReal != smsRealDeleteActive()) {
+                // The role changed between the confirm and Yes; refuse to
+                // act in a mode the user did not confirm.
+                android.util.Log.i("C2Messages", "DELETE_THREADS aborted=role_changed");
+                showNotice("Default SMS app changed; try again");
+            } else if (pinnedReal) {
                 int deleted = backend.deleteSmsThreads(targets);
+                if (deleted < 0) {
+                    android.util.Log.i("C2Messages", "DELETE_THREADS failed=role");
+                    showNotice("Messages could not be deleted");
+                } else {
                 markedThreadIds.clear();
                 refreshSmsFromPhone();
                 sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
                 android.util.Log.i("C2Messages",
                         "DELETE_THREADS real=" + deleted + " threads=" + targets.size());
                 showNotice("Deleted");
+                }
             } else {
                 for (AndroidBackend.DeviceSms m : deviceSms) {
                     if (targets.contains(m.threadId)) hiddenSmsIds.add(m.id);
@@ -7398,14 +7445,24 @@ public class C2PhoneView extends View {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
                 if (m != null) targets.add(m.id);
             } else if (activeMessageId > 0) targets.add(activeMessageId);
-            if (smsRealDeleteActive()) {
+            boolean pinnedReal = Boolean.TRUE.equals(smsConfirmRealDelete);
+            smsConfirmRealDelete = null;
+            if (pinnedReal != smsRealDeleteActive()) {
+                android.util.Log.i("C2Messages", "DELETE_SMS aborted=role_changed");
+                showNotice("Default SMS app changed; try again");
+            } else if (pinnedReal) {
                 int deleted = backend.deleteSmsByIds(targets);
+                if (deleted < 0) {
+                    android.util.Log.i("C2Messages", "DELETE_SMS failed=role");
+                    showNotice("Messages could not be deleted");
+                } else {
                 markedSmsIds.clear();
                 refreshSmsFromPhone();
                 if ("messageRead".equals(page)) back();
                 android.util.Log.i("C2Messages",
                         "DELETE_SMS real=" + deleted + " targets=" + targets.size());
                 showNotice("Deleted");
+                }
             } else {
                 hiddenSmsIds.addAll(targets);
                 markedSmsIds.clear();
@@ -7418,6 +7475,12 @@ public class C2PhoneView extends View {
             // HTML v6.343 confirmdelete: bulk delete clears app-local drafts
             // and saved templates and lands on the Messaging menu with
             // "Delete messages" selected, whatever the storage path.
+            boolean pinnedReal = Boolean.TRUE.equals(smsConfirmRealDelete);
+            smsConfirmRealDelete = null;
+            if (!demoMode && pinnedReal != smsRealDeleteActive()) {
+                android.util.Log.i("C2Messages", "DELETE_ALL_MESSAGES aborted=role_changed");
+                showNotice("Default SMS app changed; try again");
+            } else {
             int draftCount = drafts.size();
             drafts.clear();
             saveDrafts();
@@ -7426,6 +7489,7 @@ public class C2PhoneView extends View {
             saveStringList("sms_templates_v1", savedSmsTemplates);
             markedSmsIds.clear();
             markedThreadIds.clear();
+            boolean landAfterDelete = true;
             if (demoMode) {
                 // HTML performs confirmdelete in demo too, then restores its
                 // demo thread. Native demo messages are regenerated fixtures,
@@ -7443,15 +7507,22 @@ public class C2PhoneView extends View {
                 android.util.Log.i("C2Messages",
                         "DELETE_ALL_MESSAGES demo=1 restored=" + restored
                                 + " drafts=" + draftCount + " saved=" + savedCount);
-            } else if (smsRealDeleteActive()) {
+            } else if (pinnedReal) {
                 int before = backend.countSmsRows();
                 int deleted = backend.deleteAllSmsRows();
+                if (deleted < 0) {
+                    android.util.Log.i("C2Messages",
+                            "DELETE_ALL_MESSAGES failed=role before=" + before);
+                    showNotice("Messages could not be deleted");
+                    landAfterDelete = false;
+                } else {
                 hiddenSmsIds.clear();
                 saveLongSet("sms_hidden", hiddenSmsIds);
                 refreshSmsFromPhone();
                 android.util.Log.i("C2Messages",
                         "DELETE_ALL_MESSAGES real=" + deleted + " before=" + before
                                 + " drafts=" + draftCount + " saved=" + savedCount);
+                }
             } else {
                 // Without the default SMS role the provider refuses writes,
                 // so bulk delete is in-app only: every provider SMS joins
@@ -7466,10 +7537,13 @@ public class C2PhoneView extends View {
                         "DELETE_ALL_MESSAGES hidden=" + hidden
                                 + " drafts=" + draftCount + " saved=" + savedCount);
             }
-            history.clear();
-            page = "messaging";
-            sel = 12;
-            showNotice("Messages deleted");
+            if (landAfterDelete) {
+                history.clear();
+                page = "messaging";
+                sel = 12;
+                showNotice("Messages deleted");
+            }
+            }
         } else if (action.startsWith("moveContacts") || action.startsWith("copyContacts")) {
             // HTML v6.343 bulk transfer: Move changes the record's memory,
             // Copy appends a duplicate in the destination memory. "Phone" is
