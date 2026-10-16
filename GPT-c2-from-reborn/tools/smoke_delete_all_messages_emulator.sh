@@ -590,7 +590,32 @@ else
   adb shell dumpsys package "$package" < /dev/null 2>/dev/null | tr -d '\r' | grep -B2 -A8 'android.intent.action.SENDTO' >> "$result" || true
   adb shell am start -W -a android.intent.action.SENDTO -d "sms:${sendto_number}?body=${sendto_body}" -n "$package/.MainActivity" >> "$result" 2>&1 || true
   sleep 2
-  expect_foreground
+  sendto_fg="$(foreground_package)"
+  sendto_retried=0
+  if [[ "$sendto_fg" != *"$package/"* ]]; then
+    # One retry: on this image a force-stopped start can lose the foreground
+    # race to a leftover probe task (c2shareprobe). If the app itself
+    # crashed, the retry reproduces the crash and the diagnostics below
+    # capture it instead of leaving the failure opaque.
+    echo "NOTE SENDTO start left foreground=$sendto_fg; retrying once" | tee -a "$result"
+    adb shell am start -W -a android.intent.action.SENDTO -d "sms:${sendto_number}?body=${sendto_body}" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+    sleep 2
+    sendto_fg="$(foreground_package)"
+    sendto_retried=1
+  fi
+  if [[ "$sendto_fg" != *"$package/"* ]]; then
+    echo "FAIL C2 lost foreground after SENDTO start: $sendto_fg" | tee -a "$result"
+    {
+      echo "--- process state (pidof) ---"
+      adb shell pidof "$package" 2>&1 || true
+      echo "--- task stack ---"
+      adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' | grep -E 'mResumedActivity|topResumedActivity|Hist #|TaskRecord|realActivity' | head -40 || true
+      echo "--- logcat since SENDTO start ---"
+      adb logcat -d -v brief 2>/dev/null | grep -E 'C2Messages|AndroidRuntime|ActivityTaskManager|FATAL' | tail -80 || true
+    } >> "$result"
+    shot delmsg-sendto-fail
+    exit 1
+  fi
   require_marker "SENDTO_OPEN recipient=$sendto_number bodylen=${#sendto_body}"
   shot delmsg-sendto-compose
   tap OK                          # recipient+body prefilled (focus=body): OK sends
@@ -606,7 +631,11 @@ else
     echo 'FAIL outbound SMS while default: no SENT provider row for the probe body' | tee -a "$result"
     exit 1
   fi
-  echo 'PASS sms: link prefilled Compose from a cold start and sending stored a SENT provider row (type=2)' | tee -a "$result"
+  if [[ "$sendto_retried" == 1 ]]; then
+    echo 'PASS sms: link prefilled Compose from a cold start (one foreground retry) and sending stored a SENT provider row (type=2)' | tee -a "$result"
+  else
+    echo 'PASS sms: link prefilled Compose from a cold start and sending stored a SENT provider row (type=2)' | tee -a "$result"
+  fi
 
   # D3. Real delete: Delete all messages now removes every provider row
   # (inbound, multipart, redelivery and the sent row alike).
@@ -654,7 +683,7 @@ fi
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-confirm-real delmsg-after-real; do
+for f in delmsg-submenu delmsg-confirm-yes delmsg-after-yes delmsg-conversations-empty delmsg-confirm-no delmsg-after-no delmsg-route-byfolder delmsg-route-inbox delmsg-route-sent delmsg-route-drafts delmsg-inbound-inbox delmsg-sendto-compose delmsg-sendto-fail delmsg-confirm-real delmsg-after-real; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
