@@ -45,7 +45,12 @@ public final class C2SmsReceiver extends BroadcastReceiver {
             long timestamp = 0;
             StringBuilder body = new StringBuilder();
             for (SmsMessage part : parts) {
-                if (part == null) continue;
+                if (part == null) {
+                    // A missing segment would store a truncated text; drop
+                    // the whole delivery instead.
+                    Log.i("C2Messages", "SMS_DELIVER skipped reason=partial parts=" + parts.length);
+                    return;
+                }
                 if (address == null) address = part.getDisplayOriginatingAddress();
                 if (timestamp == 0) timestamp = part.getTimestampMillis();
                 String text = part.getDisplayMessageBody();
@@ -57,7 +62,12 @@ public final class C2SmsReceiver extends BroadcastReceiver {
             }
             if (timestamp == 0) timestamp = System.currentTimeMillis();
             String text = body.toString();
-            if (alreadyStored(context, address, timestamp, text)) {
+            // A true redelivery arrives immediately, so dedupe only applies
+            // to a message whose sent timestamp is seconds old. Residual:
+            // a genuinely distinct identical text sent by the same sender
+            // inside the same second is stored once (documented).
+            boolean fresh = Math.abs(System.currentTimeMillis() - timestamp) <= 30_000L;
+            if (fresh && alreadyStored(context, address, timestamp, text)) {
                 Log.i("C2Messages", "SMS_DELIVER skipped reason=duplicate addr=" + address);
                 return;
             }
@@ -89,7 +99,8 @@ public final class C2SmsReceiver extends BroadcastReceiver {
             c = context.getContentResolver().query(Telephony.Sms.CONTENT_URI,
                     new String[]{Telephony.Sms._ID},
                     Telephony.Sms.ADDRESS + "=? AND " + Telephony.Sms.DATE + "=? AND "
-                            + Telephony.Sms.BODY + "=?",
+                            + Telephony.Sms.BODY + "=? AND " + Telephony.Sms.TYPE + "="
+                            + Telephony.Sms.MESSAGE_TYPE_INBOX,
                     new String[]{address, String.valueOf(timestamp), body}, null);
             return c != null && c.moveToFirst();
         } catch (RuntimeException ex) {
