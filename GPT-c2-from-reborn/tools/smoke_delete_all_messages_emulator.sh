@@ -700,7 +700,9 @@ else
   # item 2, semicolon variant).
   adb shell am force-stop "$package"
   adb logcat -c || true
-  adb shell am start -W -a android.intent.action.SENDTO -d "sms:07700903016;07700903017?body=C2semi" -n "$package/.MainActivity" >> "$result" 2>&1 || true
+  # Inner single quotes survive the adb remote-shell re-join: a bare ';'
+  # would split the remote command line and the URI would lose the list.
+  adb shell am start -W -a android.intent.action.SENDTO -d "'sms:07700903016;07700903017?body=C2semi'" -n "$package/.MainActivity" >> "$result" 2>&1 || true
   sleep 2
   expect_foreground
   require_marker "SENDTO_MULTI list=07700903016;07700903017"
