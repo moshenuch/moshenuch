@@ -724,6 +724,34 @@ public final class AndroidBackend {
         }
     }
 
+    /**
+     * Sent-history row for an SMS C2 just submitted. Only callable while
+     * isDefaultSmsApp(); without the role the provider refuses writes.
+     * Returns the new row id, or -1 when the role is absent or the insert
+     * failed.
+     */
+    public long insertSentSms(String number, String body) {
+        if (!isDefaultSmsApp()) return -1;
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(Telephony.Sms.ADDRESS, number);
+        values.put(Telephony.Sms.BODY, body);
+        values.put(Telephony.Sms.DATE, System.currentTimeMillis());
+        values.put(Telephony.Sms.READ, 1);
+        values.put(Telephony.Sms.SEEN, 1);
+        values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT);
+        try {
+            android.net.Uri row = resolver.insert(Telephony.Sms.CONTENT_URI, values);
+            if (row == null) return -1;
+            try {
+                return Long.parseLong(row.getLastPathSegment());
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        } catch (RuntimeException ex) {
+            return -1;
+        }
+    }
+
     public boolean sendSms(String number, String body) {
         if (!has(Manifest.permission.SEND_SMS)) return false;
         try {
