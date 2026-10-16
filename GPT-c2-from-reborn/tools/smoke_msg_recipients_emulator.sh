@@ -62,7 +62,7 @@ evidence() { # evidence <stage>: screenshot + hierarchy + foreground line
     | sed "s/^/FOREGROUND[$1] /" >> "$result" || true
 }
 marker_seen() { # marker_seen <text>: 0 when the app logged it since last clear
-  adb logcat -d -s C2Log:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Log:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   local tries=0
