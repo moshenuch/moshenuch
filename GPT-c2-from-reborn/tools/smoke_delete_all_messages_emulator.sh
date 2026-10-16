@@ -75,8 +75,10 @@ ox=(w-360*scale)/2
 oy=(h-780*scale)/2
 named={
  'LSK':(90,414),'RSK':(270,414),'OK':(180,474),'DOWN':(180,505),'UP':(180,442),'RIGHT':(212,474),
+ '0':(180,716),'1':(90,557),'2':(180,557),'3':(270,557),
+ '4':(90,610),'5':(180,610),'6':(270,610),'7':(90,663),'8':(180,663),'9':(270,663),
 }
-for name in ['LSK','RSK','OK','DOWN','UP','RIGHT']:
+for name in ['LSK','RSK','OK','DOWN','UP','RIGHT','0','1','2','3','4','5','6','7','8','9']:
  x,y=named[name]
  print(f"{name} {round(ox+x*scale)} {round(oy+y*scale)}")
 PY
@@ -674,8 +676,8 @@ else
   tap RIGHT; tap DOWN; tap OK     # Messaging menu (selection row 0)
   tap OK                          # "Create message"
   sleep 1
-  adb shell input text "07900005003" < /dev/null
-  sleep 1
+  # The C2 UI reads digits from on-screen keypad taps, not IME key events.
+  for d in 0 7 9 0 0 0 0 5 0 0 3; do tap "$d"; done
   adb logcat -c || true
   adb shell am start -W --activity-single-top -a android.intent.action.SENDTO -d "sms:07700903014?body=C2link2" -n "$package/.MainActivity" >> "$result" 2>&1 || true
   sleep 2
