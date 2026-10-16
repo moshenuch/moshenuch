@@ -393,6 +393,20 @@ public final class AndroidBackend {
     public boolean deleteRawContact(long rawContactId) {
         if (!has(Manifest.permission.WRITE_CONTACTS) || rawContactId <= 0) return false;
         try {
+            // The provider only soft-marks a deleted raw contact, so a
+            // second delete of the same id still matches the row and
+            // reports success. Confirm a live row is actually there first,
+            // otherwise a rollback would claim it undid an insert that had
+            // already vanished (probe section R).
+            Cursor live = resolver.query(
+                    ContactsContract.RawContacts.CONTENT_URI,
+                    new String[]{ContactsContract.RawContacts._ID},
+                    ContactsContract.RawContacts.DELETED + "=0 AND "
+                            + ContactsContract.RawContacts._ID + "=?",
+                    new String[]{String.valueOf(rawContactId)}, null);
+            boolean present = live != null && live.moveToFirst();
+            if (live != null) live.close();
+            if (!present) return false;
             int rows = resolver.delete(
                     ContactsContract.RawContacts.CONTENT_URI,
                     ContactsContract.RawContacts._ID + "=?",
