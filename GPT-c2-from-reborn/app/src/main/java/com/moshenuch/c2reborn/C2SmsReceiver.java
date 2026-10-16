@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.provider.Telephony;
 import android.telephony.SmsMessage;
@@ -17,40 +18,84 @@ import android.util.Log;
  * receiver writes it to the provider, so each delivery is stored here.
  * Runs whether or not the app UI is open; the UI picks the row up through
  * its existing provider observer.
+ *
+ * Every inbound payload is treated as untrusted: null or empty part
+ * arrays, null parts, and missing senders or bodies are logged and
+ * skipped, and nothing in onReceive may throw. A redelivery (same sender,
+ * sent timestamp and body) is stored only once.
  */
 public final class C2SmsReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (context == null || intent == null
-                || !Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(intent.getAction())) return;
-        SmsMessage[] parts;
         try {
-            parts = Telephony.Sms.Intents.getMessagesFromIntent(intent);
+            if (context == null || intent == null
+                    || !Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(intent.getAction())) return;
+            SmsMessage[] parts;
+            try {
+                parts = Telephony.Sms.Intents.getMessagesFromIntent(intent);
+            } catch (RuntimeException ex) {
+                Log.e("C2Messages", "SMS_DELIVER skipped reason=unparsable");
+                return;
+            }
+            if (parts == null || parts.length == 0) {
+                Log.i("C2Messages", "SMS_DELIVER skipped reason=no_parts");
+                return;
+            }
+            String address = null;
+            long timestamp = 0;
+            StringBuilder body = new StringBuilder();
+            for (SmsMessage part : parts) {
+                if (part == null) continue;
+                if (address == null) address = part.getDisplayOriginatingAddress();
+                if (timestamp == 0) timestamp = part.getTimestampMillis();
+                String text = part.getDisplayMessageBody();
+                if (text != null) body.append(text);
+            }
+            if (address == null || address.length() == 0 || body.length() == 0) {
+                Log.i("C2Messages", "SMS_DELIVER skipped reason=empty parts=" + parts.length);
+                return;
+            }
+            if (timestamp == 0) timestamp = System.currentTimeMillis();
+            String text = body.toString();
+            if (alreadyStored(context, address, timestamp, text)) {
+                Log.i("C2Messages", "SMS_DELIVER skipped reason=duplicate addr=" + address);
+                return;
+            }
+            ContentValues values = new ContentValues();
+            values.put(Telephony.Sms.ADDRESS, address);
+            values.put(Telephony.Sms.BODY, text);
+            values.put(Telephony.Sms.DATE, timestamp);
+            values.put(Telephony.Sms.READ, 0);
+            values.put(Telephony.Sms.SEEN, 0);
+            values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX);
+            try {
+                Uri row = context.getContentResolver().insert(Telephony.Sms.CONTENT_URI, values);
+                Log.i("C2Messages", "SMS_DELIVER stored parts=" + parts.length
+                        + " id=" + (row == null ? "none" : row.getLastPathSegment()));
+            } catch (RuntimeException ex) {
+                Log.e("C2Messages", "SMS_DELIVER store failed: " + ex.getClass().getSimpleName());
+            }
         } catch (RuntimeException ex) {
-            Log.e("C2Messages", "SMS_DELIVER unparsable: " + ex.getClass().getSimpleName());
-            return;
+            Log.e("C2Messages", "SMS_DELIVER skipped reason=unexpected");
         }
-        if (parts == null || parts.length == 0) return;
-        String address = parts[0].getDisplayOriginatingAddress();
-        StringBuilder body = new StringBuilder();
-        for (SmsMessage part : parts) {
-            if (part == null) continue;
-            String text = part.getDisplayMessageBody();
-            if (text != null) body.append(text);
-        }
-        ContentValues values = new ContentValues();
-        values.put(Telephony.Sms.ADDRESS, address == null ? "" : address);
-        values.put(Telephony.Sms.BODY, body.toString());
-        values.put(Telephony.Sms.DATE, System.currentTimeMillis());
-        values.put(Telephony.Sms.READ, 0);
-        values.put(Telephony.Sms.SEEN, 0);
-        values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX);
+    }
+
+    /** True when the identical message (sender + sent timestamp + body)
+     *  already has a provider row; an unreadable provider stores anyway,
+     *  since a duplicate is recoverable and a lost message is not. */
+    private static boolean alreadyStored(Context context, String address, long timestamp, String body) {
+        Cursor c = null;
         try {
-            Uri row = context.getContentResolver().insert(Telephony.Sms.CONTENT_URI, values);
-            Log.i("C2Messages", "SMS_DELIVER stored parts=" + parts.length
-                    + " id=" + (row == null ? "none" : row.getLastPathSegment()));
+            c = context.getContentResolver().query(Telephony.Sms.CONTENT_URI,
+                    new String[]{Telephony.Sms._ID},
+                    Telephony.Sms.ADDRESS + "=? AND " + Telephony.Sms.DATE + "=? AND "
+                            + Telephony.Sms.BODY + "=?",
+                    new String[]{address, String.valueOf(timestamp), body}, null);
+            return c != null && c.moveToFirst();
         } catch (RuntimeException ex) {
-            Log.e("C2Messages", "SMS_DELIVER store failed: " + ex.getClass().getSimpleName());
+            return false;
+        } finally {
+            if (c != null) c.close();
         }
     }
 }
