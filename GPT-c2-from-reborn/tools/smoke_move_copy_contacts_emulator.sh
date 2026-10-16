@@ -625,22 +625,26 @@ fi
 # Since audit #20 the Yes-time revalidation refuses the batch when a
 # contact vanished since the confirm (section G2 covers that refusal), so
 # deleting mov_two BEFORE Yes no longer reaches the rollback. The failure
-# is injected mid-batch instead: the app logs MOVE_PREFLIGHT after the
-# Yes-time revalidation and before the batch, and an on-device watchdog
-# deletes mov_two's raw contact the moment that line streams in. 150 pad
-# contacts widen the window: the batch processes DelOne, DelTwo, MoveOne
-# and all 150 pads before mov_two, so the watchdog has ~150 app iterations
-# to land in (6 and 50 pads both lost - runs 38843223876, 38846177977).
-# The app's conditional delete then affects 0 rows, the op fails and
-# everything already moved must come back. A clean run (the app beat the
-# watchdog) is retried after a full state reset.
-f_pad_count=150
+# is injected mid-batch instead, deterministically: debug builds check a
+# gate file right after logging MOVE_PREFLIGHT (after the Yes-time
+# revalidation, before the batch) and park there until the probe signals.
+# The probe arms the gate before Yes, and its on-device watchdog deletes
+# mov_two's raw contact the moment PREFLIGHT streams in, then touches the
+# go file; the app wakes, the conditional delete affects 0 rows, the op
+# fails and everything already moved must come back. The gate exists only
+# in debug builds (BuildConfig.DEBUG) and only when the probe arms it, so
+# release behavior is untouched. Replaced the 6/50/150-pad race windows,
+# which all lost to logcat latency (runs 38843223876, 38846177977).
+# With the debug-build gate the batch parks at PREFLIGHT until the
+# watchdog signals, so no race window is needed; pads stay 0.
+f_pad_count=0
 f_pass=0
 for f_attempt in 1 2 3; do
   echo "rollback-failure attempt $f_attempt" >> "$result"
   # Deterministic starting state: empty SIM list, exactly the expected
   # contacts present (a lost race leaves the whole batch on the SIM).
   adb shell am force-stop "$package" || true
+  adb shell "run-as $package rm -f files/move_preflight_gate files/move_preflight_go" < /dev/null >/dev/null 2>&1 || true
   printf '%s\n' \
     '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>' \
     '<map>' \
@@ -695,12 +699,16 @@ echo "pads seeded: $(content query --uri content://com.android.contacts/data --p
     echo "UNVERIFIED could not resolve $mov_two raw id for the failure fixture" | tee -a "$result"
     exit 1
   fi
-  # Event-driven watchdog: PREFLIGHT is logged after the revalidation and
-  # before the batch; delete mov_two the moment it streams in.
-  adb shell 'logcat -s C2Contacts:I | grep -m1 "MOVE_PREFLIGHT dir=phone2sim" >/dev/null 2>&1
-echo "watchdog saw preflight"
-content delete --uri content://com.android.contacts/raw_contacts --where "_id='"$two_id"'" >/dev/null 2>&1
-echo "watchdog deleted mov_two raw_contact_id='"$two_id"'"' > /tmp/f_watchdog.out 2>&1 < /dev/null &
+  # Deterministic gate: arm before Yes so the debug build parks at
+  # PREFLIGHT; the watchdog deletes mov_two the moment PREFLIGHT streams
+  # in, then releases the batch through the go file.
+  adb shell "run-as $package touch files/move_preflight_gate" < /dev/null >/dev/null 2>&1
+  adb shell "logcat -s C2Contacts:I | grep -m1 'MOVE_PREFLIGHT dir=phone2sim' >/dev/null 2>&1
+echo 'watchdog saw preflight'
+content delete --uri content://com.android.contacts/raw_contacts --where \"_id=$two_id\" >/dev/null 2>&1
+echo 'watchdog deleted mov_two raw_contact_id='"$two_id"
+run-as $package touch files/move_preflight_go
+echo 'watchdog released the gate'" > /tmp/f_watchdog.out 2>&1 < /dev/null &
   f_watch_pid=$!
   tap LSK                         # Yes: the batch moves, mov_two fails -> rollback
   wait "$f_watch_pid" || true
