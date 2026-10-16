@@ -3167,7 +3167,12 @@ public class C2PhoneView extends View {
             } else {
                 // HTML v6.343 routes its By message / By folder rows to the
                 // inbox and folder pages; per-message handling lives there.
-                go(new String[]{"", "savedmessages", "inbox", "sent", "drafts"}[sel]);
+                // The route marker lets the emulator probe assert the actual
+                // destination page (the UI renders in this View, so
+                // uiautomator cannot see the page title).
+                String dest = new String[]{"", "savedmessages", "inbox", "sent", "drafts"}[sel];
+                android.util.Log.i("C2Messages", "DELETE_MESSAGES_ROUTE dest=" + dest);
+                go(dest);
             }
             return;
         }
@@ -6417,7 +6422,8 @@ public class C2PhoneView extends View {
                     showNotice("No conversation selected");
                 } else {
                     int n = markedThreadIds.isEmpty() ? 1 : markedThreadIds.size();
-                    requestConfirm("deleteThreads", "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
+                    requestConfirm("deleteThreads", smsRealDeleteActive() ? "Are you sure?"
+                            : "Hide " + n + (n == 1 ? " conversation" : " conversations") + " in this app? Phone SMS unchanged.");
                 }
             } else if ("Inbox view >".equals(choice)) go("inbox");
             else if ("New message >".equals(choice)) {
@@ -6478,7 +6484,8 @@ public class C2PhoneView extends View {
             } else if ("Delete".equals(choice)) {
                 if (m != null || !markedSmsIds.isEmpty()) {
                     int n = markedSmsIds.isEmpty() ? 1 : markedSmsIds.size();
-                    requestConfirm("deleteSms", "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
+                    requestConfirm("deleteSms", smsRealDeleteActive() ? "Are you sure?"
+                            : "Hide " + n + (n == 1 ? " message" : " messages") + " in this app? Phone SMS unchanged.");
                 } else showNotice("No message selected");
             } else if ("Call".equals(choice) && m != null) startCall(m.address);
             else if ("Go to Drafts".equals(choice)) go("drafts");
@@ -6534,7 +6541,8 @@ public class C2PhoneView extends View {
             } else if ("Call".equals(choice)) startCall(selected.address);
             else if ("Copy as template".equals(choice)) saveSmsAsTemplate(selected);
             else if ("Use detail".equals(choice)) showSmsUseDetails(selected);
-            else if ("Delete".equals(choice)) requestConfirm("deleteSms", "Hide this message in the app? Phone SMS unchanged.");
+            else if ("Delete".equals(choice)) requestConfirm("deleteSms", smsRealDeleteActive()
+                    ? "Are you sure?" : "Hide this message in the app? Phone SMS unchanged.");
             else if ("Forward".equals(choice)) forwardSmsCopy(selected);
             else if ("Edit".equals(choice)) {
                 // Editing a received provider SMS is not permitted; make a copy in Compose.
@@ -7360,14 +7368,24 @@ public class C2PhoneView extends View {
             HashSet<Long> targets = new HashSet<>();
             if (!markedThreadIds.isEmpty()) targets.addAll(markedThreadIds);
             else if (sel >= 0 && sel < smsThreads.size()) targets.add(smsThreads.get(sel).threadId);
-            for (AndroidBackend.DeviceSms m : deviceSms) {
-                if (targets.contains(m.threadId)) hiddenSmsIds.add(m.id);
+            if (smsRealDeleteActive()) {
+                int deleted = backend.deleteSmsThreads(targets);
+                markedThreadIds.clear();
+                refreshSmsFromPhone();
+                sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
+                android.util.Log.i("C2Messages",
+                        "DELETE_THREADS real=" + deleted + " threads=" + targets.size());
+                showNotice("Deleted");
+            } else {
+                for (AndroidBackend.DeviceSms m : deviceSms) {
+                    if (targets.contains(m.threadId)) hiddenSmsIds.add(m.id);
+                }
+                markedThreadIds.clear();
+                saveLongSet("sms_hidden", hiddenSmsIds);
+                refreshSmsFromPhone();
+                sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
+                showNotice("Conversation hidden in app");
             }
-            markedThreadIds.clear();
-            saveLongSet("sms_hidden", hiddenSmsIds);
-            refreshSmsFromPhone();
-            sel = Math.max(0, Math.min(sel, Math.max(0, smsThreads.size() - 1)));
-            showNotice("Conversation hidden in app");
         } else if ("deleteSms".equals(action)) {
             HashSet<Long> targets = new HashSet<>();
             // Bulk marks only apply inside the active conversation. Deleting
@@ -7380,22 +7398,26 @@ public class C2PhoneView extends View {
                 AndroidBackend.DeviceSms m = conversationMessageAt(sel);
                 if (m != null) targets.add(m.id);
             } else if (activeMessageId > 0) targets.add(activeMessageId);
-            hiddenSmsIds.addAll(targets);
-            markedSmsIds.clear();
-            saveLongSet("sms_hidden", hiddenSmsIds);
-            refreshSmsFromPhone();
-            if ("messageRead".equals(page)) back();
-            showNotice("SMS hidden in app");
+            if (smsRealDeleteActive()) {
+                int deleted = backend.deleteSmsByIds(targets);
+                markedSmsIds.clear();
+                refreshSmsFromPhone();
+                if ("messageRead".equals(page)) back();
+                android.util.Log.i("C2Messages",
+                        "DELETE_SMS real=" + deleted + " targets=" + targets.size());
+                showNotice("Deleted");
+            } else {
+                hiddenSmsIds.addAll(targets);
+                markedSmsIds.clear();
+                saveLongSet("sms_hidden", hiddenSmsIds);
+                refreshSmsFromPhone();
+                if ("messageRead".equals(page)) back();
+                showNotice("SMS hidden in app");
+            }
         } else if ("deleteAllMessages".equals(action)) {
-            // Hide-only bulk delete (parent direction 2026-10-15, pending
-            // Moti's real-vs-hide answer): every visible provider SMS joins
-            // the hidden set - phone SMS records stay untouched, matching
-            // deleteSms. App-local drafts and saved templates are cleared,
-            // matching the HTML v6.343 confirmdelete handler, which also
-            // lands on the Messaging menu with "Delete messages" selected.
-            int hidden = 0;
-            for (AndroidBackend.DeviceSms m : deviceSms)
-                if (hiddenSmsIds.add(m.id)) hidden++;
+            // HTML v6.343 confirmdelete: bulk delete clears app-local drafts
+            // and saved templates and lands on the Messaging menu with
+            // "Delete messages" selected, whatever the storage path.
             int draftCount = drafts.size();
             drafts.clear();
             saveDrafts();
@@ -7404,11 +7426,46 @@ public class C2PhoneView extends View {
             saveStringList("sms_templates_v1", savedSmsTemplates);
             markedSmsIds.clear();
             markedThreadIds.clear();
-            saveLongSet("sms_hidden", hiddenSmsIds);
-            refreshSmsFromPhone();
-            android.util.Log.i("C2Messages",
-                    "DELETE_ALL_MESSAGES hidden=" + hidden
-                            + " drafts=" + draftCount + " saved=" + savedCount);
+            if (demoMode) {
+                // HTML performs confirmdelete in demo too, then restores its
+                // demo thread. Native demo messages are regenerated fixtures,
+                // so performing = clearing fixture ids from the hidden set.
+                int restored = 0;
+                java.util.Iterator<Long> it = hiddenSmsIds.iterator();
+                while (it.hasNext()) {
+                    if (NativeAuditFixtures.isFixtureMessageId(it.next())) {
+                        it.remove();
+                        restored++;
+                    }
+                }
+                saveLongSet("sms_hidden", hiddenSmsIds);
+                refreshSmsFromPhone();
+                android.util.Log.i("C2Messages",
+                        "DELETE_ALL_MESSAGES demo=1 restored=" + restored
+                                + " drafts=" + draftCount + " saved=" + savedCount);
+            } else if (smsRealDeleteActive()) {
+                int before = backend.countSmsRows();
+                int deleted = backend.deleteAllSmsRows();
+                hiddenSmsIds.clear();
+                saveLongSet("sms_hidden", hiddenSmsIds);
+                refreshSmsFromPhone();
+                android.util.Log.i("C2Messages",
+                        "DELETE_ALL_MESSAGES real=" + deleted + " before=" + before
+                                + " drafts=" + draftCount + " saved=" + savedCount);
+            } else {
+                // Without the default SMS role the provider refuses writes,
+                // so bulk delete is in-app only: every provider SMS joins
+                // the hidden set (ALL row ids, not just the loaded window)
+                // and phone SMS records stay untouched, matching deleteSms.
+                int hidden = 0;
+                for (Long id : backend.loadAllSmsIds())
+                    if (hiddenSmsIds.add(id)) hidden++;
+                saveLongSet("sms_hidden", hiddenSmsIds);
+                refreshSmsFromPhone();
+                android.util.Log.i("C2Messages",
+                        "DELETE_ALL_MESSAGES hidden=" + hidden
+                                + " drafts=" + draftCount + " saved=" + savedCount);
+            }
             history.clear();
             page = "messaging";
             sel = 12;
@@ -7929,6 +7986,12 @@ public class C2PhoneView extends View {
         if (activeThreadId < 0) return out;
         for (AndroidBackend.DeviceSms m : deviceSms) if (m.threadId == activeThreadId) out.add(m);
         return out;
+    }
+
+    /** Real provider SMS delete requires the default SMS role; demo fixtures
+     * have no provider rows and keep the in-app removal (hide) semantics. */
+    private boolean smsRealDeleteActive() {
+        return !demoMode && deviceSmsActive && backend.isDefaultSmsApp();
     }
 
     private AndroidBackend.DeviceSms conversationMessageAt(int index) {
