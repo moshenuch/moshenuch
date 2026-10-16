@@ -632,6 +632,7 @@ public final class AndroidBackend {
      * Returns the number of rows actually deleted.
      */
     public int deleteSmsByIds(java.util.Collection<Long> ids) {
+        if (!isDefaultSmsApp()) return -1;
         int deleted = 0;
         if (ids == null) return 0;
         for (Long id : ids) {
@@ -648,6 +649,7 @@ public final class AndroidBackend {
 
     /** Real provider delete of every SMS in the given threads. */
     public int deleteSmsThreads(java.util.Collection<Long> threadIds) {
+        if (!isDefaultSmsApp()) return -1;
         int deleted = 0;
         if (threadIds == null) return 0;
         for (Long threadId : threadIds) {
@@ -679,11 +681,33 @@ public final class AndroidBackend {
 
     /** Real provider delete of EVERY SMS row, beyond any UI load window. */
     public int deleteAllSmsRows() {
+        if (!isDefaultSmsApp()) return -1;
         try {
             return resolver.delete(Telephony.Sms.CONTENT_URI, null, null);
         } catch (RuntimeException ex) {
             return -1;
         }
+    }
+
+    /** Number of SMS rows across the given threads, or -1 when unreadable. */
+    public int countSmsRowsInThreads(java.util.Collection<Long> threadIds) {
+        int total = 0;
+        if (threadIds == null) return 0;
+        for (Long threadId : threadIds) {
+            if (threadId == null) continue;
+            Cursor c = null;
+            try {
+                c = resolver.query(Telephony.Sms.CONTENT_URI,
+                        new String[]{Telephony.Sms._ID},
+                        Telephony.Sms.THREAD_ID + "=" + threadId, null, null);
+                if (c != null) total += c.getCount();
+            } catch (RuntimeException ex) {
+                return -1;
+            } finally {
+                if (c != null) c.close();
+            }
+        }
+        return total;
     }
 
     /** Total provider SMS rows; -1 when unreadable. */
