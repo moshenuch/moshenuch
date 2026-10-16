@@ -371,6 +371,57 @@ jobs:
           fi
           echo "versionCode check passed: $current > $previous."
 
+      # The emulator smoke suite now runs BEFORE any release is published:
+      # a failed probe means no release goes out for this version. Publishing
+      # used to happen before the suite, which let a build whose acceptance
+      # later failed stand as a published release (v2.03.15 incident, 16 Oct).
+      # A missing ffprobe previously made the video probe pass without
+      # inspecting the actual video/audio streams or decoding any samples.
+      - name: Prepare bounded MP4 verification tools
+        shell: bash
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
+            echo "FFmpeg missing from hosted runner; attempting bounded install"
+            if ! (timeout 90s sudo apt-get update -qq &&
+                  timeout 120s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg); then
+              echo "::warning::FFmpeg install timed out or failed. The optional video/JPEG decode probes will report FAIL, but the Gallery-capacity probe can still run."
+            fi
+          fi
+          if command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null; then
+            ffprobe -version | sed -n '1p'
+            ffmpeg -version | sed -n '1p'
+          else
+            echo "::warning::ffprobe and ffmpeg unavailable. Audio/video decode cannot be verified in this CI run."
+          fi
+
+      - name: Enable Android emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install, launch, and probe native video on Android 11 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back emulated -camera-front emulated
+          script: bash GPT-c2-from-reborn/tools/run_emulator_smoke_suite.sh
+
+      - name: Upload Android 11 install/launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPT-c2-from-reborn-Android11-install-smoke
+          path: GPT-c2-from-reborn/build/emulator-smoke/
+          if-no-files-found: warn
+
+
+
       - name: Publish immutable versioned APK release
         if: steps.numbered_release.outputs.publish == 'true'
         uses: ncipollo/release-action@v1
@@ -448,53 +499,3 @@ jobs:
             echo "Verified downloadable APK ${apk} from release ${tag} (SHA-256: ${checksum})"
             echo "Download verified for ${tag}: ${apk} (SHA-256 ${checksum})" >> "$GITHUB_STEP_SUMMARY"
           done
-
-      # Post-release diagnostic: a transient emulator infrastructure failure
-      # must not hide an APK that already passed build, signature and download
-      # verification. This still fails the workflow and uploads evidence.
-      # Release APKs are already published/byte-verified at this point.
-      # A missing ffprobe previously made the video probe pass without
-      # inspecting the actual video/audio streams or decoding any samples.
-      - name: Prepare bounded MP4 verification tools
-        shell: bash
-        timeout-minutes: 6
-        run: |
-          set -euo pipefail
-          if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
-            echo "FFmpeg missing from hosted runner; attempting bounded install"
-            if ! (timeout 90s sudo apt-get update -qq &&
-                  timeout 120s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg); then
-              echo "::warning::FFmpeg install timed out or failed. The optional video/JPEG decode probes will report FAIL, but the Gallery-capacity probe can still run."
-            fi
-          fi
-          if command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null; then
-            ffprobe -version | sed -n '1p'
-            ffmpeg -version | sed -n '1p'
-          else
-            echo "::warning::ffprobe and ffmpeg unavailable. Audio/video decode cannot be verified in this CI run."
-          fi
-
-      - name: Enable Android emulator hardware acceleration
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Install, launch, and probe native video on Android 11 emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back emulated -camera-front emulated
-          script: bash GPT-c2-from-reborn/tools/run_emulator_smoke_suite.sh
-
-      - name: Upload Android 11 install/launch diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: GPT-c2-from-reborn-Android11-install-smoke
-          path: GPT-c2-from-reborn/build/emulator-smoke/
-          if-no-files-found: warn
-
