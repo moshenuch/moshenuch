@@ -220,10 +220,13 @@ public final class AndroidBackend {
             if (c != null) c.close();
         }
         // Structured-name content the SIM display name cannot hold
-        // (audit #19): phonetic parts are never derivable from the display
-        // name, and structural parts only pass when they merely re-spell
-        // it (the provider may auto-split a one-token display name into
-        // one identical component; that echo loses nothing).
+        // (audit #19/#20): phonetic parts and the data10/data11 style
+        // fields are never derivable from the display name, and neither
+        // are genuine structural parts - restore writes the bare display
+        // name, so Given+Family that merely re-spell a multi-token display
+        // name would still be lost on the round trip. The only pass is the
+        // provider's echo of a ONE-TOKEN display name into identical
+        // components: a single token carries no structure to lose.
         c = null;
         try {
             c = resolver.query(
@@ -238,7 +241,9 @@ public final class AndroidBackend {
                             ContactsContract.CommonDataKinds.StructuredName.SUFFIX,
                             ContactsContract.CommonDataKinds.StructuredName.PHONETIC_GIVEN_NAME,
                             ContactsContract.CommonDataKinds.StructuredName.PHONETIC_MIDDLE_NAME,
-                            ContactsContract.CommonDataKinds.StructuredName.PHONETIC_FAMILY_NAME},
+                            ContactsContract.CommonDataKinds.StructuredName.PHONETIC_FAMILY_NAME,
+                            ContactsContract.Data.DATA10,
+                            ContactsContract.Data.DATA11},
                     ContactsContract.Data.MIMETYPE + "=?",
                     new String[]{
                             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE},
@@ -254,6 +259,15 @@ public final class AndroidBackend {
                     }
                 }
                 if (!extra) {
+                    for (int i = 10; i <= 11; i++) {
+                        String v = c.getString(i);
+                        if (v != null && !v.trim().isEmpty() && !"0".equals(v.trim())) {
+                            extra = true;
+                            break;
+                        }
+                    }
+                }
+                if (!extra) {
                     StringBuilder joined = new StringBuilder();
                     for (int i = 2; i <= 6; i++) {
                         String v = c.getString(i);
@@ -262,9 +276,12 @@ public final class AndroidBackend {
                             joined.append(v.trim());
                         }
                     }
-                    String display = c.getString(1);
-                    extra = joined.length() > 0
-                            && !joined.toString().equals(display == null ? "" : display.trim());
+                    if (joined.length() > 0) {
+                        String display = c.getString(1);
+                        String disp = display == null ? "" : display.trim();
+                        extra = !joined.toString().equals(disp)
+                                || disp.matches("(?s).*\\s.*");
+                    }
                 }
                 if (extra) out.add(c.getLong(0));
             }
@@ -393,27 +410,41 @@ public final class AndroidBackend {
     public boolean deleteRawContact(long rawContactId) {
         if (!has(Manifest.permission.WRITE_CONTACTS) || rawContactId <= 0) return false;
         try {
-            // The provider only soft-marks a deleted raw contact, so a
-            // second delete of the same id still matches the row and
-            // reports success. Confirm a live row is actually there first,
-            // otherwise a rollback would claim it undid an insert that had
-            // already vanished (probe section R).
-            Cursor live = resolver.query(
+            // The provider only soft-marks a deleted raw contact, so the
+            // write itself is conditional on the row still being live: a
+            // delete of an already-removed id then affects 0 rows and the
+            // rollback does not claim it undid an insert that had already
+            // vanished (probe section R, audit #20).
+            int rows = resolver.delete(
+                    ContactsContract.RawContacts.CONTENT_URI,
+                    ContactsContract.RawContacts.DELETED + "=0 AND "
+                            + ContactsContract.RawContacts._ID + "=?",
+                    new String[]{String.valueOf(rawContactId)});
+            return rows > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** True while a live (not soft-deleted) raw contact with this id
+     *  exists. Used by the SIM->phone rollback: when a delete fails the
+     *  SIM entry is only restored if the phone copy is actually gone,
+     *  otherwise the contact would sit in both places (audit #20). */
+    public boolean rawContactLive(long rawContactId) {
+        if (!has(Manifest.permission.READ_CONTACTS) || rawContactId <= 0) return false;
+        Cursor c = null;
+        try {
+            c = resolver.query(
                     ContactsContract.RawContacts.CONTENT_URI,
                     new String[]{ContactsContract.RawContacts._ID},
                     ContactsContract.RawContacts.DELETED + "=0 AND "
                             + ContactsContract.RawContacts._ID + "=?",
                     new String[]{String.valueOf(rawContactId)}, null);
-            boolean present = live != null && live.moveToFirst();
-            if (live != null) live.close();
-            if (!present) return false;
-            int rows = resolver.delete(
-                    ContactsContract.RawContacts.CONTENT_URI,
-                    ContactsContract.RawContacts._ID + "=?",
-                    new String[]{String.valueOf(rawContactId)});
-            return rows > 0;
+            return c != null && c.moveToFirst();
         } catch (Exception e) {
             return false;
+        } finally {
+            if (c != null) c.close();
         }
     }
 
