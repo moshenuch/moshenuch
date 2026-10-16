@@ -563,11 +563,16 @@ public final class AndroidBackend {
     }
 
         public boolean deleteContact(long contactId) {
+        // Conditional on the rows still being live, same as
+        // deleteRawContact: a soft-deleted row still matches a plain
+        // CONTACT_ID delete and would report a delete that removed
+        // nothing (audit #20).
         if (!has(Manifest.permission.WRITE_CONTACTS)) return false;
         try {
             int rows = resolver.delete(
                     ContactsContract.RawContacts.CONTENT_URI,
-                    ContactsContract.RawContacts.CONTACT_ID + "=?",
+                    ContactsContract.RawContacts.DELETED + "=0 AND "
+                            + ContactsContract.RawContacts.CONTACT_ID + "=?",
                     new String[]{String.valueOf(contactId)});
             return rows > 0;
         } catch (Exception e) {
