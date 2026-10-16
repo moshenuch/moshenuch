@@ -61,7 +61,7 @@ shot() {
   adb exec-out screencap -p > "$out/$1.png" 2>/dev/null || true
 }
 marker_seen() {
-  adb logcat -d -s C2Log:I 2>/dev/null | grep -qF "$1"
+  adb logcat -d -s C2Log:I 2>/dev/null | grep -F "$1" >/dev/null
 }
 require_marker() {
   local tries=0
@@ -172,14 +172,14 @@ cleanup_state() {
   if [[ -s "$out/c2_inserted_ids.txt" ]]; then
     while IFS= read -r row_id; do
       [[ -n "$row_id" ]] || continue
-      del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" 2>&1 | tr -d '\r' || true)"
+      del_out="$(adb shell content delete --uri content://call_log/calls --where "_id=$row_id" < /dev/null 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$del_out"; then
         echo "FAIL cleanup: provider delete of _id=$row_id errored: $del_out" | tee -a "$result"
         cleanup_status=1
         remaining_ids+=("$row_id")
         continue
       fi
-      query_out="$(adb shell content query --uri content://call_log/calls --projection _id 2>&1 | tr -d '\r' || true)"
+      query_out="$(adb shell content query --uri content://call_log/calls --projection _id < /dev/null 2>&1 | tr -d '\r' || true)"
       if grep -qiE 'exception|denied|error' <<< "$query_out"; then
         echo "FAIL cleanup: provider query after delete errored: $query_out" | tee -a "$result"
         cleanup_status=1
