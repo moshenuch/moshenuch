@@ -3,6 +3,8 @@
 # suite:
 #  Y. Yes:  with two seeded contacts present, Del. all contacts > Yes must
 #     remove every provider contact and report the exact deleted count.
+#  Y-add/Y-remove: a contact appearing or vanishing between the
+#     confirm and Yes refuses the delete (audit #34 item B1).
 #  E. Empty: with the provider empty, Del. all contacts is refused with the
 #     "Selected memory empty" notice (HTML v6.343 wording); nothing changes.
 #  N. No:   answering No on the confirm leaves the provider byte-identical.
@@ -197,6 +199,56 @@ tap OK                          # "Del. all contacts"
 sleep 1
 require_marker "DELETE_ALL_CONTACTS_CONFIRM count=$expected"
 shot delall-confirm-yes
+
+# Y-add (audit #34 item B1): a contact that APPEARS between the confirm and
+# Yes must refuse the delete, not remove a contact the user never saw
+# counted. The seed goes straight into the provider while the confirm is
+# open, so the pinned membership no longer matches at Yes.
+four_id="$(seed_contact AAAC2DelFour 07900005004)"
+adb logcat -c || true
+tap LSK                         # Yes
+require_marker "DELETE_ALL_CONTACTS_REFUSED reason=changed"
+leftover="$(raw_ids)"
+leftover_count="$(grep -c . <<< "$leftover" || true)"
+[[ -n "$leftover" ]] || leftover_count=0
+if [[ "$leftover_count" -ne $((expected + 1)) ]]; then
+  echo "FAIL changed-refuse path deleted contacts anyway (left $leftover_count, expected $((expected + 1)))" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS Delete all contacts Yes refused after a contact appeared between confirm and Yes' | tee -a "$result"
+shot delall-add-refused
+sleep 2                         # let the refusal notice auto-dismiss (1800ms)
+
+# Y-remove (audit #34 item B1): a contact that VANISHES between the confirm
+# and Yes must refuse too. The Yes handler reset selection to the top row.
+tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
+tap OK
+sleep 1
+require_marker "DELETE_ALL_CONTACTS_CONFIRM count=$((expected + 1))"
+adb shell content delete --uri content://com.android.contacts/raw_contacts \
+  --where "_id=$four_id" >/dev/null 2>&1 || true
+sleep 1
+adb logcat -c || true
+tap LSK                         # Yes
+require_marker "DELETE_ALL_CONTACTS_REFUSED reason=changed"
+leftover="$(raw_ids)"
+leftover_count="$(grep -c . <<< "$leftover" || true)"
+[[ -n "$leftover" ]] || leftover_count=0
+if [[ "$leftover_count" -ne $expected ]]; then
+  echo "FAIL vanished-refuse path deleted contacts anyway (left $leftover_count, expected $expected)" | tee -a "$result"
+  exit 1
+fi
+echo 'PASS Delete all contacts Yes refused after a contact vanished between confirm and Yes' | tee -a "$result"
+shot delall-remove-refused
+sleep 2                         # let the refusal notice auto-dismiss
+
+# Y-real: with membership unchanged since the confirm, Yes deletes exactly
+# the pinned aggregate set.
+tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
+tap OK
+sleep 1
+require_marker "DELETE_ALL_CONTACTS_CONFIRM count=$expected"
+adb logcat -c || true
 tap LSK                         # Yes
 sleep 2
 require_marker "DELETE_ALL_CONTACTS deleted=$expected failed=0"
@@ -248,7 +300,7 @@ shot delall-after-no
 
 # Mirror key screenshots into the results as single-line base64 so the job
 # log (the only reliable retrieval path) carries them for visual review.
-for f in delall-confirm-yes delall-after-yes delall-confirm-no delall-empty-refused delall-after-no; do
+for f in delall-confirm-yes delall-add-refused delall-remove-refused delall-after-yes delall-confirm-no delall-empty-refused delall-after-no; do
   if [[ -s "$out/$f.png" ]]; then
     echo "SHOTB64 $f $(base64 -w0 "$out/$f.png")" >> "$result"
   fi
