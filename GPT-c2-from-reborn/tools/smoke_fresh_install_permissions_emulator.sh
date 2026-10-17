@@ -3,8 +3,9 @@
 # first launch with NO pre-granted runtime permissions. BLOCKING in the
 # suite.
 #  D. Deny path: every OS sheet denied. The app must survive, render home,
-#    open Contacts without READ_CONTACTS and stay foreground. The second
-#    cold start is characterized (OS sheets are tolerated, never a crash).
+#    open Contacts without READ_CONTACTS and stay foreground. The dampened
+#    startup stays silent on the second cold start; opening Contacts then
+#    re-asks with the OS sheet exactly once.
 #  A. Allow path: every OS sheet allowed. The app must end with the phone
 #    and storage permissions granted, survive, and render home.
 # The sheets are Android's own (com.android.permissioncontroller): C2 never
@@ -174,15 +175,33 @@ shot freshinstall-deny-contacts
 tap BACK
 tap BACK
 
-# Second cold start after plain denial: OS sheets may show again (tolerated,
-# they are Android's own); the app must not crash either way.
+# Dampened startup (2.03.19): after a plain denial the phone cascade must
+# NOT re-fire on cold start. Zero sheets.
 adb shell am force-stop "$package"
 launch
-settle_sheets Deny 6
+settle_sheets Deny 2
+if [[ $ANSWERED -ne 0 ]]; then
+  echo "FAIL second cold start after denial re-showed $ANSWERED sheet(s); dampened startup must stay silent" | tee -a "$result"
+  exit 1
+fi
 expect_alive 'deny path second launch'
 expect_foreground
-echo "NOTE second cold start after denial re-showed $ANSWERED OS sheet(s); app survived" >> "$result"
-echo 'PASS Fresh install deny-all: second cold start survived' | tee -a "$result"
+echo 'PASS Fresh install deny-all: second cold start shows no permission sheets' | tee -a "$result"
+
+# Opening a feature that needs a denied permission re-asks with the OS
+# sheet (once per feature per session; never C2-drawn UI).
+tap OK                          # menu grid
+tap OK                          # Contacts
+sleep 2
+settle_sheets Deny 2
+if [[ $ANSWERED -eq 0 ]]; then
+  echo 'FAIL opening Contacts after denial did not re-ask with the OS sheet' | tee -a "$result"
+  exit 1
+fi
+expect_alive 'deny path feature re-ask'
+expect_foreground
+echo 'PASS Fresh install deny-all: opening Contacts after denial re-asks with the OS sheet' | tee -a "$result"
+shot freshinstall-deny-contacts-reask
 
 # --- A. Allow every sheet ---------------------------------------------------
 fresh_install
