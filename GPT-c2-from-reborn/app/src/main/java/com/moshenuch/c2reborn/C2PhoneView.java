@@ -6391,6 +6391,7 @@ public class C2PhoneView extends View {
                 // refusal on deny (audit #41).
                 MainActivity activity = getContext() instanceof MainActivity ?
                         (MainActivity) getContext() : null;
+                android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_WRITE_ASK contactId=" + target.contactId);
                 if (activity != null &&
                         activity.askWriteContactsForAdd(target.contactId)) return;
                 android.util.Log.i("C2Contacts", "ADD_TO_CONTACT_REFUSED reason=no_write_permission");
