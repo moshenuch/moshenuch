@@ -35,8 +35,8 @@ w,h=map(int,sys.argv[1:])
 scale=min(w/360,h/780)
 ox=(w-360*scale)/2
 oy=(h-780*scale)/2
-named={'OK':(180,474),'BACK':(270,414)}
-for name in ['OK','BACK']:
+named={'OK':(180,474),'BACK':(270,414),'DOWN':(180,505),'5':(180,610)}
+for name in ['OK','BACK','DOWN','5']:
  x,y=named[name]
  print(f"{name} {round(ox+x*scale)} {round(oy+y*scale)}")
 PY
@@ -194,14 +194,55 @@ tap OK                          # menu grid
 tap OK                          # Contacts
 sleep 2
 settle_sheets Deny 2
-if [[ $ANSWERED -eq 0 ]]; then
-  echo 'FAIL opening Contacts after denial did not re-ask with the OS sheet' | tee -a "$result"
+if [[ $ANSWERED -ne 1 ]]; then
+  echo "FAIL opening Contacts after denial showed $ANSWERED sheet(s); expected exactly 1" | tee -a "$result"
   exit 1
 fi
 expect_alive 'deny path feature re-ask'
 expect_foreground
 echo 'PASS Fresh install deny-all: opening Contacts after denial re-asks with the OS sheet' | tee -a "$result"
 shot freshinstall-deny-contacts-reask
+
+# Direct entry, dial pad: a digit on home opens the dial page; the
+# CALL_PHONE group re-ask fires exactly once (audit #40).
+tap BACK
+tap BACK
+tap 5
+sleep 2
+settle_sheets Deny 2
+if [[ $ANSWERED -ne 1 ]]; then
+  echo "FAIL opening the dial pad after denial showed $ANSWERED sheet(s); expected exactly 1" | tee -a "$result"
+  exit 1
+fi
+expect_alive 'deny path dial re-ask'
+expect_foreground
+echo 'PASS Fresh install deny-all: opening the dial pad after denial re-asks with the OS sheet' | tee -a "$result"
+shot freshinstall-deny-dial-reask
+
+# Direct entry, call log (new process so the calls group is unasked):
+# menu -> Log -> All calls re-asks with the OS sheet exactly once.
+adb shell am force-stop "$package"
+launch
+settle_sheets Deny 2
+if [[ $ANSWERED -ne 0 ]]; then
+  echo "FAIL third cold start re-showed $ANSWERED sheet(s); dampened startup must stay silent" | tee -a "$result"
+  exit 1
+fi
+tap OK                          # menu grid (selection index 0)
+tap DOWN                        # grid row 2
+tap DOWN                        # grid row 3: Log
+tap OK                          # Log page
+tap OK                          # All calls
+sleep 2
+settle_sheets Deny 2
+if [[ $ANSWERED -ne 1 ]]; then
+  echo "FAIL opening the call log after denial showed $ANSWERED sheet(s); expected exactly 1" | tee -a "$result"
+  exit 1
+fi
+expect_alive 'deny path call-log re-ask'
+expect_foreground
+echo 'PASS Fresh install deny-all: opening the call log after denial re-asks with the OS sheet' | tee -a "$result"
+shot freshinstall-deny-calllog-reask
 
 # --- A. Allow every sheet ---------------------------------------------------
 fresh_install
