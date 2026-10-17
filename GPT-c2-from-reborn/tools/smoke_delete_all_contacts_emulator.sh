@@ -107,8 +107,19 @@ require_marker() {
 raw_ids() { # one LIVE raw-contact _id per line, sorted; empty when provider empty.
   # Synced raws are soft-deleted (deleted=1) so the account can propagate the
   # removal; the user-facing promise is that no live contacts remain.
-  adb shell content query --uri content://com.android.contacts/raw_contacts \
-    --projection _id --where "deleted=0" 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+  # Fail closed (audit #37): an adb/provider error must not read as an empty
+  # list - the No before/after comparison would pass on two failed reads.
+  local out
+  if ! out="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
+      --projection _id --where "deleted=0" 2>&1)"; then
+    echo "FAIL raw_ids query errored: $out" | tee -a "$result"
+    exit 1
+  fi
+  if grep -qiE 'error|exception|security' <<< "$out"; then
+    echo "FAIL raw_ids query returned an error: $out" | tee -a "$result"
+    exit 1
+  fi
+  printf '%s\n' "$out" | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
 }
 seed_contact() { # seed_contact <name> <number>; prints the new raw id
   local name="$1" number="$2" before after new_id
