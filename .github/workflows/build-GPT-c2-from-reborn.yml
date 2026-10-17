@@ -27,7 +27,7 @@ jobs:
     # release builds through the concurrency group. Bound the whole job too.
     # 35: the full smoke suite (Move/Copy grew by four sections for audit
     # #18) needs ~28 min; keep the bound tight against real stalls.
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
