@@ -2507,24 +2507,52 @@ public class C2PhoneView extends View {
         p.setStyle(Paint.Style.FILL);
         p.setColor(Color.argb(140, 0, 0, 0));
         c.drawRect(0, 0, 240, 286, p);
+        // Size the box to the wrapped line count (audit #35 item 1): the
+        // overlay has no scroll and LSK/OK accepts Yes immediately, so a
+        // clipped consequence line would never be seen. The box grows down
+        // toward the soft bar (y>=286) up to 7 lines.
+        p.setTypeface(fontRegular);
+        p.setTextSize(15);
+        p.setTextAlign(Paint.Align.LEFT);
+        int confirmLines = Math.min(Math.max(wrappedLineCount(confirmText, 194), 3), 7);
+        float boxBottom = confirmLines <= 3 ? 208
+                : Math.min(145 + (confirmLines - 1) * 18 + 12, 274);
         p.setColor(Color.rgb(7, 15, 25));
-        c.drawRect(11, 93, 229, 208, p);
+        c.drawRect(11, 93, 229, boxBottom, p);
         p.setColor(Color.rgb(197, 211, 225));
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(1f);
-        c.drawRect(11.5f, 93.5f, 228.5f, 207.5f, p);
+        c.drawRect(11.5f, 93.5f, 228.5f, boxBottom - 0.5f, p);
         p.setStyle(Paint.Style.FILL);
         p.setColor(Color.rgb(38, 59, 81));
         c.drawRect(13, 96, 227, 119, p);
         p.setColor(Color.WHITE);
         p.setTypeface(fontBold);
-        p.setTextAlign(Paint.Align.LEFT);
         p.setTextSize(14);
         c.drawText("Question", 21, 113, p);
         p.setTypeface(fontRegular);
         p.setTextSize(15);
         p.setColor(Color.WHITE);
-        drawWrappedText(c, confirmText, 22, 145, 194, 18, 3);
+        drawWrappedText(c, confirmText, 22, 145, 194, 18, confirmLines);
+    }
+
+    /** Line count drawWrappedText would produce for the same wrap rules;
+     *  the caller sets the paint (typeface/size) first. */
+    private int wrappedLineCount(String text, float maxWidth) {
+        if (text == null) text = "";
+        int lines = 0;
+        for (String para : text.split("\\n", -1)) {
+            String line = "";
+            for (String word : para.split(" ")) {
+                String test = line.isEmpty() ? word : line + " " + word;
+                if (p.measureText(test) > maxWidth && !line.isEmpty()) {
+                    lines++;
+                    line = word;
+                } else line = test;
+            }
+            lines++;
+        }
+        return lines;
     }
 
     private void drawNotice(Canvas c) {
@@ -3283,14 +3311,19 @@ public class C2PhoneView extends View {
                         // memory / From SIM card / All contacts) but no
                         // functional delete or confirm, so the confirm says
                         // exactly what happens, including the sync-delete
-                        // consequence.
-                        String text = "Delete all contacts?\n\n" + count
-                                + (count == 1 ? " contact" : " contacts")
-                                + " on this phone, including contacts without numbers,"
-                                + " will be permanently deleted.";
+                        // consequence. Wording is compact so the grown
+                        // confirm box (audit #35 item 1) shows every line
+                        // before Yes is possible; the sync claim says "may
+                        // be removed" because read-only synced rows can
+                        // refuse the removal (audit #35 note).
+                        String text = "Delete all " + count
+                                + (count == 1 ? " contact?" : " contacts?")
+                                + "\nAll contacts on this phone will be permanently"
+                                + " deleted, incl. ones without numbers.";
                         if (syncedCount > 0) text += "\n" + syncedCount
-                                + (syncedCount == 1 ? " belongs" : " belong")
-                                + " to synced accounts and will be removed from the account too.";
+                                + (syncedCount == 1
+                                        ? " synced contact may be removed from the account too."
+                                        : " synced contacts may be removed from the account too.");
                         pendingDeleteAllIds = new java.util.HashSet<>(ids);
                         requestConfirm("deleteAllContacts", text);
                         android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_CONFIRM count=" + count);
