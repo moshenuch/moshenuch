@@ -4398,6 +4398,10 @@ public class C2PhoneView extends View {
         sel = 0;
         optionsOpen = false;
         resetTap();
+        // Dampened permission re-ask: opening a feature that needs a denied
+        // permission gets one OS sheet (never on cold start, never C2 UI).
+        if (getContext() instanceof MainActivity)
+            ((MainActivity) getContext()).maybeAskFeaturePermission(target);
         invalidate();
     }
 
