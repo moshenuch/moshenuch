@@ -59,12 +59,13 @@ if bash GPT-c2-from-reborn/tools/smoke_add_to_contact_emulator.sh "$results"; th
     echo "::error::Add to contact core acceptance incomplete; see add-to-contact-results.txt"
     add_to_contact_core_failed=1
   fi
-  # Section E (WRITE_CONTACTS denied) is warning-only per the 2026-10-15
-  # auditor timebox: green and deterministic since commit 5b37b79e (run
-  # 38691909508), but a probe-side flake here must never hold a release.
+  # Section E (WRITE_CONTACTS write-ask) is warning-only: re-specced for
+  # 2.03.19 to the API-30 contacts group auto-grant (WRITE_ASK -> INSERTED,
+  # refusal branch unreachable with READ held; static-audit-covered), but a
+  # probe-side flake here must never hold a release.
   # Exact diagnostics are always in add-to-contact-results.txt.
-  if ! grep -Fq 'PASS Add to contact refused without WRITE_CONTACTS' "$results/add-to-contact-results.txt"; then
-    echo "::warning::Section E (WRITE_CONTACTS denied) acceptance incomplete; see add-to-contact-results.txt"
+  if ! grep -Fq 'PASS Add to contact write-ask retried the insert' "$results/add-to-contact-results.txt"; then
+    echo "::warning::Section E (WRITE_CONTACTS write-ask) acceptance incomplete; see add-to-contact-results.txt"
   fi
   if ! grep -Fq 'PASS Conversations Add to contact appended sender number' "$results/add-to-contact-results.txt" ||
      ! grep -Fq 'PASS alphanumeric SMS sender refused before picker' "$results/add-to-contact-results.txt"; then
