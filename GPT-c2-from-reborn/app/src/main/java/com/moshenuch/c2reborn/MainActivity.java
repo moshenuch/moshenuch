@@ -37,6 +37,13 @@ public class MainActivity extends Activity {
     private static final int REQ_VIDEO_LIBRARY = 410;
     private static final int REQ_IMAGE_LIBRARY = 411;
     private static final int REQ_STARTUP_MEDIA = 412;
+    private static final int REQ_FEATURE_CONTACTS = 413;
+    private static final int REQ_FEATURE_SMS = 414;
+    private static final int REQ_FEATURE_CALLS = 415;
+    // Feature-open permission asks are dampened to one OS sheet per
+    // feature group per process lifetime (never a sheet loop).
+    private final java.util.HashSet<String> featureAskedThisSession =
+            new java.util.HashSet<>();
     private Uri pendingNativeVideo;
     private volatile boolean videoFinalising;
     private volatile boolean videoStopWorkerRunning;
@@ -188,7 +195,14 @@ public class MainActivity extends Activity {
             if (captured != null) pendingCameraOutput = Uri.parse(captured);
             pendingCameraVideo = savedInstanceState.getBoolean("pendingCameraVideo", false);
         }
-        requestPhonePermissions();
+        // Dampened startup ask (audit of the fresh-install lifecycle,
+        // 2026-10-17): the phone-permission cascade fires once ever.
+        // After a plain deny, cold starts stay silent; a feature asks
+        // again (OS sheet only) when the user opens it.
+        if (!getSharedPreferences("c2_perm_dampen", MODE_PRIVATE)
+                .getBoolean("phone_asked_v1", false)) {
+            requestPhonePermissions();
+        }
         requestStartupMediaAfterPhonePermissions();
         // Expire any send-result aggregates left over 10 minutes (process
         // death between parts) into FAILED rows (audit #32 item 1).
@@ -737,6 +751,47 @@ public class MainActivity extends Activity {
         cameraPreview.setLayoutParams(lp);
     }
 
+    /**
+     * Dampened re-ask: called when the user opens a feature that needs a
+     * runtime permission they previously denied. Shows the OS sheet only,
+     * at most once per feature group per process lifetime. Never fires on
+     * cold start (that is the first-launch cascade's one shot) and never
+     * draws C2 UI. Gallery image/video asks keep their own existing flows.
+     */
+    public void maybeAskFeaturePermission(String page) {
+        if (Build.VERSION.SDK_INT < 23) return;
+        String group;
+        String[] perms;
+        int requestCode;
+        if ("contacts".equals(page) || "contactsNames".equals(page)) {
+            group = "contacts";
+            perms = new String[]{Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.WRITE_CONTACTS};
+            requestCode = REQ_FEATURE_CONTACTS;
+        } else if ("messaging".equals(page) || "conversations".equals(page)) {
+            group = "sms";
+            perms = new String[]{Manifest.permission.READ_SMS,
+                    Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS};
+            requestCode = REQ_FEATURE_SMS;
+        } else if ("dialled".equals(page)) {
+            group = "calls";
+            perms = new String[]{Manifest.permission.CALL_PHONE,
+                    Manifest.permission.ANSWER_PHONE_CALLS,
+                    Manifest.permission.READ_CALL_LOG};
+            requestCode = REQ_FEATURE_CALLS;
+        } else return;
+        boolean missing = false;
+        for (String permission : perms) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                missing = true;
+                break;
+            }
+        }
+        if (!missing) return;
+        if (!featureAskedThisSession.add(group)) return;
+        requestPermissions(perms, requestCode);
+    }
+
     private void requestPhonePermissions() {
         if (Build.VERSION.SDK_INT < 23) return;
         String[] permissions = {
@@ -756,7 +811,12 @@ public class MainActivity extends Activity {
                 break;
             }
         }
-        if (missing) requestPermissions(permissions, REQ_PHONE_DATA);
+        if (missing) {
+            featureAskedThisSession.add("contacts");
+            featureAskedThisSession.add("sms");
+            featureAskedThisSession.add("calls");
+            requestPermissions(permissions, REQ_PHONE_DATA);
+        }
     }
 
     @Override
@@ -767,7 +827,14 @@ public class MainActivity extends Activity {
             observeSmsWhileVisible();
             getSharedPreferences("c2_startup_media", MODE_PRIVATE).edit()
                     .putBoolean("phone_prompt_finished", true).apply();
+            getSharedPreferences("c2_perm_dampen", MODE_PRIVATE).edit()
+                    .putBoolean("phone_asked_v1", true).apply();
             requestStartupMediaAfterPhonePermissions();
+        }
+        if ((requestCode == REQ_FEATURE_CONTACTS || requestCode == REQ_FEATURE_SMS ||
+                requestCode == REQ_FEATURE_CALLS) && phoneView != null) {
+            phoneView.onPermissionsChanged();
+            if (requestCode == REQ_FEATURE_SMS) observeSmsWhileVisible();
         }
         if (requestCode == REQ_STARTUP_MEDIA && phoneView != null) {
             phoneView.refreshVisibleVideoLibrary();
