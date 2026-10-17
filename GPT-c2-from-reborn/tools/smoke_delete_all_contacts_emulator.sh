@@ -233,8 +233,14 @@ tap OK                          # "Del. all contacts"
 sleep 1
 require_marker "DELETE_ALL_CONTACTS_CONFIRM count=$expected"
 # This screenshot is the audit #35 item 1 proof: the confirm box must show
-# the full wording including the synced-account consequence line.
+# the full wording including the synced-account consequence line. Its
+# existence is a gate (audit #36 item 3); a human/agent view of the PNG
+# confirms the "may be removed" line is visible.
 shot delall-confirm-yes
+if [[ ! -s "$out/delall-confirm-yes.png" ]]; then
+  echo "FAIL delall-confirm-yes.png missing or empty; consequence-line proof unavailable" | tee -a "$result"
+  exit 1
+fi
 
 # Y-add (audit #34 item B1): a contact that APPEARS between the confirm and
 # Yes must refuse the delete, not remove a contact the user never saw
@@ -302,8 +308,17 @@ adb shell content delete \
   --uri "'content://com.android.contacts/raw_contacts?caller_is_syncadapter=true'" \
   --where "'deleted=1'" >/dev/null 2>&1 || true
 sleep 1
-tombstones="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
-  --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true)"
+# Fail closed (audit #36 item 2): a query error must not read as clean.
+if ! tomb_out="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
+    --projection _id 2>&1)"; then
+  echo "FAIL tombstone check query errored: $tomb_out" | tee -a "$result"
+  exit 1
+fi
+if grep -qiE 'error|exception|security' <<< "$tomb_out"; then
+  echo "FAIL tombstone check query returned an error: $tomb_out" | tee -a "$result"
+  exit 1
+fi
+tombstones="$(printf '%s' "$tomb_out" | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true)"
 if [[ -n "$tombstones" ]]; then
   echo "FAIL soft-deleted raw contacts survived cleanup: $tombstones" | tee -a "$result"
   exit 1
