@@ -115,11 +115,18 @@ raw_ids() { # one LIVE raw-contact _id per line, sorted; empty when provider emp
     echo "FAIL raw_ids query errored: $out" | tee -a "$result"
     exit 1
   fi
-  if grep -qiE 'error|exception|security' <<< "$out"; then
+  if grep -qiE 'error|exception|security|permission|denial|denied' <<< "$out"; then
     echo "FAIL raw_ids query returned an error: $out" | tee -a "$result"
     exit 1
   fi
-  printf '%s\n' "$out" | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+  # Audit #38: output with no _id lines is only acceptable as the known
+  # empty-provider message; anything else reads as failure.
+  out_clean="$(printf '%s' "$out" | tr -d '\r' | sed 's/[[:space:]]*$//')"
+  if ! grep -q '_id=' <<< "$out_clean" && [[ "$out_clean" != "No result found." ]]; then
+    echo "FAIL raw_ids query returned unexpected output: $out" | tee -a "$result"
+    exit 1
+  fi
+  printf '%s\n' "$out_clean" | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
 }
 seed_contact() { # seed_contact <name> <number>; prints the new raw id
   local name="$1" number="$2" before after new_id
