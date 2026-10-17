@@ -104,9 +104,11 @@ require_marker() {
     exit 1
   fi
 }
-raw_ids() { # one raw-contact _id per line, sorted; empty when provider empty
+raw_ids() { # one LIVE raw-contact _id per line, sorted; empty when provider empty.
+  # Synced raws are soft-deleted (deleted=1) so the account can propagate the
+  # removal; the user-facing promise is that no live contacts remain.
   adb shell content query --uri content://com.android.contacts/raw_contacts \
-    --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
+    --projection _id --where "deleted=0" 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true
 }
 seed_contact() { # seed_contact <name> <number>; prints the new raw id
   local name="$1" number="$2" before after new_id
@@ -293,6 +295,19 @@ if [[ -n "$leftover" ]]; then
 fi
 echo "PASS Delete all contacts Yes removed every provider contact ($expected deleted)" | tee -a "$result"
 echo 'PASS Delete all contacts count and delete included a contact without a phone number' | tee -a "$result"
+# The synced seed was soft-deleted (deleted=1), which is the correct Android
+# sync-delete behavior the confirm discloses. Hard-remove it so the next
+# probes in the suite see a byte-clean provider.
+adb shell content delete \
+  --uri "'content://com.android.contacts/raw_contacts?caller_is_syncadapter=true'" \
+  --where "'deleted=1'" >/dev/null 2>&1 || true
+sleep 1
+tombstones="$(adb shell content query --uri content://com.android.contacts/raw_contacts \
+  --projection _id 2>&1 | tr -d '\r' | grep -oE '_id=[0-9]+' | cut -d= -f2 | sort -n || true)"
+if [[ -n "$tombstones" ]]; then
+  echo "FAIL soft-deleted raw contacts survived cleanup: $tombstones" | tee -a "$result"
+  exit 1
+fi
 expect_foreground
 echo 'PASS C2 remains foreground after Delete all contacts Yes' | tee -a "$result"
 shot delall-after-yes
