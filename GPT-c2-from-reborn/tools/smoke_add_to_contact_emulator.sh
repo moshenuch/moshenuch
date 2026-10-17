@@ -356,7 +356,11 @@ tap_perm_button() { # tap_perm_button <allow|deny>: 0 tapped, 1 no button
   dump_ui
   python3 - "$UI_XML.host" "$1" <<'PYEOF'
 import re, sys, subprocess
-xml, which = sys.argv[1], sys.argv[2]
+path, which = sys.argv[1], sys.argv[2]
+try:
+    xml = open(path, encoding='utf-8', errors='replace').read()
+except OSError:
+    sys.exit(1)
 if which == 'allow':
     ids = ('permission_allow_button',)
 else:
