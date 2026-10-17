@@ -4250,7 +4250,7 @@ public class C2PhoneView extends View {
         showNotice("Default phone role unavailable");
     }
 
-    private void startCall(String who) {
+    void startCall(String who) {
         if (demoMode) {
             showNotice("DEMO: Real calls are disabled");
             return;
@@ -4267,6 +4267,9 @@ public class C2PhoneView extends View {
             return;
         }
         if (!backend.has(Manifest.permission.CALL_PHONE)) {
+            // Deliberate Call press: ask with the OS sheet, retry on grant,
+            // abort with the existing notice on deny (audit #40).
+            if (activity != null && activity.askCallPermissionForCall(who)) return;
             showNotice("Allow Phone permission");
             return;
         }
@@ -4280,6 +4283,26 @@ public class C2PhoneView extends View {
             return;
         }
         go("call");
+    }
+
+    void onCallPermissionDenied() {
+        showNotice("Allow Phone permission");
+    }
+
+    void retrySendMessage() {
+        sendMessage();
+    }
+
+    void onSmsPermissionDenied() {
+        showNotice("SMS permission required");
+    }
+
+    void retryBeginAddToContact(String number) {
+        beginAddToContact(number);
+    }
+
+    void onContactsPermissionDenied() {
+        showNotice("Android contacts unavailable; allow Contacts permission");
     }
 
     private void toggleSpeaker() {
@@ -4358,6 +4381,15 @@ public class C2PhoneView extends View {
         if (messageBody.trim().isEmpty()) {
             composeFocus = 1;
             showNotice("Write message");
+            return;
+        }
+        if (!backend.has(Manifest.permission.SEND_SMS)) {
+            // Deliberate Send press: ask with the OS sheet, retry on grant,
+            // abort with the existing notice on deny (audit #40).
+            MainActivity activity = getContext() instanceof MainActivity ?
+                    (MainActivity) getContext() : null;
+            if (activity != null && activity.askSmsPermissionForSend()) return;
+            showNotice("SMS permission required");
             return;
         }
         if (!backend.sendSms(recipient.trim(), messageBody)) {
@@ -6353,6 +6385,12 @@ public class C2PhoneView extends View {
         }
         refreshContactsFromPhone();
         if (!deviceContactsActive && !demoMode) {
+            // Deliberate Add-to-contact: ask the Contacts group with the OS
+            // sheet, retry on grant, abort with the existing notice on deny
+            // (audit #40).
+            MainActivity activity = getContext() instanceof MainActivity ?
+                    (MainActivity) getContext() : null;
+            if (activity != null && activity.askContactsPermissionForAdd(number)) return;
             showNotice("Android contacts unavailable; allow Contacts permission");
             return;
         }
