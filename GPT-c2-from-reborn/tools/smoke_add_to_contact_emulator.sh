@@ -345,46 +345,61 @@ expect_foreground
 # (runs 38590863441, 38605594546), which is a probe-orchestration race, not an
 # app bypass - the refusal branch itself is covered by the wiring audit.
 # OS permission sheets are uiautomator-only interactions; the C2 dialog
-# helper cannot reach them. Ported from the fresh-install probe for the
-# audit-#41 deny-refusal and grant-retry cases.
-UI_XML=/data/local/tmp/c2-ui.xml
-dump_ui() {
-  # Android's /tmp is not writable; uiautomator needs /data/local/tmp (run
-  # 39019125505 answered 0 sheets because the dump silently failed on /tmp).
-  adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 || true
-  adb shell cat "$UI_XML" 2>/dev/null | tr -d '\r' > /tmp/c2-ui.xml.host || true
-}
-tap_perm_button() { # tap_perm_button <allow|deny>: 0 tapped, 1 no button
-  dump_ui
-  python3 - /tmp/c2-ui.xml.host "$1" <<'PYEOF'
-import re, sys, subprocess
-path, which = sys.argv[1], sys.argv[2]
+# helper cannot reach them. Verbatim port of the fresh-install probe's
+# proven text-matched tapper (id-matching and one-shot dumps answered 0 in
+# run 39021780549 even with the sheet on screen).
+tap_perm_button() { # tap_perm_button <Allow|Deny>: 0 tapped, 1 no button
+  local want="$1" tries=0 coords=""
+  while [[ $tries -lt 3 ]]; do
+    adb shell uiautomator dump /sdcard/c2-ui.xml >/dev/null 2>&1 || true
+    adb pull /sdcard/c2-ui.xml /tmp/c2-ui-section-e.xml >/dev/null 2>&1 || true
+    coords="$(python3 - "$want" <<'PYEOF'
+import sys, re
+want = sys.argv[1]
 try:
-    xml = open(path, encoding='utf-8', errors='replace').read()
+    xml = open('/tmp/c2-ui-section-e.xml', encoding='utf-8', errors='replace').read()
 except OSError:
-    sys.exit(1)
-if which == 'allow':
-    ids = ('permission_allow_button',)
-else:
-    ids = ('permission_deny_button',)
-for m in re.finditer(r'<node[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*>', xml):
-    tag = m.group(0)
-    if any(i in tag for i in ids):
-        x1, y1, x2, y2 = map(int, m.groups())
-        subprocess.run(['adb', 'shell', 'input', 'tap',
-                        str((x1 + x2) // 2), str((y1 + y2) // 2)], check=False)
-        sys.exit(0)
-sys.exit(1)
+    sys.exit(0)
+if 'permissioncontroller' not in xml and 'packageinstaller' not in xml:
+    sys.exit(0)
+for m in re.finditer(r'<node[^>]*/?>', xml):
+    node = m.group(0)
+    text = re.search(r'text="([^"]*)"', node)
+    if not text or text.group(1).strip().lower() != want.lower():
+        continue
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+    if not b:
+        continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    print(f"{(x1+x2)//2} {(y1+y2)//2}")
+    sys.exit(0)
 PYEOF
+)"
+    [[ -n "$coords" ]] && break
+    tries=$((tries + 1))
+    sleep 1
+  done
+  [[ -n "$coords" ]] || return 1
+  echo "PERMSHEET $want $coords" >> "$result"
+  adb shell input tap $coords
+  sleep 2
+  return 0
 }
-settle_sheets() { # settle_sheets <allow|deny> <max>: echo taps done
-  local which=$1 max=$2 n=0
-  while [[ $n -lt $max ]]; do
-    if ! tap_perm_button "$which"; then break; fi
+settle_sheets() { # settle_sheets <Allow|Deny> <max>: echo taps done
+  local choice="$1" max="$2" n=0
+  while [[ $n -lt $max ]] && tap_perm_button "$choice"; do
     n=$((n + 1))
-    sleep 3
   done
   echo "$n"
+}
+
+section_e_diagnostics() { # capture app-vs-probe evidence on a sheet failure
+  adb logcat -d -s C2Contacts:I 2>/dev/null | tail -20 \
+    > "$out/add-to-contact-section-e-logcat.txt" || true
+  adb shell dumpsys package "$package" 2>/dev/null | tr -d '\r' \
+    | grep -F "WRITE_CONTACTS" >> "$out/add-to-contact-section-e-logcat.txt" || true
+  cp /tmp/c2-ui-section-e.xml "$out/add-to-contact-section-e-uixml.txt" 2>/dev/null || true
+  adb exec-out screencap -p > "$out/add-to-contact-section-e-fail.png" 2>/dev/null || true
 }
 
 section_e() {
@@ -483,10 +498,11 @@ sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK
 sleep 3
-ANSWERED="$(settle_sheets deny 3)"
+ANSWERED="$(settle_sheets Deny 3)"
 if [[ "$ANSWERED" != "1" ]]; then
   echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
+  section_e_diagnostics
   restore_permissions
   exit 1
 fi
@@ -509,10 +525,11 @@ sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK
 sleep 3
-ANSWERED="$(settle_sheets allow 3)"
+ANSWERED="$(settle_sheets Allow 3)"
 if [[ "$ANSWERED" != "1" ]]; then
   echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
+  section_e_diagnostics
   restore_permissions
   exit 1
 fi
