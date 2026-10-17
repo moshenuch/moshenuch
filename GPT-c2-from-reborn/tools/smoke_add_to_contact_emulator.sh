@@ -344,26 +344,19 @@ expect_foreground
 # (runs 38590863441, 38605594546), which is a probe-orchestration race, not an
 # app bypass - the refusal branch itself is covered by the wiring audit.
 section_e() {
-# Deterministic pre-state. WHY THIS IS COMPLICATED: the AOSP permission
-# controller grants a requested permission WITHOUT A SHEET when another
-# permission in the same group is already granted ("If two permissions belong
-# to a group and the first permission is already granted the second one will
-# be granted on request of the app without user interaction"). With
-# READ_CONTACTS held, the app's cold-start request silently re-grants
-# WRITE_CONTACTS (runs 38684431984, 38687531877, 38689955068: granted=true,
-# no USER_SET flag, no sheet ever foreground). So:
-#   1. Revoke the WHOLE contacts group, cold-start, and BACK the sheet (BACK
-#      on GrantPermissionsActivity denies the request).
+# Deterministic pre-state. The AOSP permission controller grants a requested
+# permission WITHOUT A SHEET when another permission in the same group is
+# already granted. Since 2.03.19's dampened startup the app NEVER requests
+# permissions on cold start, so that silent group-auto-grant path is gone:
+#   1. Revoke the WHOLE contacts group, cold-start. No sheet appears now
+#      (the fresh-install probe asserts that); BACK it defensively if one
+#      ever does.
 #   2. Re-grant READ_CONTACTS to the RUNNING app (grant does not kill the
 #      process; revoke does - logcat shows "Killing <pid>: permissions
-#      revoked"). A process death here voids the round: the next cold start
-#      would group-auto-grant WRITE_CONTACTS again.
+#      revoked").
 #   3. Verify WRITE_CONTACTS is still denied, then drive the picker.
-# The sheet is detected by FOREGROUND ACTIVITY, never by uiautomator text
-# (the sheet displays ~6s after the cold start on a loaded emulator, and
-# text-dump polling declared "sheet clear" before it was even visible).
-# Grant flags are logged each round: USER_SET means the sheet was answered;
-# no USER_SET means a programmatic grant.
+# The (legacy) sheet is detected by FOREGROUND ACTIVITY, never by
+# uiautomator text.
 denied_ready=0
 for round in 1 2 3; do
 adb shell pm revoke "$package" android.permission.READ_CONTACTS 2>&1 | tee -a "$result" || true
@@ -405,10 +398,6 @@ echo "WRITE_CONTACTS after sheet handling (round $round): $post_state" | tee -a 
 if ! grep -q 'granted=false' <<< "$post_state"; then
   echo "round $round: WRITE_CONTACTS granted again (grant flags above identify who), retrying" | tee -a "$result"
   adb logcat -d -t 250 2>/dev/null | grep -iE 'grant|permission' | tail -15 >> "$result" || true
-  continue
-fi
-if [[ "$sheet_seen" != "1" ]]; then
-  echo "round $round: no permission sheet seen despite full contacts-group revoke; suspicious, retrying" | tee -a "$result"
   continue
 fi
 # Denied. Re-grant READ_CONTACTS to the RUNNING app so the picker lists
