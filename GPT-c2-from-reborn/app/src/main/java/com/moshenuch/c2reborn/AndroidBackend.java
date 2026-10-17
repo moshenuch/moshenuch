@@ -98,6 +98,28 @@ public final class AndroidBackend {
                 context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 
+    /** Every aggregate contact id in the provider, including contacts with
+     *  no phone number. Delete-all counts and deletes by aggregate, so a
+     *  number-less contact must not be skipped (audit #14 item 1).
+     *  Returns null when the scan cannot complete (permission gone or a
+     *  provider error) so the caller fails CLOSED. */
+    public java.util.ArrayList<Long> loadAllAggregateIds() {
+        if (!has(Manifest.permission.READ_CONTACTS)) return null;
+        java.util.ArrayList<Long> out = new java.util.ArrayList<>();
+        Cursor c = null;
+        try {
+            c = resolver.query(ContactsContract.Contacts.CONTENT_URI,
+                    new String[]{ContactsContract.Contacts._ID}, null, null, null);
+            if (c == null) return null;
+            while (c.moveToNext()) out.add(c.getLong(0));
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
+        return out;
+    }
+
     public ArrayList<DeviceContact> loadContacts() {
         ArrayList<DeviceContact> out = new ArrayList<>();
         if (!has(Manifest.permission.READ_CONTACTS)) return out;
