@@ -119,7 +119,8 @@ public final class AndroidBackend {
         } catch (Exception e) {
             return null;
         } finally {
-            if (c != null) c.close();
+            // close() can throw too; fail closed, never crash (audit #35 item 2).
+            if (c != null) try { c.close(); } catch (Exception ignored) {}
         }
         return out;
     }
@@ -141,7 +142,8 @@ public final class AndroidBackend {
         } catch (Exception e) {
             return null;
         } finally {
-            if (c != null) c.close();
+            // close() can throw too; fail closed, never crash (audit #35 item 2).
+            if (c != null) try { c.close(); } catch (Exception ignored) {}
         }
         return out;
     }
