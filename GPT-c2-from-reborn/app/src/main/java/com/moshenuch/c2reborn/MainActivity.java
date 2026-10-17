@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private static final int REQ_FEATURE_CONTACTS = 413;
     private static final int REQ_FEATURE_SMS = 414;
     private static final int REQ_FEATURE_CALLS = 415;
+    private static final int REQ_FEATURE_CALL_LOG = 419;
     private static final int REQ_CALL_PLACE = 416;
     private static final int REQ_SMS_SEND = 417;
     private static final int REQ_CONTACTS_ADD = 418;
@@ -822,14 +823,19 @@ public class MainActivity extends Activity {
             perms = new String[]{Manifest.permission.READ_SMS,
                     Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS};
             requestCode = REQ_FEATURE_SMS;
-        } else if ("dial".equals(page) || "calllog".equals(page) ||
-                "missed".equals(page) || "received".equals(page) ||
-                "dialled".equals(page)) {
+        } else if ("dial".equals(page)) {
+            // PHONE group only: CALL_PHONE + ANSWER_PHONE_CALLS are one OS
+            // sheet; READ_CALL_LOG is the separate CALL_LOG group on
+            // API 29+ and belongs to the call-log pages (audit #40).
             group = "calls";
             perms = new String[]{Manifest.permission.CALL_PHONE,
-                    Manifest.permission.ANSWER_PHONE_CALLS,
-                    Manifest.permission.READ_CALL_LOG};
+                    Manifest.permission.ANSWER_PHONE_CALLS};
             requestCode = REQ_FEATURE_CALLS;
+        } else if ("calllog".equals(page) || "missed".equals(page) ||
+                "received".equals(page) || "dialled".equals(page)) {
+            group = "calllog";
+            perms = new String[]{Manifest.permission.READ_CALL_LOG};
+            requestCode = REQ_FEATURE_CALL_LOG;
         } else return;
         boolean missing = false;
         for (String permission : perms) {
@@ -866,6 +872,7 @@ public class MainActivity extends Activity {
             featureAskedThisSession.add("contacts");
             featureAskedThisSession.add("sms");
             featureAskedThisSession.add("calls");
+            featureAskedThisSession.add("calllog");
             requestPermissions(permissions, REQ_PHONE_DATA);
         }
     }
@@ -883,7 +890,8 @@ public class MainActivity extends Activity {
             requestStartupMediaAfterPhonePermissions();
         }
         if ((requestCode == REQ_FEATURE_CONTACTS || requestCode == REQ_FEATURE_SMS ||
-                requestCode == REQ_FEATURE_CALLS) && phoneView != null) {
+                requestCode == REQ_FEATURE_CALLS || requestCode == REQ_FEATURE_CALL_LOG)
+                && phoneView != null) {
             phoneView.onPermissionsChanged();
             if (requestCode == REQ_FEATURE_SMS) observeSmsWhileVisible();
         }
