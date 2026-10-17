@@ -12,6 +12,8 @@ bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh "$apk" "$results"
 bash GPT-c2-from-reborn/tools/smoke_fresh_install_permissions_emulator.sh "$apk" "$results"
 if ! grep -Fq 'PASS Fresh install deny-all: app survived, home rendered, no crash' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install deny-all: Contacts opens without contacts permission and stays foreground' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install deny-all: second cold start shows no permission sheets' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install deny-all: opening Contacts after denial re-asks with the OS sheet' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install allow-all: every phone and storage permission granted through the OS sheets' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install allow-all: app survived, Contacts opened, no crash' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install permission lifecycle acceptance complete' "$results/fresh-install-permissions-results.txt"; then
