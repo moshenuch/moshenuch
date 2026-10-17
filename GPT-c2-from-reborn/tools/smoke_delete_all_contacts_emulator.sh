@@ -154,6 +154,32 @@ open_delete_all() {
   tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN; tap DOWN
 }
 
+seed_numberless() { # seed_numberless <name>: a contact with a name but NO phone row
+  local name="$1" before after new_id
+  before="$(raw_ids)"
+  adb shell content insert --uri content://com.android.contacts/raw_contacts \
+    --bind starred:i:0 >/dev/null 2>&1 || true
+  after="$(raw_ids)"
+  new_id="$(comm -13 <(echo "$before") <(echo "$after") || true)"
+  if [[ "$(grep -c . <<< "$new_id")" != "1" ]]; then
+    echo "UNVERIFIED seed of number-less $name did not add exactly one raw contact" | tee -a "$result"
+    exit 1
+  fi
+  adb shell content insert --uri content://com.android.contacts/data \
+    --bind raw_contact_id:i:"$new_id" \
+    --bind mimetype:s:vnd.android.cursor.item/name \
+    --bind data1:s:"$name" >/dev/null 2>&1 || true
+  # The seeded contact must have NO phone row: that is the case under test
+  # (audit #14 item 1).
+  if adb shell content query --uri content://com.android.contacts/data \
+      --projection raw_contact_id:mimetype 2>&1 | tr -d '\r' \
+      | grep -F "raw_contact_id=$new_id" | grep -Fq "phone_v2"; then
+    echo "UNVERIFIED number-less seed $name unexpectedly has a phone row" | tee -a "$result"
+    exit 1
+  fi
+  echo "$new_id"
+}
+
 # --- Y. Yes removes every provider contact ---------------------------------
 baseline_ids="$(raw_ids)"
 baseline_count="$(grep -c . <<< "$baseline_ids" || true)"
@@ -161,8 +187,9 @@ baseline_count="$(grep -c . <<< "$baseline_ids" || true)"
 echo "provider baseline raw contacts: $baseline_count" >> "$result"
 seed_contact "$del_one" "$num_one" >/dev/null
 seed_contact "$del_two" "$num_two" >/dev/null
-expected=$((baseline_count + 2))
-echo "Seeded $del_one and $del_two; expecting $expected contacts visible to the app" >> "$result"
+seed_numberless "AAAC2DelThree" >/dev/null
+expected=$((baseline_count + 3))
+echo "Seeded $del_one, $del_two and number-less AAAC2DelThree; expecting $expected aggregates counted by Del. all contacts" >> "$result"
 
 open_delete_all
 adb logcat -c || true
@@ -179,6 +206,7 @@ if [[ -n "$leftover" ]]; then
   exit 1
 fi
 echo "PASS Delete all contacts Yes removed every provider contact ($expected deleted)" | tee -a "$result"
+echo 'PASS Delete all contacts count and delete included a contact without a phone number' | tee -a "$result"
 expect_foreground
 echo 'PASS C2 remains foreground after Delete all contacts Yes' | tee -a "$result"
 shot delall-after-yes
