@@ -166,6 +166,9 @@ public class C2PhoneView extends View {
      *  Yes deletes exactly these and refuses when membership changed
      *  (audit #34 item B1). */
     private java.util.HashSet<Long> pendingDeleteAllIds;
+    /** The synced subset of pendingDeleteAllIds shown in the confirm; Yes
+     *  refuses when it no longer matches (audit #36 item 1). */
+    private java.util.HashSet<Long> pendingDeleteAllSyncedIds;
     private int lastTapKey = -1;
     private int tapIndex = 0;
     private long lastTapAt = 0L;
@@ -3325,6 +3328,8 @@ public class C2PhoneView extends View {
                                         ? " synced contact may be removed from the account too."
                                         : " synced contacts may be removed from the account too.");
                         pendingDeleteAllIds = new java.util.HashSet<>(ids);
+                        pendingDeleteAllSyncedIds = new java.util.HashSet<>(synced);
+                        pendingDeleteAllSyncedIds.retainAll(pendingDeleteAllIds);
                         requestConfirm("deleteAllContacts", text);
                         android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_CONFIRM count=" + count);
                     }
@@ -8087,7 +8092,9 @@ public class C2PhoneView extends View {
                 int failed = 0;
                 boolean aborted = false;
                 java.util.HashSet<Long> pinned = pendingDeleteAllIds;
+                java.util.HashSet<Long> pinnedSynced = pendingDeleteAllSyncedIds;
                 pendingDeleteAllIds = null;
+                pendingDeleteAllSyncedIds = null;
                 if (deviceContactsActive) {
                     // The confirm pinned the aggregates it counted; re-scan
                     // at Yes and refuse when membership changed rather than
@@ -8110,11 +8117,36 @@ public class C2PhoneView extends View {
                                 + " fresh=" + freshList.size());
                         showNotice("Contacts changed; try again");
                     } else {
-                        for (long id : pinned) {
-                            if (backend.deleteContact(id)) deleted++;
-                            else failed++;
+                        // Same membership, but the sync consequence the
+                        // confirm showed must still be true: recheck the
+                        // synced set too (audit #36 item 1). Null fails
+                        // closed.
+                        java.util.HashSet<Long> freshSynced =
+                                backend.loadSyncedAggregateIds();
+                        if (freshSynced == null) {
+                            aborted = true;
+                            android.util.Log.i("C2Contacts",
+                                    "DELETE_ALL_CONTACTS aborted reason=scan_failed");
+                            showNotice("Contacts unavailable; try again");
+                        } else {
+                            freshSynced.retainAll(pinned);
+                            if (!freshSynced.equals(
+                                    pinnedSynced == null
+                                            ? new java.util.HashSet<Long>()
+                                            : pinnedSynced)) {
+                                aborted = true;
+                                android.util.Log.i("C2Contacts",
+                                        "DELETE_ALL_CONTACTS_REFUSED reason=changed pinned="
+                                        + pinned.size() + " fresh=" + freshList.size());
+                                showNotice("Contacts changed; try again");
+                            } else {
+                                for (long id : pinned) {
+                                    if (backend.deleteContact(id)) deleted++;
+                                    else failed++;
+                                }
+                                refreshContactsFromPhone();
+                            }
                         }
-                        refreshContactsFromPhone();
                     }
                 } else {
                     deleted = contacts.size();
