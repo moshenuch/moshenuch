@@ -347,14 +347,16 @@ expect_foreground
 # OS permission sheets are uiautomator-only interactions; the C2 dialog
 # helper cannot reach them. Ported from the fresh-install probe for the
 # audit-#41 deny-refusal and grant-retry cases.
-UI_XML=/tmp/c2-ui.xml
+UI_XML=/data/local/tmp/c2-ui.xml
 dump_ui() {
+  # Android's /tmp is not writable; uiautomator needs /data/local/tmp (run
+  # 39019125505 answered 0 sheets because the dump silently failed on /tmp).
   adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 || true
-  adb shell cat "$UI_XML" 2>/dev/null | tr -d '\r' > "$UI_XML.host" || true
+  adb shell cat "$UI_XML" 2>/dev/null | tr -d '\r' > /tmp/c2-ui.xml.host || true
 }
 tap_perm_button() { # tap_perm_button <allow|deny>: 0 tapped, 1 no button
   dump_ui
-  python3 - "$UI_XML.host" "$1" <<'PYEOF'
+  python3 - /tmp/c2-ui.xml.host "$1" <<'PYEOF'
 import re, sys, subprocess
 path, which = sys.argv[1], sys.argv[2]
 try:
