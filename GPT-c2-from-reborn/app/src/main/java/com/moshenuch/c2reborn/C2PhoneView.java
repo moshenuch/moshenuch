@@ -162,6 +162,10 @@ public class C2PhoneView extends View {
     private String recipient = "";
     private String messageBody = "";
     private int composeFocus = 0;
+    /** Aggregate ids pinned when the Delete-all-contacts confirm opened;
+     *  Yes deletes exactly these and refuses when membership changed
+     *  (audit #34 item B1). */
+    private java.util.HashSet<Long> pendingDeleteAllIds;
     private int lastTapKey = -1;
     private int tapIndex = 0;
     private long lastTapAt = 0L;
@@ -3258,10 +3262,12 @@ public class C2PhoneView extends View {
                 refreshContactsFromPhone();
                 if (deviceContactsActive && !demoMode) {
                     // Count by aggregate, not by phone row: contacts with no
-                    // number must not be skipped (audit #14 item 1). A null
-                    // scan fails closed.
+                    // number must not be skipped (audit #14 item 1). Null
+                    // scans fail closed.
                     java.util.ArrayList<Long> ids = backend.loadAllAggregateIds();
-                    if (ids == null) {
+                    java.util.HashSet<Long> synced =
+                            ids == null ? null : backend.loadSyncedAggregateIds();
+                    if (ids == null || synced == null) {
                         showNotice("Contacts unavailable; try again");
                         android.util.Log.i("C2Contacts",
                                 "DELETE_ALL_CONTACTS_REFUSED reason=scan_failed");
@@ -3270,8 +3276,23 @@ public class C2PhoneView extends View {
                         android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_REFUSED reason=empty");
                     } else {
                         int count = ids.size();
-                        requestConfirm("deleteAllContacts", "Delete contacts?\n\n" + count
-                                + (count == 1 ? " contact selected" : " contacts selected"));
+                        int syncedCount = 0;
+                        for (long id : ids) if (synced.contains(id)) syncedCount++;
+                        // Native-added wording (audit #34 item B2): the HTML
+                        // ships the Del. all contacts page (From phone
+                        // memory / From SIM card / All contacts) but no
+                        // functional delete or confirm, so the confirm says
+                        // exactly what happens, including the sync-delete
+                        // consequence.
+                        String text = "Delete all contacts?\n\n" + count
+                                + (count == 1 ? " contact" : " contacts")
+                                + " on this phone, including contacts without numbers,"
+                                + " will be permanently deleted.";
+                        if (syncedCount > 0) text += "\n" + syncedCount
+                                + (syncedCount == 1 ? " belongs" : " belong")
+                                + " to synced accounts and will be removed from the account too.";
+                        pendingDeleteAllIds = new java.util.HashSet<>(ids);
+                        requestConfirm("deleteAllContacts", text);
                         android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_CONFIRM count=" + count);
                     }
                 } else if (contacts.isEmpty()) {
@@ -8032,19 +8053,31 @@ public class C2PhoneView extends View {
                 int deleted = 0;
                 int failed = 0;
                 boolean aborted = false;
+                java.util.HashSet<Long> pinned = pendingDeleteAllIds;
+                pendingDeleteAllIds = null;
                 if (deviceContactsActive) {
-                    // Re-read the aggregate ids at Yes: the provider list is
-                    // live, and each aggregate is removed by its own id, so
-                    // number-less contacts go too (audit #14 item 1). A
-                    // failed scan fails closed: nothing is touched.
-                    java.util.ArrayList<Long> ids = backend.loadAllAggregateIds();
-                    if (ids == null) {
+                    // The confirm pinned the aggregates it counted; re-scan
+                    // at Yes and refuse when membership changed rather than
+                    // deleting a contact the user never saw counted (audit
+                    // #34 item B1). Each aggregate is removed by its own id,
+                    // so number-less contacts go too (audit #14 item 1).
+                    // Null scans fail closed.
+                    java.util.ArrayList<Long> freshList = backend.loadAllAggregateIds();
+                    if (freshList == null) {
                         aborted = true;
                         android.util.Log.i("C2Contacts",
                                 "DELETE_ALL_CONTACTS aborted reason=scan_failed");
                         showNotice("Contacts unavailable; try again");
+                    } else if (pinned == null
+                            || !new java.util.HashSet<>(freshList).equals(pinned)) {
+                        aborted = true;
+                        android.util.Log.i("C2Contacts",
+                                "DELETE_ALL_CONTACTS_REFUSED reason=changed pinned="
+                                + (pinned == null ? -1 : pinned.size())
+                                + " fresh=" + freshList.size());
+                        showNotice("Contacts changed; try again");
                     } else {
-                        for (long id : ids) {
+                        for (long id : pinned) {
                             if (backend.deleteContact(id)) deleted++;
                             else failed++;
                         }
