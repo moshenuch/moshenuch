@@ -40,6 +40,17 @@ public class MainActivity extends Activity {
     private static final int REQ_FEATURE_CONTACTS = 413;
     private static final int REQ_FEATURE_SMS = 414;
     private static final int REQ_FEATURE_CALLS = 415;
+    private static final int REQ_CALL_PLACE = 416;
+    private static final int REQ_SMS_SEND = 417;
+    private static final int REQ_CONTACTS_ADD = 418;
+    // Deliberate-action permission asks (call placement, SMS send, add-to-
+    // contact): the sheet belongs to the action; on grant the action
+    // retries, on deny it aborts with the app's existing notice. The
+    // pending fields also guard against stacking a second sheet while one
+    // is up.
+    private String pendingOutgoingCall;
+    private boolean pendingSmsSend;
+    private String pendingAddToContact;
     // Feature-open permission asks are dampened to one OS sheet per
     // feature group per process lifetime (never a sheet loop).
     private final java.util.HashSet<String> featureAskedThisSession =
@@ -758,6 +769,43 @@ public class MainActivity extends Activity {
      * cold start (that is the first-launch cascade's one shot) and never
      * draws C2 UI. Gallery image/video asks keep their own existing flows.
      */
+    /** Call placement without CALL_PHONE: ask with the OS sheet, retry on
+     * grant, abort with the existing notice on deny. false = do not ask. */
+    public boolean askCallPermissionForCall(String number) {
+        if (Build.VERSION.SDK_INT < 23) return false;
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE)
+                == PackageManager.PERMISSION_GRANTED) return false;
+        if (pendingOutgoingCall != null) return false;
+        pendingOutgoingCall = number;
+        requestPermissions(new String[]{Manifest.permission.CALL_PHONE}, REQ_CALL_PLACE);
+        return true;
+    }
+
+    /** SMS send without SEND_SMS: ask with the OS sheet, retry on grant. */
+    public boolean askSmsPermissionForSend() {
+        if (Build.VERSION.SDK_INT < 23) return false;
+        if (checkSelfPermission(Manifest.permission.SEND_SMS)
+                == PackageManager.PERMISSION_GRANTED) return false;
+        if (pendingSmsSend) return false;
+        pendingSmsSend = true;
+        requestPermissions(new String[]{Manifest.permission.SEND_SMS}, REQ_SMS_SEND);
+        return true;
+    }
+
+    /** Add-to-contact without the Contacts group: ask with the OS sheet. */
+    public boolean askContactsPermissionForAdd(String number) {
+        if (Build.VERSION.SDK_INT < 23) return false;
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                == PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.WRITE_CONTACTS)
+                == PackageManager.PERMISSION_GRANTED) return false;
+        if (pendingAddToContact != null) return false;
+        pendingAddToContact = number;
+        requestPermissions(new String[]{Manifest.permission.READ_CONTACTS,
+                Manifest.permission.WRITE_CONTACTS}, REQ_CONTACTS_ADD);
+        return true;
+    }
+
     public void maybeAskFeaturePermission(String page) {
         if (Build.VERSION.SDK_INT < 23) return;
         String group;
@@ -768,12 +816,15 @@ public class MainActivity extends Activity {
             perms = new String[]{Manifest.permission.READ_CONTACTS,
                     Manifest.permission.WRITE_CONTACTS};
             requestCode = REQ_FEATURE_CONTACTS;
-        } else if ("messaging".equals(page) || "conversations".equals(page)) {
+        } else if ("messaging".equals(page) || "conversations".equals(page) ||
+                "compose".equals(page)) {
             group = "sms";
             perms = new String[]{Manifest.permission.READ_SMS,
                     Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS};
             requestCode = REQ_FEATURE_SMS;
-        } else if ("dialled".equals(page)) {
+        } else if ("dial".equals(page) || "calllog".equals(page) ||
+                "missed".equals(page) || "received".equals(page) ||
+                "dialled".equals(page)) {
             group = "calls";
             perms = new String[]{Manifest.permission.CALL_PHONE,
                     Manifest.permission.ANSWER_PHONE_CALLS,
@@ -835,6 +886,31 @@ public class MainActivity extends Activity {
                 requestCode == REQ_FEATURE_CALLS) && phoneView != null) {
             phoneView.onPermissionsChanged();
             if (requestCode == REQ_FEATURE_SMS) observeSmsWhileVisible();
+        }
+        if (requestCode == REQ_CALL_PLACE && phoneView != null) {
+            String number = pendingOutgoingCall;
+            pendingOutgoingCall = null;
+            if (number != null && results.length > 0 &&
+                    results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.startCall(number);
+            else if (number != null)
+                phoneView.onCallPermissionDenied();
+        }
+        if (requestCode == REQ_SMS_SEND && phoneView != null) {
+            pendingSmsSend = false;
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.retrySendMessage();
+            else phoneView.onSmsPermissionDenied();
+        }
+        if (requestCode == REQ_CONTACTS_ADD && phoneView != null) {
+            String number = pendingAddToContact;
+            pendingAddToContact = null;
+            phoneView.onPermissionsChanged();
+            boolean granted = results.length > 0;
+            if (granted) for (int r : results)
+                if (r != PackageManager.PERMISSION_GRANTED) granted = false;
+            if (number != null && granted) phoneView.retryBeginAddToContact(number);
+            else if (number != null) phoneView.onContactsPermissionDenied();
         }
         if (requestCode == REQ_STARTUP_MEDIA && phoneView != null) {
             phoneView.refreshVisibleVideoLibrary();
