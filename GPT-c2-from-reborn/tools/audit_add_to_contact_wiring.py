@@ -56,32 +56,56 @@ check("Entry opens the dedicated contact picker",
       'go("addToContactPicker")' in begin)
 
 open_selected = method(view, "private void openSelected()")
-check("Picker adds the pending number through the backend and refreshes",
+check("Picker selection delegates to the pending-number insert",
       'if ("addToContactPicker".equals(page))' in open_selected
-      and "backend.addNumberToContact(writeRawId," in open_selected
-      and "refreshContactsFromPhone()" in open_selected)
+      and "addPendingNumberToContact(contacts.get(sel))" in open_selected
+      and '"No contact selected"' in open_selected)
+
+add_pending = method(view, "private void addPendingNumberToContact(Contact target)")
+check("Picker adds the pending number through the backend and refreshes",
+      "backend.addNumberToContact(writeRawId," in add_pending
+      and "refreshContactsFromPhone()" in add_pending)
 check("Picker writes to a writable raw contact of the aggregate, never its first raw id",
-      "writableRawContactId(target.contactId)" in open_selected
+      "writableRawContactId(target.contactId)" in add_pending
       and "RAW_CONTACT_IS_READ_ONLY" in backend
       and "RawContacts.DELETED" in backend
-      and '"ADD_TO_CONTACT_REFUSED reason=read_only_contact"' in open_selected
-      and "addNumberToContact(target.rawContactId" not in open_selected)
+      and '"ADD_TO_CONTACT_REFUSED reason=read_only_contact"' in add_pending
+      and "addNumberToContact(target.rawContactId" not in add_pending)
 check("Picker never writes in demo mode or to app-local contacts",
-      '"DEMO: Contacts are read-only"' in open_selected and "!target.device" in open_selected)
+      '"DEMO: Contacts are read-only"' in add_pending and "!target.device" in add_pending)
 check("Picker refuses numbers already saved on the chosen contact",
-      '"Number already saved for "' in open_selected
-      and "pendingDigits.equals(ukNormalisedDigits(savedNumber))" in open_selected)
+      '"Number already saved for "' in add_pending
+      and "pendingDigits.equals(ukNormalisedDigits(savedNumber))" in add_pending)
 check("Duplicate check treats UK trunk 0 and +44/0044/44 forms as the same number",
       'digits.length() == 14 && digits.startsWith("0044")' in ukphone
       and 'digits.length() == 12 && digits.startsWith("44")' in ukphone
       and "UkPhoneNumbers.ukNormalisedDigits(number)" in view
-      and "ukNormalisedDigits(pendingAddToContactNumber)" in open_selected)
+      and "ukNormalisedDigits(pendingAddToContactNumber)" in add_pending)
 check("Probe markers: picker open, refusal reasons and insert are logged",
       '"ADD_TO_CONTACT_PICKER_OPEN"' in view
-      and '"ADD_TO_CONTACT_REFUSED reason=duplicate"' in open_selected
-      and '"ADD_TO_CONTACT_REFUSED reason=no_write_permission"' in open_selected
+      and '"ADD_TO_CONTACT_REFUSED reason=duplicate"' in add_pending
+      and '"ADD_TO_CONTACT_REFUSED reason=no_write_permission"' in add_pending
       and '"ADD_TO_CONTACT_REFUSED reason=invalid_sender"' in view
-      and '"ADD_TO_CONTACT_INSERTED rawContactId="' in open_selected)
+      and '"ADD_TO_CONTACT_INSERTED rawContactId="' in add_pending)
+
+main = (root / "app/src/main/java/com/moshenuch/c2reborn/MainActivity.java").read_text(
+    encoding="utf-8"
+)
+check("Deliberate selection without WRITE_CONTACTS asks with the OS sheet",
+      "askWriteContactsForAdd(target.contactId)" in add_pending)
+check("MainActivity wires the write ask: one request code, pending target, retry or refuse",
+      "REQ_CONTACTS_WRITE" in main
+      and "pendingWriteAddContactId" in main
+      and "retryAddToContactSelection(contactId)" in main
+      and "onWriteContactsDeniedForAdd()" in main)
+retry = method(view, "void retryAddToContactSelection(long contactId)")
+check("Grant retry re-runs the insert on the remembered contact",
+      "addPendingNumberToContact(target)" in retry
+      and '"No contact selected"' in retry)
+denied = method(view, "void onWriteContactsDeniedForAdd()")
+check("Deny keeps the no_write_permission refusal and notice",
+      '"ADD_TO_CONTACT_REFUSED reason=no_write_permission"' in denied
+      and '"Contacts write permission unavailable"' in denied)
 check("Entry rejects senders without a usable phone number",
       "digitsOnly(number).length() < 3" in begin
       and '"This sender cannot be saved as a phone number"' in begin)
