@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CALL_PLACE = 416;
     private static final int REQ_SMS_SEND = 417;
     private static final int REQ_CONTACTS_ADD = 418;
+    private static final int REQ_CONTACTS_WRITE = 420;
     // Deliberate-action permission asks (call placement, SMS send, add-to-
     // contact): the sheet belongs to the action; on grant the action
     // retries, on deny it aborts with the app's existing notice. The
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
     private String pendingOutgoingCall;
     private boolean pendingSmsSend;
     private String pendingAddToContact;
+    private long pendingWriteAddContactId = -1;
     // Feature-open permission asks are dampened to one OS sheet per
     // feature group per process lifetime (never a sheet loop).
     private final java.util.HashSet<String> featureAskedThisSession =
@@ -763,6 +765,19 @@ public class MainActivity extends Activity {
         cameraPreview.setLayoutParams(lp);
     }
 
+    /** Picker selection without WRITE_CONTACTS: ask, retry insert on
+     * grant, keep the no_write_permission refusal on deny (audit #41). */
+    public boolean askWriteContactsForAdd(long contactId) {
+        if (Build.VERSION.SDK_INT < 23) return false;
+        if (checkSelfPermission(Manifest.permission.WRITE_CONTACTS)
+                == PackageManager.PERMISSION_GRANTED) return false;
+        if (pendingWriteAddContactId != -1) return false;
+        pendingWriteAddContactId = contactId;
+        requestPermissions(new String[]{Manifest.permission.WRITE_CONTACTS},
+                REQ_CONTACTS_WRITE);
+        return true;
+    }
+
     /**
      * Dampened re-ask: called when the user opens a feature that needs a
      * runtime permission they previously denied. Shows the OS sheet only,
@@ -919,6 +934,16 @@ public class MainActivity extends Activity {
                 if (r != PackageManager.PERMISSION_GRANTED) granted = false;
             if (number != null && granted) phoneView.retryBeginAddToContact(number);
             else if (number != null) phoneView.onContactsPermissionDenied();
+        }
+        if (requestCode == REQ_CONTACTS_WRITE && phoneView != null) {
+            long contactId = pendingWriteAddContactId;
+            pendingWriteAddContactId = -1;
+            phoneView.onPermissionsChanged();
+            if (contactId != -1 && results.length > 0 &&
+                    results[0] == PackageManager.PERMISSION_GRANTED)
+                phoneView.retryAddToContactSelection(contactId);
+            else if (contactId != -1)
+                phoneView.onWriteContactsDeniedForAdd();
         }
         if (requestCode == REQ_STARTUP_MEDIA && phoneView != null) {
             phoneView.refreshVisibleVideoLibrary();
