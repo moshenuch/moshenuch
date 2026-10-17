@@ -28,7 +28,6 @@ uk_local="07555000000"
 uk_0044="00447555000000"
 new_number="07900001234"
 perm_number="07600000000"
-perm_number_grant="07600000009"
 sms_sender="07777000111"
 sms_alpha="C2ALERTS"
 
@@ -487,8 +486,16 @@ done
 if [[ "$denied_ready" != "1" ]]; then
   echo "FAIL could not establish a stable WRITE_CONTACTS-denied state after 3 rounds" | tee -a "$result"; exit 1
 fi
-# A fresh number: an already-saved one would hit the duplicate refusal first.
-# Deny round: the OS WRITE_CONTACTS sheet appears once and the refusal is kept.
+# API-30 reality (re-spec after runs 39019125505/39021780549/39024499832):
+# with READ_CONTACTS held, the OS grants WRITE_CONTACTS to the app's request
+# WITHOUT A SHEET (AOSP contacts group auto-grant, pre-API-31). The
+# no_write_permission refusal branch is unreachable through the UI on this
+# emulator - the picker cannot list contacts without READ - so it is covered
+# by the static wiring audit (audit_add_to_contact_wiring.py) and only
+# reachable on API 31+. What this section asserts instead: the app's
+# write-ask fires (WRITE_ASK marker), the OS auto-grant makes the retry
+# insert succeed (INSERTED marker, provider row present), no refusal marker,
+# and any sheet the OS does show (API 31+) is answered Allow.
 dial_number "$perm_number"
 adb logcat -c || true
 tap LSK
@@ -498,58 +505,34 @@ sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK
 sleep 3
-ANSWERED="$(settle_sheets Deny 3)"
-if [[ "$ANSWERED" != "1" ]]; then
-  echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
-  phone_rows >> "$out/add-to-contact-provider.txt"
-  section_e_diagnostics
-  restore_permissions
-  exit 1
-fi
-sleep 1
-require_marker 'ADD_TO_CONTACT_REFUSED reason=no_write_permission'
-if [[ "$(count_phone_rows "$perm_number")" != "0" ]]; then
-  echo "FAIL write-permission-denied Add to contact wrote a row for $perm_number" | tee -a "$result"
-  phone_rows >> "$out/add-to-contact-provider.txt"
-  restore_permissions
-  exit 1
-fi
-echo "PASS Add to contact refused without WRITE_CONTACTS, provider unchanged" | tee -a "$result"
-# Grant round: answering Allow retries the insert on the selected contact.
-dial_number "$perm_number_grant"
-adb logcat -c || true
-tap LSK
-tap DOWN; tap DOWN; tap DOWN
-tap OK
-sleep 1
-require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
-tap OK
-sleep 3
 ANSWERED="$(settle_sheets Allow 3)"
-if [[ "$ANSWERED" != "1" ]]; then
-  echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
+echo "write-ask sheets answered with Allow: $ANSWERED" >> "$result"
+sleep 1
+require_marker 'ADD_TO_CONTACT_WRITE_ASK'
+require_marker 'ADD_TO_CONTACT_INSERTED'
+if marker_seen 'ADD_TO_CONTACT_REFUSED reason=no_write_permission'; then
+  echo "FAIL write-ask refused despite the API-30 contacts group auto-grant" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
   section_e_diagnostics
   restore_permissions
   exit 1
 fi
-sleep 1
-require_marker 'ADD_TO_CONTACT_INSERTED'
-if [[ "$(count_phone_rows "$perm_number_grant")" != "1" ]]; then
-  echo "FAIL write-permission-granted Add to contact did not write a row for $perm_number_grant" | tee -a "$result"
+if [[ "$(count_phone_rows "$perm_number")" != "1" ]]; then
+  echo "FAIL write-ask retry did not write a row for $perm_number" | tee -a "$result"
   phone_rows >> "$out/add-to-contact-provider.txt"
+  section_e_diagnostics
   restore_permissions
   exit 1
 fi
 ins_id="$(adb shell content query --uri content://com.android.contacts/data \
-  --projection _id:data1 2>&1 | tr -d '\r' | grep -F "data1=$perm_number_grant" \
+  --projection _id:data1 2>&1 | tr -d '\r' | grep -F "data1=$perm_number" \
   | grep -oE '_id=[0-9]+' | cut -d= -f2 | head -1)"
 if [[ -n "$ins_id" ]]; then
   adb shell content delete --uri content://com.android.contacts/data \
     --where "_id=$ins_id" >/dev/null 2>&1 || true
 fi
 restore_permissions
-echo "PASS Add to contact write-ask grant retried the insert" | tee -a "$result"
+echo "PASS Add to contact write-ask retried the insert on the API-30 group auto-grant" | tee -a "$result"
 expect_foreground
 }
 # Subshell: section E contains exit statements; they must end the subshell,
