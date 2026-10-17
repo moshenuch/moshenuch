@@ -98,6 +98,32 @@ public final class AndroidBackend {
                 context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 
+    /** Aggregate ids with at least one live raw contact that belongs to a
+     *  synced account (non-null account type). Delete-all removes these
+     *  from the account too, so the confirm must say so (audit #34 item
+     *  B2). Returns null when the scan cannot complete: the caller fails
+     *  CLOSED. */
+    public java.util.HashSet<Long> loadSyncedAggregateIds() {
+        if (!has(Manifest.permission.READ_CONTACTS)) return null;
+        java.util.HashSet<Long> out = new java.util.HashSet<>();
+        Cursor c = null;
+        try {
+            c = resolver.query(ContactsContract.RawContacts.CONTENT_URI,
+                    new String[]{ContactsContract.RawContacts.CONTACT_ID,
+                            ContactsContract.RawContacts.ACCOUNT_TYPE},
+                    ContactsContract.RawContacts.DELETED + "=0", null, null);
+            if (c == null) return null;
+            while (c.moveToNext()) {
+                if (c.getString(1) != null) out.add(c.getLong(0));
+            }
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
+        return out;
+    }
+
     /** Every aggregate contact id in the provider, including contacts with
      *  no phone number. Delete-all counts and deletes by aggregate, so a
      *  number-less contact must not be skipped (audit #14 item 1).
