@@ -4,6 +4,20 @@ set -euo pipefail
 apk="GPT-c2-from-reborn/app/build/outputs/apk/debug/app-debug.apk"
 results="GPT-c2-from-reborn/build/emulator-smoke"
 bash GPT-c2-from-reborn/tools/smoke_install_emulator.sh "$apk" "$results"
+
+# Fresh-install permission lifecycle (BLOCKING): cold first launch with no
+# pre-granted runtime permissions. Deny path: app survives, home renders,
+# Contacts opens without READ_CONTACTS, second cold start survives. Allow
+# path: all phone+storage permissions end granted via the OS sheets.
+bash GPT-c2-from-reborn/tools/smoke_fresh_install_permissions_emulator.sh "$apk" "$results"
+if ! grep -Fq 'PASS Fresh install deny-all: app survived, home rendered, no crash' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install deny-all: Contacts opens without contacts permission and stays foreground' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install allow-all: every phone and storage permission granted through the OS sheets' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install allow-all: app survived, Contacts opened, no crash' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install permission lifecycle acceptance complete' "$results/fresh-install-permissions-results.txt"; then
+  echo "::error::Fresh-install permission lifecycle acceptance failed; see fresh-install-permissions-results.txt"
+  exit 1
+fi
 if bash GPT-c2-from-reborn/tools/smoke_video_emulator.sh "$results"; then
   echo "PASS: Emulator recorded, finalized and independently decoded an MP4." | tee "$results/video-suite-status.txt"
 else
