@@ -1406,9 +1406,18 @@ print(json.dumps(entries))
   adb shell "run-as $package touch files/move_rollback_gate" < /dev/null >/dev/null 2>&1
   timeout 90 adb shell "logcat -s C2Contacts:I | grep -m1 'MOVE_ROLLBACK_GATE armed dir=sim2phone' >/dev/null 2>&1
 echo 'watchdog saw the rollback gate'
+rid=\"\"
+for try in 1 2 3 4 5; do
 rid=\$(content query --uri content://com.android.contacts/data --projection raw_contact_id:data1 2>/dev/null | tr -d \"\r\" | grep -F \"data1=AAAC2Rb25\" | head -1 | sed -n \"s/.*raw_contact_id=\\([0-9][0-9]*\\).*/\\1/p\")
+[ -n \"\$rid\" ] && break
+sleep 1
+done
+if [ -n \"\$rid\" ]; then
 content delete --uri content://com.android.contacts/raw_contacts --where \"_id=\$rid\" >/dev/null 2>&1
 echo \"watchdog deleted middle insert raw_contact_id=\$rid\"
+else
+echo 'watchdog could not resolve AAAC2Rb25 raw id; injection skipped'
+fi
 run-as $package touch files/move_rollback_go
 echo 'watchdog released the rollback gate'" > /tmp/rb_watchdog.out 2>&1 < /dev/null &
   rb_watch_pid=$!
