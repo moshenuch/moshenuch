@@ -4,7 +4,9 @@
 #  Y. Yes:  with two seeded contacts present, Del. all contacts > Yes must
 #     remove every provider contact and report the exact deleted count.
 #  Y-add/Y-remove: a contact appearing or vanishing between the
-#     confirm and Yes refuses the delete (audit #34 item B1).
+#     confirm and Yes refuses the delete (audit #34 item B1). The Y
+#     confirm screenshot must show the full native wording incl. the
+#     synced-account consequence line (audit #35 item 1).
 #  E. Empty: with the provider empty, Del. all contacts is refused with the
 #     "Selected memory empty" notice (HTML v6.343 wording); nothing changes.
 #  N. No:   answering No on the confirm leaves the provider byte-identical.
@@ -182,6 +184,35 @@ seed_numberless() { # seed_numberless <name>: a contact with a name but NO phone
   echo "$new_id"
 }
 
+seed_synced_contact() { # seed_synced_contact <name> <number>: raw contact bound to an account
+  local name="$1" number="$2" before after new_id
+  before="$(raw_ids)"
+  adb shell content insert --uri content://com.android.contacts/raw_contacts \
+    --bind account_name:s:probe@example.com --bind account_type:s:com.example.sync \
+    --bind starred:i:0 >/dev/null 2>&1 || true
+  after="$(raw_ids)"
+  new_id="$(comm -13 <(echo "$before") <(echo "$after") || true)"
+  if [[ "$(grep -c . <<< "$new_id")" != "1" ]]; then
+    echo "UNVERIFIED synced seed of $name did not add exactly one raw contact" | tee -a "$result"
+    exit 1
+  fi
+  adb shell content insert --uri content://com.android.contacts/data \
+    --bind raw_contact_id:i:"$new_id" \
+    --bind mimetype:s:vnd.android.cursor.item/name \
+    --bind data1:s:"$name" >/dev/null 2>&1 || true
+  adb shell content insert --uri content://com.android.contacts/data \
+    --bind raw_contact_id:i:"$new_id" \
+    --bind mimetype:s:vnd.android.cursor.item/phone_v2 \
+    --bind data1:s:"$number" --bind data2:i:2 >/dev/null 2>&1 || true
+  if ! adb shell content query --uri content://com.android.contacts/raw_contacts \
+      --projection _id:account_type 2>&1 | tr -d '\r' \
+      | grep -F "_id=$new_id" | grep -Fq 'com.example.sync'; then
+    echo "UNVERIFIED synced seed $name lost its account_type in the provider" | tee -a "$result"
+    exit 1
+  fi
+  echo "$new_id"
+}
+
 # --- Y. Yes removes every provider contact ---------------------------------
 baseline_ids="$(raw_ids)"
 baseline_count="$(grep -c . <<< "$baseline_ids" || true)"
@@ -190,14 +221,17 @@ echo "provider baseline raw contacts: $baseline_count" >> "$result"
 seed_contact "$del_one" "$num_one" >/dev/null
 seed_contact "$del_two" "$num_two" >/dev/null
 seed_numberless "AAAC2DelThree" >/dev/null
-expected=$((baseline_count + 3))
-echo "Seeded $del_one, $del_two and number-less AAAC2DelThree; expecting $expected aggregates counted by Del. all contacts" >> "$result"
+seed_synced_contact "AAAC2DelSync" "07900005003" >/dev/null
+expected=$((baseline_count + 4))
+echo "Seeded $del_one, $del_two, number-less AAAC2DelThree and synced AAAC2DelSync; expecting $expected aggregates counted by Del. all contacts" >> "$result"
 
 open_delete_all
 adb logcat -c || true
 tap OK                          # "Del. all contacts"
 sleep 1
 require_marker "DELETE_ALL_CONTACTS_CONFIRM count=$expected"
+# This screenshot is the audit #35 item 1 proof: the confirm box must show
+# the full wording including the synced-account consequence line.
 shot delall-confirm-yes
 
 # Y-add (audit #34 item B1): a contact that APPEARS between the confirm and
