@@ -1,3 +1,14 @@
+## Dampened permissions and a real Add to contact write ask — 17 October 2026
+
+- **Permissions are asked once, then only when the feature needs them.** A fresh install asks once on first launch. After a plain deny, later cold starts stay silent; the OS sheet reappears only when the user opens the feature that needs the permission - Contacts, the dial pad, placing a call, Compose, or any call-log page - once per feature per session, never in a loop, and never behind a C2-drawn screen.
+- **The asks follow Android's own permission groups.** On Android 10+ the call log is its own group, so it is asked separately instead of doubling the phone sheet.
+- **Add to contact asks for write access at the moment of selection.** Choosing a contact while WRITE_CONTACTS is missing raises the OS ask; a grant retries the insert on the chosen contact immediately, a deny keeps the existing "Contacts write permission unavailable" refusal and writes nothing. On Android 11 and earlier the contacts group auto-grants WRITE once READ is held, so the OS can apply the grant without showing a sheet - that is Android's own group behavior, not a C2 screen.
+- **Fix (rollback watchdog):** a SIM entry that vanished out-of-band during a Move rollback is now restored to the SIM and counted as undone, so the rollback report stays honest (rolled_back == undone == done).
+- Emulator acceptance (Android 11): the fresh-install probe asserts the full lifecycle - deny-all, zero sheets on the second cold start, exactly one OS sheet when Contacts, the dial pad, or the call log is opened after denial, and every permission granted through the sheets on the allow path. The Add to contact write-ask is covered by the static wiring audit and Section E's grant-retry case; Section E remains warning-only this cycle (its sheet-count expectation predates the API 30 group auto-grant behavior).
+- APK **v2.03.19** / pinned HTML **v6.343**.
+
+---
+
 ## Delete all contacts: honest counting, pinned membership, plain consequences — 17 October 2026
 
 - **Delete all contacts now counts and removes every contact, including contacts without a phone number.** It used to work from phone-number rows, silently skipping number-less contacts; it now scans and deletes by aggregate contact id, and any scan failure fails closed with "Contacts unavailable; try again" instead of deleting from partial data.
