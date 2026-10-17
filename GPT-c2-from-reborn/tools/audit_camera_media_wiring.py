@@ -35,7 +35,7 @@ checks = {
     ),
     "Delete confirmation uses Nokia Canvas rather than stock grey dialog": (
         "private void drawConfirm(Canvas c)" in view
-        and "c.drawRect(11, 93, 229, 208, p);" in view
+        and "c.drawRect(11, 93, 229, boxBottom, p);" in view
         and 'c.drawText("Confirm"' not in view
     ),
     "Save and Send verify committed photo still readable": (
