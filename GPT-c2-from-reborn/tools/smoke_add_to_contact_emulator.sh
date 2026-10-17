@@ -28,6 +28,7 @@ uk_local="07555000000"
 uk_0044="00447555000000"
 new_number="07900001234"
 perm_number="07600000000"
+perm_number_grant="07600000009"
 sms_sender="07777000111"
 sms_alpha="C2ALERTS"
 
@@ -343,6 +344,43 @@ expect_foreground
 # varies enough that taps can hit its Allow button and re-grant the permission
 # (runs 38590863441, 38605594546), which is a probe-orchestration race, not an
 # app bypass - the refusal branch itself is covered by the wiring audit.
+# OS permission sheets are uiautomator-only interactions; the C2 dialog
+# helper cannot reach them. Ported from the fresh-install probe for the
+# audit-#41 deny-refusal and grant-retry cases.
+UI_XML=/tmp/c2-ui.xml
+dump_ui() {
+  adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 || true
+  adb shell cat "$UI_XML" 2>/dev/null | tr -d '\r' > "$UI_XML.host" || true
+}
+tap_perm_button() { # tap_perm_button <allow|deny>: 0 tapped, 1 no button
+  dump_ui
+  python3 - "$UI_XML.host" "$1" <<'PYEOF'
+import re, sys, subprocess
+xml, which = sys.argv[1], sys.argv[2]
+if which == 'allow':
+    ids = ('permission_allow_button',)
+else:
+    ids = ('permission_deny_button',)
+for m in re.finditer(r'<node[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*>', xml):
+    tag = m.group(0)
+    if any(i in tag for i in ids):
+        x1, y1, x2, y2 = map(int, m.groups())
+        subprocess.run(['adb', 'shell', 'input', 'tap',
+                        str((x1 + x2) // 2), str((y1 + y2) // 2)], check=False)
+        sys.exit(0)
+sys.exit(1)
+PYEOF
+}
+settle_sheets() { # settle_sheets <allow|deny> <max>: echo taps done
+  local which=$1 max=$2 n=0
+  while [[ $n -lt $max ]]; do
+    if ! tap_perm_button "$which"; then break; fi
+    n=$((n + 1))
+    sleep 3
+  done
+  echo "$n"
+}
+
 section_e() {
 # Deterministic pre-state. The AOSP permission controller grants a requested
 # permission WITHOUT A SHEET when another permission in the same group is
@@ -429,6 +467,7 @@ if [[ "$denied_ready" != "1" ]]; then
   echo "FAIL could not establish a stable WRITE_CONTACTS-denied state after 3 rounds" | tee -a "$result"; exit 1
 fi
 # A fresh number: an already-saved one would hit the duplicate refusal first.
+# Deny round: the OS WRITE_CONTACTS sheet appears once and the refusal is kept.
 dial_number "$perm_number"
 adb logcat -c || true
 tap LSK
@@ -437,7 +476,15 @@ tap OK
 sleep 1
 require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
 tap OK
-sleep 2
+sleep 3
+ANSWERED="$(settle_sheets deny 3)"
+if [[ "$ANSWERED" != "1" ]]; then
+  echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
+  phone_rows >> "$out/add-to-contact-provider.txt"
+  restore_permissions
+  exit 1
+fi
+sleep 1
 require_marker 'ADD_TO_CONTACT_REFUSED reason=no_write_permission'
 if [[ "$(count_phone_rows "$perm_number")" != "0" ]]; then
   echo "FAIL write-permission-denied Add to contact wrote a row for $perm_number" | tee -a "$result"
@@ -445,8 +492,41 @@ if [[ "$(count_phone_rows "$perm_number")" != "0" ]]; then
   restore_permissions
   exit 1
 fi
-restore_permissions
 echo "PASS Add to contact refused without WRITE_CONTACTS, provider unchanged" | tee -a "$result"
+# Grant round: answering Allow retries the insert on the selected contact.
+dial_number "$perm_number_grant"
+adb logcat -c || true
+tap LSK
+tap DOWN; tap DOWN; tap DOWN
+tap OK
+sleep 1
+require_marker 'ADD_TO_CONTACT_PICKER_OPEN'
+tap OK
+sleep 3
+ANSWERED="$(settle_sheets allow 3)"
+if [[ "$ANSWERED" != "1" ]]; then
+  echo "FAIL expected exactly one OS WRITE_CONTACTS sheet, answered $ANSWERED" | tee -a "$result"
+  phone_rows >> "$out/add-to-contact-provider.txt"
+  restore_permissions
+  exit 1
+fi
+sleep 1
+require_marker 'ADD_TO_CONTACT_INSERTED'
+if [[ "$(count_phone_rows "$perm_number_grant")" != "1" ]]; then
+  echo "FAIL write-permission-granted Add to contact did not write a row for $perm_number_grant" | tee -a "$result"
+  phone_rows >> "$out/add-to-contact-provider.txt"
+  restore_permissions
+  exit 1
+fi
+ins_id="$(adb shell content query --uri content://com.android.contacts/data \
+  --projection _id:data1 2>&1 | tr -d '\r' | grep -F "data1=$perm_number_grant" \
+  | grep -oE '_id=[0-9]+' | cut -d= -f2 | head -1)"
+if [[ -n "$ins_id" ]]; then
+  adb shell content delete --uri content://com.android.contacts/data \
+    --where "_id=$ins_id" >/dev/null 2>&1 || true
+fi
+restore_permissions
+echo "PASS Add to contact write-ask grant retried the insert" | tee -a "$result"
 expect_foreground
 }
 # Subshell: section E contains exit statements; they must end the subshell,
