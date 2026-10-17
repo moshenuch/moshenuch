@@ -14,6 +14,8 @@ if ! grep -Fq 'PASS Fresh install deny-all: app survived, home rendered, no cras
    ! grep -Fq 'PASS Fresh install deny-all: Contacts opens without contacts permission and stays foreground' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install deny-all: second cold start shows no permission sheets' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install deny-all: opening Contacts after denial re-asks with the OS sheet' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install deny-all: opening the dial pad after denial re-asks with the OS sheet' "$results/fresh-install-permissions-results.txt" ||
+   ! grep -Fq 'PASS Fresh install deny-all: opening the call log after denial re-asks with the OS sheet' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install allow-all: every phone and storage permission granted through the OS sheets' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install allow-all: app survived, Contacts opened, no crash' "$results/fresh-install-permissions-results.txt" ||
    ! grep -Fq 'PASS Fresh install permission lifecycle acceptance complete' "$results/fresh-install-permissions-results.txt"; then
