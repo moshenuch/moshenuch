@@ -99,6 +99,7 @@ fi
 delete_all_contacts_failed=0
 if bash GPT-c2-from-reborn/tools/smoke_delete_all_contacts_emulator.sh "$results"; then
   if ! grep -Fq 'PASS Delete all contacts Yes removed every provider contact' "$results/delete-all-contacts-results.txt" ||
+     ! grep -Fq 'PASS Delete all contacts count and delete included a contact without a phone number' "$results/delete-all-contacts-results.txt" ||
      ! grep -Fq 'PASS Delete all contacts refused empty provider with Selected memory empty' "$results/delete-all-contacts-results.txt" ||
      ! grep -Fq 'PASS Delete all contacts No left provider unchanged' "$results/delete-all-contacts-results.txt"; then
     echo "::error::Delete all contacts acceptance incomplete; see delete-all-contacts-results.txt"
