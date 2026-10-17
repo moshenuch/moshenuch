@@ -3256,7 +3256,25 @@ public class C2PhoneView extends View {
                 // contacts?" + "N contacts selected"). The confirm is the
                 // in-house C2 question box - nothing deletes without it.
                 refreshContactsFromPhone();
-                if (contacts.isEmpty()) {
+                if (deviceContactsActive && !demoMode) {
+                    // Count by aggregate, not by phone row: contacts with no
+                    // number must not be skipped (audit #14 item 1). A null
+                    // scan fails closed.
+                    java.util.ArrayList<Long> ids = backend.loadAllAggregateIds();
+                    if (ids == null) {
+                        showNotice("Contacts unavailable; try again");
+                        android.util.Log.i("C2Contacts",
+                                "DELETE_ALL_CONTACTS_REFUSED reason=scan_failed");
+                    } else if (ids.isEmpty()) {
+                        showNotice("Selected memory empty");
+                        android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_REFUSED reason=empty");
+                    } else {
+                        int count = ids.size();
+                        requestConfirm("deleteAllContacts", "Delete contacts?\n\n" + count
+                                + (count == 1 ? " contact selected" : " contacts selected"));
+                        android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_CONFIRM count=" + count);
+                    }
+                } else if (contacts.isEmpty()) {
                     showNotice("Selected memory empty");
                     android.util.Log.i("C2Contacts", "DELETE_ALL_CONTACTS_REFUSED reason=empty");
                 } else {
@@ -8013,26 +8031,38 @@ public class C2PhoneView extends View {
             } else {
                 int deleted = 0;
                 int failed = 0;
+                boolean aborted = false;
                 if (deviceContactsActive) {
-                    // Snapshot first: every provider delete mutates the live
-                    // list, and each aggregate is removed by its own id.
-                    ArrayList<Contact> snapshot = new ArrayList<>(contacts);
-                    for (Contact c : snapshot) {
-                        if (backend.deleteContact(c.contactId)) deleted++;
-                        else failed++;
+                    // Re-read the aggregate ids at Yes: the provider list is
+                    // live, and each aggregate is removed by its own id, so
+                    // number-less contacts go too (audit #14 item 1). A
+                    // failed scan fails closed: nothing is touched.
+                    java.util.ArrayList<Long> ids = backend.loadAllAggregateIds();
+                    if (ids == null) {
+                        aborted = true;
+                        android.util.Log.i("C2Contacts",
+                                "DELETE_ALL_CONTACTS aborted reason=scan_failed");
+                        showNotice("Contacts unavailable; try again");
+                    } else {
+                        for (long id : ids) {
+                            if (backend.deleteContact(id)) deleted++;
+                            else failed++;
+                        }
+                        refreshContactsFromPhone();
                     }
-                    refreshContactsFromPhone();
                 } else {
                     deleted = contacts.size();
                     contacts.clear();
                     saveContacts();
                 }
                 sel = 0;
-                android.util.Log.i("C2Contacts",
-                        "DELETE_ALL_CONTACTS deleted=" + deleted + " failed=" + failed);
-                showNotice(failed > 0
-                        ? deleted + " deleted; " + failed + " failed"
-                        : deleted + (deleted == 1 ? " contact deleted" : " contacts deleted"));
+                if (!aborted) {
+                    android.util.Log.i("C2Contacts",
+                            "DELETE_ALL_CONTACTS deleted=" + deleted + " failed=" + failed);
+                    showNotice(failed > 0
+                            ? deleted + " deleted; " + failed + " failed"
+                            : deleted + (deleted == 1 ? " contact deleted" : " contacts deleted"));
+                }
             }
         } else if ("deleteContact".equals(action)) {
             deleteContactAt(contactIndex);
